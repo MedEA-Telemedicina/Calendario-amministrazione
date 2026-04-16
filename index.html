@@ -305,9 +305,8 @@ function gapiLoaded() {
   gapi.load('client', async () => {
     try {
       await gapi.client.init({});
-      await gapi.client.load('calendar', 'v3');
     } catch(e) {
-      console.warn('gapi init warning:', e);
+      console.warn('gapi init:', e);
     }
     gapiInited = true;
     maybeEnable();
@@ -371,7 +370,10 @@ async function loadEvents() {
         singleEvents: true, orderBy: 'startTime', maxResults: 2500,
       };
       if (pageToken) p.pageToken = pageToken;
-      const r = await gapi.client.calendar.events.list(p);
+      const r = await gapi.client.request({
+        path: `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CALENDARS[currentCalIndex].id)}/events`,
+        params: p
+      });
       items = items.concat(r.result.items || []);
       pageToken = r.result.nextPageToken;
     } while (pageToken);

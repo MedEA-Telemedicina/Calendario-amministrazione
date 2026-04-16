@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -302,9 +303,12 @@ function isRelevant(ev) {
 // ─── GAPI / GIS ───────────────────────────────────────────────
 function gapiLoaded() {
   gapi.load('client', async () => {
-    await gapi.client.init({
-      discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
-    });
+    try {
+      await gapi.client.init({});
+      await gapi.client.load('calendar', 'v3');
+    } catch(e) {
+      console.warn('gapi init warning:', e);
+    }
     gapiInited = true;
     maybeEnable();
   });

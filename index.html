@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calendario Cardiologi</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f0f4f8; color: #333; min-height: 100vh; }
+
+  /* ── LOGIN SCREEN ── */
+  #login-screen {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100vh; padding: 20px;
+  }
+  .login-card {
+    background: white; border-radius: 20px; padding: 50px 48px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.13); text-align: center; max-width: 420px; width: 100%;
+  }
+  .login-card .icon { font-size: 56px; margin-bottom: 16px; }
+  .login-card h1 { font-size: 24px; color: #1a73e8; margin-bottom: 8px; font-weight: 700; }
+  .login-card p { color: #777; font-size: 14px; margin-bottom: 34px; line-height: 1.6; }
+  .btn-google {
+    display: inline-flex; align-items: center; gap: 12px;
+    background: #1a73e8; color: white; border: none; padding: 14px 28px;
+    border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer;
+    transition: background .2s; width: 100%; justify-content: center;
+  }
+  .btn-google:hover { background: #1558b0; }
+  .btn-google:disabled { background: #a8c4f0; cursor: not-allowed; }
+  .btn-google svg { width: 22px; height: 22px; flex-shrink: 0; }
+  .login-note { font-size: 11px; color: #bbb; margin-top: 18px; }
+
+  /* ── APP ── */
+  #app { display: none; max-width: 1340px; margin: 0 auto; padding: 18px; }
+
+  /* HEADER */
+  .app-header {
+    display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(135deg, #1a73e8, #0d47a1); color: white;
+    padding: 14px 22px; border-radius: 14px; margin-bottom: 16px;
+    box-shadow: 0 3px 12px rgba(26,115,232,.35);
+  }
+  .app-header h1 { font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  .btn-sm {
+    background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.3);
+    color: white; padding: 7px 14px; border-radius: 7px; cursor: pointer; font-size: 13px;
+    transition: background .2s;
+  }
+  .btn-sm:hover { background: rgba(255,255,255,0.32); }
+
+  /* CALENDAR SELECTOR */
+  .cal-selector {
+    display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .cal-btn {
+    padding: 9px 20px; border-radius: 25px; border: 2px solid #1a73e8;
+    background: white; color: #1a73e8; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all .2s;
+  }
+  .cal-btn.active { background: #1a73e8; color: white; }
+  .cal-btn:hover:not(.active) { background: #e8f0fe; }
+
+  /* WEEK NAV */
+  .week-nav {
+    display: flex; align-items: center; gap: 14px; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .nav-arrow {
+    background: white; border: 2px solid #1a73e8; color: #1a73e8;
+    width: 38px; height: 38px; border-radius: 50%; font-size: 20px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: all .2s; flex-shrink: 0;
+  }
+  .nav-arrow:hover { background: #1a73e8; color: white; }
+  .week-label {
+    font-size: 15px; font-weight: 700; color: #333;
+    flex: 1; text-align: center; min-width: 220px;
+  }
+  .btn-today {
+    background: #1a73e8; color: white; border: none; padding: 8px 18px;
+    border-radius: 20px; font-size: 13px; cursor: pointer; font-weight: 600;
+    transition: background .2s;
+  }
+  .btn-today:hover { background: #1558b0; }
+
+  /* CALENDAR GRID */
+  .calendar-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 7px; margin-bottom: 20px;
+  }
+  .day-col { background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 5px rgba(0,0,0,0.09); }
+  .day-header {
+    background: #1a73e8; color: white; text-align: center;
+    padding: 8px 4px; font-size: 12px; font-weight: 700; letter-spacing: .3px;
+  }
+  .day-header.weekend { background: #5a95e8; }
+  .day-header.today-hdr { background: #ea4335; }
+  .day-body { padding: 7px 6px; min-height: 110px; }
+  .day-number {
+    font-size: 11px; color: #aaa; margin-bottom: 6px; font-weight: 700;
+    display: inline-flex; width: 24px; height: 24px;
+    align-items: center; justify-content: center; border-radius: 50%;
+  }
+  .day-number.today-num { background: #ea4335; color: white; }
+  .event-pill {
+    padding: 4px 7px; border-radius: 6px; font-size: 11px; font-weight: 600;
+    margin-bottom: 4px; line-height: 1.4; border-left: 3px solid transparent;
+    word-break: break-word;
+  }
+  .event-01 { background: #e8f5e9; color: #2e7d32; border-color: #43a047; }
+  .event-02 { background: #e3f2fd; color: #1565c0; border-color: #1e88e5; }
+
+  /* STATS */
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .stats-grid { grid-template-columns: 1fr; } .calendar-grid { grid-template-columns: repeat(3,1fr); } }
+
+  .stats-card {
+    background: white; border-radius: 12px; padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  .stats-card h3 {
+    font-size: 14px; font-weight: 700; color: #1a73e8; margin-bottom: 14px;
+    padding-bottom: 10px; border-bottom: 2px solid #e8f0fe;
+  }
+  .stats-table { width: 100%; border-collapse: collapse; }
+  .stats-table th {
+    text-align: left; padding: 7px 10px; font-size: 11px; color: #888;
+    text-transform: uppercase; letter-spacing: .5px; background: #f8f9fa;
+  }
+  .stats-table td { padding: 9px 10px; font-size: 13px; }
+  .stats-table tr:not(:first-child) td { border-top: 1px solid #f0f0f0; }
+  .stats-table tr:hover td { background: #f8f9fa; }
+  .badge {
+    display: inline-block; color: white; border-radius: 12px;
+    padding: 2px 11px; font-size: 12px; font-weight: 700;
+  }
+  .badge-blue   { background: #1a73e8; }
+  .badge-green  { background: #43a047; }
+  .badge-orange { background: #fb8c00; }
+  .badge-red    { background: #e53935; }
+  .empty-msg { color: #bbb; font-size: 13px; text-align: center; padding: 24px 0; }
+
+  /* LOADING */
+  #loading-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(255,255,255,.82);
+    align-items: center; justify-content: center; z-index: 999; flex-direction: column; gap: 14px;
+  }
+  .spinner {
+    width: 46px; height: 46px; border: 4px solid #e0e0e0;
+    border-top-color: #1a73e8; border-radius: 50%; animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading-overlay p { color: #555; font-size: 14px; font-weight: 500; }
+
+  .error-banner {
+    background: #fdecea; border: 1px solid #f5c6c2; color: #c62828;
+    border-radius: 8px; padding: 12px 16px; margin-bottom: 14px;
+    font-size: 13px; display: none;
+  }
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <p id="loading-msg">Caricamento eventi...</p>
+</div>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="icon">📅</div>
+    <h1>Calendario Cardiologi</h1>
+    <p>Visualizzazione settimanale dei turni medici.<br>Accedi con il tuo account Google per iniziare.</p>
+    <button class="btn-google" id="btn-login" disabled>
+      <svg viewBox="0 0 48 48"><path fill="#FFF" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z"/></svg>
+      Accedi con Google
+    </button>
+    <p class="login-note">Verranno letti solo i tuoi calendari. Nessun dato viene salvato esternamente.</p>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="app-header">
+    <h1>📅 Calendario Cardiologi</h1>
+    <div class="header-right">
+      <span id="header-cal-label" style="font-size:13px;opacity:.85;font-weight:600;"></span>
+      <button class="btn-sm" id="btn-signout">Esci</button>
+    </div>
+  </div>
+
+  <div id="error-app" class="error-banner"></div>
+
+  <!-- Selezione calendario -->
+  <div class="cal-selector">
+    <button class="cal-btn active" id="cal-btn-0" onclick="switchCalendar(0)">
+      📋 Medici a Consuntivo
+    </button>
+    <button class="cal-btn" id="cal-btn-1" onclick="switchCalendar(1)">
+      🗓️ Medici in Turno
+    </button>
+  </div>
+
+  <!-- Navigazione settimana -->
+  <div class="week-nav">
+    <button class="nav-arrow" id="btn-prev">&#8592;</button>
+    <span class="week-label" id="week-label"></span>
+    <button class="nav-arrow" id="btn-next">&#8594;</button>
+    <button class="btn-today" id="btn-today">Oggi</button>
+  </div>
+
+  <!-- Griglia settimana -->
+  <div class="calendar-grid" id="calendar-grid"></div>
+
+  <!-- Statistiche -->
+  <div class="stats-grid">
+    <div class="stats-card">
+      <h3>📊 Settimana — conteggio per medico</h3>
+      <div id="stats-week"></div>
+    </div>
+    <div class="stats-card">
+      <h3>📆 Mese di <span id="month-label-stat"></span> — conteggio per medico</h3>
+      <div id="stats-month"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Google APIs -->
+<script src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+<script src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+
+<script>
+// ─── CONFIG (preconfigurata) ───────────────────────────────────
+const CLIENT_ID = '976159946912-keku8ef7blm4rganeljuftn9umbdvnl9.apps.googleusercontent.com';
+
+const CALENDARS = [
+  {
+    id: 'bed7ff7def2699ba37902c336fb0f1f221b7bc50cf624c8a03d956ac7a5503cf@group.calendar.google.com',
+    label: 'Medici a Consuntivo'
+  },
+  {
+    id: '9180e8cbcb11d8cb4d85ce22d0741657b90fdf1031ff2db3fee4106dc5e5aada@group.calendar.google.com',
+    label: 'Medici in Turno'
+  }
+];
+
+// ─── STATE ────────────────────────────────────────────────────
+let gapiInited = false;
+let gisInited  = false;
+let tokenClient;
+let allEvents  = [];
+let currentWeekStart;
+let currentCalIndex = 0;
+
+// ─── DATE UTILS ───────────────────────────────────────────────
+function startOfWeek(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0,0,0,0);
+  return d;
+}
+function addDays(date, n) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+function toISODate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+}
+function fmtDate(date) {
+  return date.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' });
+}
+function fmtMonthYear(date) {
+  return date.toLocaleDateString('it-IT', { month:'long', year:'numeric' });
+}
+const GIORNI = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
+
+// ─── PARSING ──────────────────────────────────────────────────
+const TIME_WORDS = ['MATTINA','MATTINO','POMERIGGIO','POMERIGIO','SERA','NOTTE','AM','PM','MORNING','AFTERNOON'];
+
+function parseEvent(title) {
+  const m = title.match(/^(0[12])\s+(.+)$/i);
+  if (!m) return null;
+  const prefix = m[1];
+  let rest = m[2].trim().toUpperCase();
+  let turno = '';
+  for (const w of TIME_WORDS) {
+    const re = new RegExp(`\\s+${w}\\s*$`,'i');
+    if (re.test(rest)) { turno = w; rest = rest.replace(re,'').trim(); break; }
+  }
+  return { prefix, doctorName: rest, turno, fullTitle: title };
+}
+
+function isRelevant(ev) {
+  return ev.start && ev.start.date && /^0[12]\s+/i.test((ev.summary||'').trim());
+}
+
+// ─── GAPI / GIS ───────────────────────────────────────────────
+function gapiLoaded() {
+  gapi.load('client', async () => {
+    await gapi.client.init({
+      discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
+    });
+    gapiInited = true;
+    maybeEnable();
+  });
+}
+function gisLoaded() {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: 'https://www.googleapis.com/auth/calendar.readonly',
+    callback: async (resp) => {
+      if (resp.error) { hideLoading(); showError('Errore autenticazione: ' + resp.error); return; }
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      currentWeekStart = startOfWeek(new Date());
+      await loadEvents();
+    },
+  });
+  gisInited = true;
+  maybeEnable();
+}
+function maybeEnable() {
+  if (gapiInited && gisInited) document.getElementById('btn-login').disabled = false;
+}
+
+// ─── AUTH ─────────────────────────────────────────────────────
+document.getElementById('btn-login').addEventListener('click', () => {
+  showLoading('Autenticazione in corso...');
+  tokenClient.requestAccessToken({ prompt: 'consent' });
+});
+document.getElementById('btn-signout').addEventListener('click', () => {
+  const t = gapi.client.getToken();
+  if (t) google.accounts.oauth2.revoke(t.access_token);
+  gapi.client.setToken('');
+  allEvents = [];
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+});
+
+// ─── SWITCH CALENDARIO ────────────────────────────────────────
+async function switchCalendar(idx) {
+  currentCalIndex = idx;
+  document.querySelectorAll('.cal-btn').forEach((b,i) => b.classList.toggle('active', i===idx));
+  document.getElementById('header-cal-label').textContent = CALENDARS[idx].label;
+  allEvents = [];
+  await loadEvents();
+}
+
+// ─── LOAD EVENTS ──────────────────────────────────────────────
+async function loadEvents() {
+  showLoading('Caricamento eventi — ' + CALENDARS[currentCalIndex].label + '...');
+  hideError();
+  try {
+    const now   = currentWeekStart || new Date();
+    const tMin  = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+    const tMax  = new Date(now.getFullYear(), now.getMonth() + 4, 1);
+    let items = [], pageToken;
+    do {
+      const p = {
+        calendarId: CALENDARS[currentCalIndex].id,
+        timeMin: tMin.toISOString(), timeMax: tMax.toISOString(),
+        singleEvents: true, orderBy: 'startTime', maxResults: 2500,
+      };
+      if (pageToken) p.pageToken = pageToken;
+      const r = await gapi.client.calendar.events.list(p);
+      items = items.concat(r.result.items || []);
+      pageToken = r.result.nextPageToken;
+    } while (pageToken);
+
+    allEvents = items.filter(isRelevant).map(ev => ({
+      date: ev.start.date,
+      summary: ev.summary,
+      parsed: parseEvent(ev.summary || '')
+    }));
+
+    render();
+    hideLoading();
+  } catch(e) {
+    hideLoading();
+    const msg = e.result ? e.result.error.message : (e.message || String(e));
+    showError('Errore caricamento: ' + msg);
+  }
+}
+
+// ─── RENDER ───────────────────────────────────────────────────
+function render() { renderWeek(); renderStats(); }
+
+function renderWeek() {
+  const ws = currentWeekStart;
+  const we = addDays(ws, 6);
+  const todayStr = toISODate(new Date());
+  document.getElementById('week-label').textContent = `${fmtDate(ws)}  ›  ${fmtDate(we)}`;
+
+  const grid = document.getElementById('calendar-grid');
+  grid.innerHTML = '';
+
+  for (let i = 0; i < 7; i++) {
+    const day = addDays(ws, i);
+    const dayStr = toISODate(day);
+    const isToday   = dayStr === todayStr;
+    const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+    const dayEvs    = allEvents.filter(ev => ev.date === dayStr);
+
+    const col = document.createElement('div');
+    col.className = 'day-col';
+
+    const hdr = document.createElement('div');
+    hdr.className = 'day-header' + (isToday ? ' today-hdr' : isWeekend ? ' weekend' : '');
+    hdr.textContent = GIORNI[day.getDay()];
+    col.appendChild(hdr);
+
+    const body = document.createElement('div');
+    body.className = 'day-body';
+
+    const num = document.createElement('div');
+    num.className = 'day-number' + (isToday ? ' today-num' : '');
+    num.textContent = day.getDate();
+    body.appendChild(num);
+
+    dayEvs.forEach(ev => {
+      const pill = document.createElement('div');
+      const pfx  = ev.parsed ? ev.parsed.prefix : '01';
+      pill.className = `event-pill event-${pfx}`;
+      let lbl = ev.parsed
+        ? ev.parsed.doctorName + (ev.parsed.turno ? ' · ' + ev.parsed.turno : '')
+        : ev.summary;
+      pill.textContent = lbl;
+      pill.title = ev.summary;
+      body.appendChild(pill);
+    });
+
+    col.appendChild(body);
+    grid.appendChild(col);
+  }
+}
+
+function renderStats() {
+  const ws = currentWeekStart;
+  const we = addDays(ws, 6);
+  const wStart = toISODate(ws), wEnd = toISODate(we);
+
+  const year = ws.getFullYear(), month = ws.getMonth();
+  const mStart = toISODate(new Date(year, month, 1));
+  const mEnd   = toISODate(new Date(year, month+1, 0));
+
+  document.getElementById('month-label-stat').textContent = fmtMonthYear(ws);
+
+  renderTable('stats-week',  allEvents.filter(ev => ev.date >= wStart && ev.date <= wEnd));
+  renderTable('stats-month', allEvents.filter(ev => ev.date >= mStart && ev.date <= mEnd));
+}
+
+function badgeClass(n) {
+  if (n >= 10) return 'badge badge-red';
+  if (n >= 6)  return 'badge badge-orange';
+  if (n >= 3)  return 'badge badge-blue';
+  return 'badge badge-green';
+}
+
+function renderTable(id, events) {
+  const container = document.getElementById(id);
+  container.innerHTML = '';
+  if (!events.length) {
+    container.innerHTML = '<p class="empty-msg">Nessun evento trovato</p>'; return;
+  }
+  const counts = {};
+  events.forEach(ev => {
+    if (!ev.parsed) return;
+    const k = ev.parsed.doctorName;
+    if (!counts[k]) counts[k] = { total:0, mat:0, pom:0, altro:0 };
+    counts[k].total++;
+    const t = ev.parsed.turno.toUpperCase();
+    if (['MATTINA','MATTINO','AM','MORNING'].includes(t)) counts[k].mat++;
+    else if (['POMERIGGIO','POMERIGIO','PM','AFTERNOON'].includes(t)) counts[k].pom++;
+    else counts[k].altro++;
+  });
+
+  const sorted = Object.entries(counts).sort((a,b) => b[1].total - a[1].total);
+
+  const tbl = document.createElement('table');
+  tbl.className = 'stats-table';
+  tbl.innerHTML = `<thead><tr>
+    <th>Medico</th>
+    <th style="text-align:center">Tot.</th>
+    <th style="text-align:center">Mattina</th>
+    <th style="text-align:center">Pomeriggio</th>
+    <th style="text-align:center">Altro</th>
+  </tr></thead>`;
+  const tbody = document.createElement('tbody');
+  sorted.forEach(([name, c]) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><strong>${name}</strong></td>
+      <td style="text-align:center"><span class="${badgeClass(c.total)}">${c.total}</span></td>
+      <td style="text-align:center">${c.mat   > 0 ? c.mat   : '<span style="color:#ccc">–</span>'}</td>
+      <td style="text-align:center">${c.pom   > 0 ? c.pom   : '<span style="color:#ccc">–</span>'}</td>
+      <td style="text-align:center">${c.altro > 0 ? c.altro : '<span style="color:#ccc">–</span>'}</td>`;
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+  container.appendChild(tbl);
+}
+
+// ─── NAVIGAZIONE ──────────────────────────────────────────────
+document.getElementById('btn-prev').addEventListener('click', () => { currentWeekStart = addDays(currentWeekStart,-7); render(); });
+document.getElementById('btn-next').addEventListener('click', () => { currentWeekStart = addDays(currentWeekStart, 7); render(); });
+document.getElementById('btn-today').addEventListener('click', () => { currentWeekStart = startOfWeek(new Date()); render(); });
+
+// ─── UI HELPERS ───────────────────────────────────────────────
+function showLoading(msg) {
+  document.getElementById('loading-msg').textContent = msg || 'Caricamento...';
+  document.getElementById('loading-overlay').style.display = 'flex';
+}
+function hideLoading() { document.getElementById('loading-overlay').style.display = 'none'; }
+function showError(msg) {
+  const el = document.getElementById('error-app');
+  el.textContent = msg; el.style.display = 'block';
+}
+function hideError() { document.getElementById('error-app').style.display = 'none'; }
+</script>
+</body>
+</html>

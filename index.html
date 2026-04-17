@@ -649,7 +649,6 @@ function renderWeek() {
       pill.className = 'event-pill ' + colorClass;
 
       let lbl = ev.summary.replace(/^0[12]\s+/i, '').trim();
-      if (ev.isHolter && !ev.isEcg) lbl = '🫀 ' + lbl;
 
       pill.innerHTML = alwaysShow ? lbl : highlightText(lbl);
       pill.title = ev.summary;

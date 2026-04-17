@@ -6,8 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Conteggio turni cardiologi</title>
 
-  
-<!-- Favicon -->
+ <!-- Favicon -->
   <link rel="icon" type="image/png" href="MEDEA-LOGO-APP.png">
 
   
@@ -587,7 +586,6 @@ document.getElementById('btn-today-week').addEventListener('click', () => {
 async function switchCalendar(idx) {
   currentCalIndex = idx;
   document.querySelectorAll('.cal-btn').forEach((b,i) => b.classList.toggle('active', i===idx));
-  document.getElementById('header-cal-label').textContent = CALENDARS[idx].label;
   allEvents = [];
   await loadEvents();
 }
@@ -829,21 +827,7 @@ function renderTable(id, events) {
   const titleMap = { 'stats-month': 'Mese corrente', 'stats-week': 'Settimana corrente' };
   _tableData[id] = { rows: sorted, title: titleMap[id] || id };
 
-  // sort bar
-  const sortBar = document.createElement('div');
-  sortBar.className = 'sort-bar';
-  sortBar.innerHTML = `
-    <label>Ordina per:</label>
-    <select class="sort-select" onchange="setSort('${id}', this.value)">
-      <option value="alpha"  ${(_sortState[id]||'alpha')==='alpha'  ? 'selected':''}>A → Z</option>
-      <option value="total"  ${_sortState[id]==='total'  ? 'selected':''}>Totale ↓</option>
-      <option value="mat"    ${_sortState[id]==='mat'    ? 'selected':''}>Mattina ↓</option>
-      <option value="pom"    ${_sortState[id]==='pom'    ? 'selected':''}>Pomeriggio ↓</option>
-      <option value="holter" ${_sortState[id]==='holter' ? 'selected':''}>Holter ↓</option>
-      <option value="ecg"    ${_sortState[id]==='ecg'    ? 'selected':''}>ECG ↓</option>
-      <option value="altro"  ${_sortState[id]==='altro'  ? 'selected':''}>Altro ↓</option>
-    </select>`;
-  container.appendChild(sortBar);
+
 
 
 

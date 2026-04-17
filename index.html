@@ -52,9 +52,7 @@
   .btn-sm:hover { background: rgba(255,255,255,0.32); }
 
   /* CALENDAR SELECTOR */
-  .cal-selector {
-    display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;
-  }
+  .cal-selector { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
   .cal-btn {
     padding: 9px 20px; border-radius: 25px; border: 2px solid #1a73e8;
     background: white; color: #1a73e8; font-size: 13px; font-weight: 600;
@@ -62,6 +60,85 @@
   }
   .cal-btn.active { background: #1a73e8; color: white; }
   .cal-btn:hover:not(.active) { background: #e8f0fe; }
+
+  /* MONTH NAV (freccette) */
+  .month-nav {
+    display: flex; align-items: center; gap: 14px; margin-bottom: 16px;
+    background: white; border-radius: 12px; padding: 12px 20px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.09);
+  }
+  .month-nav .nav-arrow {
+    background: #e8f0fe; border: 2px solid #1a73e8; color: #1a73e8;
+    width: 38px; height: 38px; border-radius: 50%; font-size: 20px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: all .2s; flex-shrink: 0;
+  }
+  .month-nav .nav-arrow:hover { background: #1a73e8; color: white; }
+  .month-nav .month-label {
+    flex: 1; text-align: center; font-size: 17px; font-weight: 800;
+    color: #1a73e8; text-transform: capitalize;
+  }
+  .month-nav .btn-today {
+    background: #1a73e8; color: white; border: none; padding: 8px 18px;
+    border-radius: 20px; font-size: 13px; cursor: pointer; font-weight: 600;
+    transition: background .2s;
+  }
+  .month-nav .btn-today:hover { background: #1558b0; }
+
+  /* SEARCH BAR */
+  .search-bar {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
+    background: white; border-radius: 10px; padding: 10px 16px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.09);
+  }
+  .search-bar label { font-size: 13px; font-weight: 700; color: #555; white-space: nowrap; }
+  .search-bar input {
+    flex: 1; padding: 8px 14px; border-radius: 8px; border: 2px solid #1a73e8;
+    font-size: 14px; outline: none; color: #333; transition: box-shadow .2s;
+  }
+  .search-bar input:focus { box-shadow: 0 0 0 3px rgba(26,115,232,0.2); }
+  .search-bar button {
+    background: #e8f0fe; border: none; border-radius: 7px; padding: 8px 14px;
+    color: #1a73e8; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .2s;
+  }
+  .search-bar button:hover { background: #d2e3fc; }
+  .search-highlight { background: #fff176; border-radius: 3px; padding: 0 2px; }
+
+  /* STATS (mensile — principale) */
+  .stats-card {
+    background: white; border-radius: 12px; padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 20px;
+  }
+  .stats-card h3 {
+    font-size: 15px; font-weight: 700; color: #1a73e8; margin-bottom: 14px;
+    padding-bottom: 10px; border-bottom: 2px solid #e8f0fe;
+  }
+  .stats-table { width: 100%; border-collapse: collapse; }
+  .stats-table th {
+    text-align: left; padding: 7px 10px; font-size: 11px; color: #888;
+    text-transform: uppercase; letter-spacing: .5px; background: #f8f9fa;
+  }
+  .stats-table td { padding: 9px 10px; font-size: 13px; }
+  .stats-table tr:not(:first-child) td { border-top: 1px solid #f0f0f0; }
+  .stats-table tr:hover td { background: #f8f9fa; }
+  .badge {
+    display: inline-block; color: white; border-radius: 12px;
+    padding: 2px 11px; font-size: 12px; font-weight: 700;
+  }
+  .badge-blue   { background: #1a73e8; }
+  .badge-green  { background: #43a047; }
+  .badge-orange { background: #fb8c00; }
+  .badge-red    { background: #e53935; }
+  .empty-msg { color: #bbb; font-size: 13px; text-align: center; padding: 24px 0; }
+
+  /* SEZIONE SETTIMANALE (in basso) */
+  .section-divider {
+    display: flex; align-items: center; gap: 14px; margin: 28px 0 16px;
+  }
+  .section-divider h2 { font-size: 14px; font-weight: 700; color: #888; white-space: nowrap; }
+  .section-divider::before, .section-divider::after {
+    content: ''; flex: 1; height: 1px; background: #ddd;
+  }
 
   /* WEEK NAV */
   .week-nav {
@@ -78,12 +155,12 @@
     font-size: 15px; font-weight: 700; color: #333;
     flex: 1; text-align: center; min-width: 220px;
   }
-  .btn-today {
+  .btn-today-week {
     background: #1a73e8; color: white; border: none; padding: 8px 18px;
     border-radius: 20px; font-size: 13px; cursor: pointer; font-weight: 600;
     transition: background .2s;
   }
-  .btn-today:hover { background: #1558b0; }
+  .btn-today-week:hover { background: #1558b0; }
 
   /* CALENDAR GRID */
   .calendar-grid {
@@ -110,73 +187,15 @@
   }
 
   /* ── 3 COLORI FISSI ── */
-  /* Verde – Medici a Consuntivo */
   .event-consuntivo { background: #d4f0d8; color: #1a5c20; border-color: #43a047; }
-  /* Blu – Medici in Turno */
   .event-turno      { background: #d0e4ff; color: #0d3b8a; border-color: #1a73e8; }
-  /* Vinaccia – Turni Holter */
   .event-holter     { background: #f0d4de; color: #6b0a25; border-color: #8b1a3a; }
 
-  /* Month selector */
-  .month-selector {
-    display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;
+  /* ECG badge sempre visibile */
+  .event-ecg {
+    background: #fff8e1; color: #795548; border-color: #f9a825;
+    font-style: italic;
   }
-  .month-selector label { font-size: 13px; font-weight: 700; color: #555; }
-  .month-selector select {
-    padding: 8px 14px; border-radius: 8px; border: 2px solid #1a73e8;
-    font-size: 13px; font-weight: 600; color: #1a73e8; background: white;
-    cursor: pointer; outline: none;
-  }
-  .month-selector select:focus { box-shadow: 0 0 0 3px rgba(26,115,232,0.2); }
-
-  /* STATS */
-  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media (max-width: 760px) { .stats-grid { grid-template-columns: 1fr; } .calendar-grid { grid-template-columns: repeat(3,1fr); } }
-
-  .stats-card {
-    background: white; border-radius: 12px; padding: 20px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  }
-  .stats-card h3 {
-    font-size: 14px; font-weight: 700; color: #1a73e8; margin-bottom: 14px;
-    padding-bottom: 10px; border-bottom: 2px solid #e8f0fe;
-  }
-  .stats-table { width: 100%; border-collapse: collapse; }
-  .stats-table th {
-    text-align: left; padding: 7px 10px; font-size: 11px; color: #888;
-    text-transform: uppercase; letter-spacing: .5px; background: #f8f9fa;
-  }
-  .stats-table td { padding: 9px 10px; font-size: 13px; }
-  .stats-table tr:not(:first-child) td { border-top: 1px solid #f0f0f0; }
-  .stats-table tr:hover td { background: #f8f9fa; }
-  .badge {
-    display: inline-block; color: white; border-radius: 12px;
-    padding: 2px 11px; font-size: 12px; font-weight: 700;
-  }
-  .badge-blue   { background: #1a73e8; }
-  .badge-green  { background: #43a047; }
-  .badge-orange { background: #fb8c00; }
-  .badge-red    { background: #e53935; }
-  .empty-msg { color: #bbb; font-size: 13px; text-align: center; padding: 24px 0; }
-
-  /* SEARCH BAR */
-  .search-bar {
-    display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
-    background: white; border-radius: 10px; padding: 10px 16px;
-    box-shadow: 0 1px 5px rgba(0,0,0,0.09);
-  }
-  .search-bar label { font-size: 13px; font-weight: 700; color: #555; white-space: nowrap; }
-  .search-bar input {
-    flex: 1; padding: 8px 14px; border-radius: 8px; border: 2px solid #1a73e8;
-    font-size: 14px; outline: none; color: #333; transition: box-shadow .2s;
-  }
-  .search-bar input:focus { box-shadow: 0 0 0 3px rgba(26,115,232,0.2); }
-  .search-bar button {
-    background: #e8f0fe; border: none; border-radius: 7px; padding: 8px 14px;
-    color: #1a73e8; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .2s;
-  }
-  .search-bar button:hover { background: #d2e3fc; }
-  .search-highlight { background: #fff176; border-radius: 3px; padding: 0 2px; }
 
   /* LOADING */
   #loading-overlay {
@@ -195,6 +214,10 @@
     border-radius: 8px; padding: 12px 16px; margin-bottom: 14px;
     font-size: 13px; display: none;
   }
+
+  @media (max-width: 760px) {
+    .calendar-grid { grid-template-columns: repeat(3,1fr); }
+  }
 </style>
 </head>
 <body>
@@ -210,7 +233,7 @@
   <div class="login-card">
     <div class="icon">📅</div>
     <h1>Calendario Cardiologi</h1>
-    <p>Visualizzazione settimanale dei turni medici.<br>Accedi con il tuo account Google per iniziare.</p>
+    <p>Visualizzazione turni medici.<br>Accedi con il tuo account Google per iniziare.</p>
     <button class="btn-google" id="btn-login">
       <svg viewBox="0 0 48 48"><path fill="#FFF" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z"/></svg>
       Accedi con Google
@@ -241,18 +264,12 @@
     </button>
   </div>
 
-  <!-- Navigazione settimana -->
-  <div class="week-nav">
-    <button class="nav-arrow" id="btn-prev">&#8592;</button>
-    <span class="week-label" id="week-label"></span>
-    <button class="nav-arrow" id="btn-next">&#8594;</button>
-    <button class="btn-today" id="btn-today">Oggi</button>
-  </div>
-
-  <!-- Selezione mese -->
-  <div class="month-selector">
-    <label>📅 Mese:</label>
-    <select id="month-select" onchange="changeMonth()"></select>
+  <!-- Navigazione mese con freccette -->
+  <div class="month-nav">
+    <button class="nav-arrow" id="btn-prev-month">&#8592;</button>
+    <span class="month-label" id="month-label-nav"></span>
+    <button class="nav-arrow" id="btn-next-month">&#8594;</button>
+    <button class="btn-today" id="btn-today-month">Oggi</button>
   </div>
 
   <!-- Ricerca cardiologo -->
@@ -262,26 +279,39 @@
     <button onclick="clearSearch()">✕ Cancella</button>
   </div>
 
+  <!-- ═══ VISTA MENSILE (principale) ═══ -->
+  <div class="stats-card">
+    <h3>📆 <span id="month-label-stat"></span> — conteggio per medico</h3>
+    <div id="stats-month"></div>
+  </div>
+
+  <!-- ═══ SEZIONE SETTIMANALE (in basso) ═══ -->
+  <div class="section-divider">
+    <h2>📋 Vista settimanale</h2>
+  </div>
+
+  <!-- Navigazione settimana -->
+  <div class="week-nav">
+    <button class="nav-arrow" id="btn-prev-week">&#8592;</button>
+    <span class="week-label" id="week-label"></span>
+    <button class="nav-arrow" id="btn-next-week">&#8594;</button>
+    <button class="btn-today-week" id="btn-today-week">Questa settimana</button>
+  </div>
+
   <!-- Griglia settimana -->
   <div class="calendar-grid" id="calendar-grid"></div>
 
-  <!-- Statistiche -->
-  <div class="stats-grid">
-    <div class="stats-card">
-      <h3>📊 Settimana — conteggio per medico</h3>
-      <div id="stats-week"></div>
-    </div>
-    <div class="stats-card">
-      <h3>📆 Mese di <span id="month-label-stat"></span> — conteggio per medico</h3>
-      <div id="stats-month"></div>
-    </div>
+  <!-- Lista settimanale -->
+  <div class="stats-card">
+    <h3>📊 Settimana — conteggio per medico</h3>
+    <div id="stats-week"></div>
   </div>
 </div>
 
 <!-- Google APIs -->
 
 <script>
-// ─── CONFIG (preconfigurata) ───────────────────────────────────
+// ─── CONFIG ───────────────────────────────────────────────────
 const CLIENT_ID = '976159946912-keku8ef7blm4rganeljuftn9umbdvnl9.apps.googleusercontent.com';
 
 const CALENDARS = [
@@ -300,7 +330,8 @@ let gapiInited = false;
 let gisInited  = false;
 let tokenClient;
 let allEvents  = [];
-let currentWeekStart;
+let currentMonth;       // primo giorno del mese corrente
+let currentWeekStart;   // primo giorno della settimana corrente
 let currentCalIndex = 0;
 let autoLoginAttempted = false;
 
@@ -369,19 +400,25 @@ function isHolterEvent(ev) {
   return currentCalIndex === 1;
 }
 
+// Evento ECG: contiene la parola ECG nel titolo
+function isEcgEvent(ev) {
+  if (!ev.start || !ev.start.date) return false;
+  return /\bECG\b/i.test(ev.summary || '');
+}
+
 // ─── AUTH CALLBACK ────────────────────────────────────────────
 function handleTokenResponse(resp) {
   if (resp.error) {
-    // Accesso silenzioso fallito → mostra schermata di login
     hideLoading();
     document.getElementById('login-screen').style.display = 'flex';
     document.getElementById('app').style.display = 'none';
     return;
   }
-  // Accesso riuscito
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
-  if (!currentWeekStart) currentWeekStart = startOfWeek(new Date());
+  const now = new Date();
+  if (!currentMonth) currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  if (!currentWeekStart) currentWeekStart = startOfWeek(now);
   loadEvents();
 }
 
@@ -404,23 +441,20 @@ function gisLoaded() {
   maybeAutoLogin();
 }
 
-// Tenta accesso automatico silenzioso (senza popup) se già autorizzato
 function maybeAutoLogin() {
   if (!gapiInited || !gisInited || autoLoginAttempted) return;
   autoLoginAttempted = true;
   showLoading('Accesso automatico...');
-  // prompt='' → silenzioso se già autorizzato, altrimenti mostra selezione account (senza ri-chiedere consenso)
   tokenClient.requestAccessToken({ prompt: '' });
 }
 
-// ─── PULSANTE LOGIN ───────────────────────────────────────────
+// ─── PULSANTI ─────────────────────────────────────────────────
 document.getElementById('btn-login').addEventListener('click', () => {
   if (!gisInited || !tokenClient) {
     alert('Le librerie Google non sono ancora pronte. Attendi qualche secondo e riprova.');
     return;
   }
   showLoading('Autenticazione in corso...');
-  // prompt='' → non ri-chiede consenso se già concesso
   tokenClient.requestAccessToken({ prompt: '' });
 });
 
@@ -432,6 +466,44 @@ document.getElementById('btn-signout').addEventListener('click', () => {
   allEvents = [];
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
+});
+
+// ─── NAVIGAZIONE MESE ─────────────────────────────────────────
+document.getElementById('btn-prev-month').addEventListener('click', () => {
+  currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
+  // Allinea settimana al mese selezionato
+  currentWeekStart = startOfWeek(currentMonth);
+  render();
+});
+document.getElementById('btn-next-month').addEventListener('click', () => {
+  currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
+  currentWeekStart = startOfWeek(currentMonth);
+  render();
+});
+document.getElementById('btn-today-month').addEventListener('click', () => {
+  const now = new Date();
+  currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  currentWeekStart = startOfWeek(now);
+  render();
+});
+
+// ─── NAVIGAZIONE SETTIMANA ────────────────────────────────────
+document.getElementById('btn-prev-week').addEventListener('click', () => {
+  currentWeekStart = addDays(currentWeekStart, -7);
+  // Aggiorna mese se la settimana cambia mese
+  currentMonth = new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), 1);
+  render();
+});
+document.getElementById('btn-next-week').addEventListener('click', () => {
+  currentWeekStart = addDays(currentWeekStart, 7);
+  currentMonth = new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), 1);
+  render();
+});
+document.getElementById('btn-today-week').addEventListener('click', () => {
+  const now = new Date();
+  currentWeekStart = startOfWeek(now);
+  currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  render();
 });
 
 // ─── SWITCH CALENDARIO ────────────────────────────────────────
@@ -448,9 +520,9 @@ async function loadEvents() {
   showLoading('Caricamento eventi — ' + CALENDARS[currentCalIndex].label + '...');
   hideError();
   try {
-    const now   = currentWeekStart || new Date();
-    const tMin  = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-    const tMax  = new Date(now.getFullYear(), now.getMonth() + 4, 1);
+    const ref   = currentMonth || new Date();
+    const tMin  = new Date(ref.getFullYear(), ref.getMonth() - 3, 1);
+    const tMax  = new Date(ref.getFullYear(), ref.getMonth() + 4, 1);
     let items = [], pageToken;
     do {
       const p = {
@@ -469,13 +541,26 @@ async function loadEvents() {
 
     const relevant = [];
     items.forEach(ev => {
+      const hasEcg = isEcgEvent(ev);
       if (isRelevant(ev)) {
         relevant.push({
           date: ev.start.date,
           summary: ev.summary,
           colorId: ev.colorId || null,
           isHolter: false,
+          isEcg: hasEcg,
           parsed: parseEvent(ev.summary || '', false)
+        });
+      } else if (hasEcg && ev.start && ev.start.date) {
+        // Evento ECG puro (non ha prefisso 01/02)
+        relevant.push({
+          date: ev.start.date,
+          summary: ev.summary,
+          colorId: ev.colorId || null,
+          isHolter: false,
+          isEcg: true,
+          isEcgOnly: true,  // ECG senza medico associato
+          parsed: { doctorName: (ev.summary||'').toUpperCase(), turno: 'ECG', fullTitle: ev.summary }
         });
       } else if (isHolterEvent(ev)) {
         relevant.push({
@@ -483,6 +568,7 @@ async function loadEvents() {
           summary: ev.summary,
           colorId: ev.colorId || null,
           isHolter: true,
+          isEcg: hasEcg,
           parsed: parseEvent(ev.summary || '', true)
         });
       }
@@ -499,7 +585,17 @@ async function loadEvents() {
 }
 
 // ─── RENDER ───────────────────────────────────────────────────
-function render() { populateMonthSelector(); renderWeek(); renderStats(); }
+function render() {
+  renderMonthNav();
+  renderWeek();
+  renderStats();
+}
+
+function renderMonthNav() {
+  const lbl = fmtMonthYear(currentMonth || new Date());
+  document.getElementById('month-label-nav').textContent = lbl.charAt(0).toUpperCase() + lbl.slice(1);
+  document.getElementById('month-label-stat').textContent = lbl;
+}
 
 function renderWeek() {
   const ws = currentWeekStart;
@@ -533,23 +629,32 @@ function renderWeek() {
     num.textContent = day.getDate();
     body.appendChild(num);
 
-    dayEvs.filter(ev => matchesSearch(ev)).forEach(ev => {
+    // Mostra SEMPRE gli ECG (non filtrati dalla ricerca)
+    // Gli altri eventi vengono filtrati dalla ricerca
+    dayEvs.forEach(ev => {
+      const alwaysShow = ev.isEcg; // ECG sempre visibile
+      if (!alwaysShow && !matchesSearch(ev)) return;
+
       const pill = document.createElement('div');
-      // ── Colori fissi: verde / blu / vinaccia ──
       let colorClass;
-      if (ev.isHolter) {
-        colorClass = 'event-holter';      // vinaccia
+      if (ev.isEcg) {
+        colorClass = 'event-ecg';
+      } else if (ev.isHolter) {
+        colorClass = 'event-holter';
       } else if (currentCalIndex === 0) {
-        colorClass = 'event-consuntivo';  // verde
+        colorClass = 'event-consuntivo';
       } else {
-        colorClass = 'event-turno';       // blu
+        colorClass = 'event-turno';
       }
       pill.className = 'event-pill ' + colorClass;
+
       let lbl = ev.parsed
         ? ev.parsed.doctorName + (ev.parsed.turno ? ' · ' + ev.parsed.turno : '')
         : ev.summary;
-      if (ev.isHolter) lbl = '🫀 ' + lbl;
-      pill.innerHTML = highlightText(lbl);
+      if (ev.isHolter && !ev.isEcg) lbl = '🫀 ' + lbl;
+      if (ev.isEcg) lbl = '💓 ' + lbl;
+
+      pill.innerHTML = alwaysShow ? lbl : highlightText(lbl);
       pill.title = ev.summary;
       body.appendChild(pill);
     });
@@ -560,18 +665,16 @@ function renderWeek() {
 }
 
 function renderStats() {
+  const m = currentMonth || new Date();
+  const mStart = toISODate(new Date(m.getFullYear(), m.getMonth(), 1));
+  const mEnd   = toISODate(new Date(m.getFullYear(), m.getMonth()+1, 0));
+
   const ws = currentWeekStart;
   const we = addDays(ws, 6);
   const wStart = toISODate(ws), wEnd = toISODate(we);
 
-  const year = ws.getFullYear(), month = ws.getMonth();
-  const mStart = toISODate(new Date(year, month, 1));
-  const mEnd   = toISODate(new Date(year, month+1, 0));
-
-  document.getElementById('month-label-stat').textContent = fmtMonthYear(ws);
-
-  renderTable('stats-week',  allEvents.filter(ev => ev.date >= wStart && ev.date <= wEnd));
   renderTable('stats-month', allEvents.filter(ev => ev.date >= mStart && ev.date <= mEnd));
+  renderTable('stats-week',  allEvents.filter(ev => ev.date >= wStart && ev.date <= wEnd));
 }
 
 function badgeClass(n) {
@@ -588,19 +691,23 @@ function renderTable(id, events) {
     container.innerHTML = '<p class="empty-msg">Nessun evento trovato</p>'; return;
   }
   const counts = {};
-  events.filter(ev => matchesSearch(ev)).forEach(ev => {
+  events.filter(ev => matchesSearch(ev) && !ev.isEcgOnly).forEach(ev => {
     if (!ev.parsed) return;
     const k = ev.parsed.doctorName;
-    if (!counts[k]) counts[k] = { total:0, mat:0, pom:0, holter:0, altro:0 };
+    if (!counts[k]) counts[k] = { total:0, mat:0, pom:0, holter:0, ecg:0, altro:0 };
     counts[k].total++;
     const t = ev.parsed.turno.toUpperCase();
     if (['MATTINA','MATTINO','AM','MORNING'].includes(t)) counts[k].mat++;
     else if (['POMERIGGIO','POMERIGIO','PM','AFTERNOON'].includes(t)) counts[k].pom++;
     else if (t === 'HOLTER') counts[k].holter++;
+    else if (t === 'ECG') counts[k].ecg++;
     else counts[k].altro++;
   });
 
   const sorted = Object.entries(counts).sort((a,b) => b[1].total - a[1].total);
+  if (!sorted.length) {
+    container.innerHTML = '<p class="empty-msg">Nessun risultato</p>'; return;
+  }
 
   const tbl = document.createElement('table');
   tbl.className = 'stats-table';
@@ -610,6 +717,7 @@ function renderTable(id, events) {
     <th style="text-align:center">Mattina</th>
     <th style="text-align:center">Pomeriggio</th>
     <th style="text-align:center">Holter</th>
+    <th style="text-align:center">ECG</th>
     <th style="text-align:center">Altro</th>
   </tr></thead>`;
   const tbody = document.createElement('tbody');
@@ -621,37 +729,12 @@ function renderTable(id, events) {
       <td style="text-align:center">${c.mat    > 0 ? c.mat    : '<span style="color:#ccc">–</span>'}</td>
       <td style="text-align:center">${c.pom    > 0 ? c.pom    : '<span style="color:#ccc">–</span>'}</td>
       <td style="text-align:center">${c.holter > 0 ? c.holter : '<span style="color:#ccc">–</span>'}</td>
-      <td style="text-align:center">${c.altro  > 0 ? c.altro  : '<span style="color:#ccc">–</span>'}</td>`;
+      <td style="text-align:center">${c.ecg    > 0 ? c.ecg    : '<span style="color:#ccc">–</span>'}</td>
+      <td style="text-align:center">${c.altro  > 0 ? c.altro  : '<span style="color:#ccc">–</span>'}`;
     tbody.appendChild(tr);
   });
   tbl.appendChild(tbody);
   container.appendChild(tbl);
-}
-
-// ─── MONTH SELECTOR ───────────────────────────────────────────
-function populateMonthSelector() {
-  const sel = document.getElementById('month-select');
-  sel.innerHTML = '';
-  const now = new Date();
-  for (let offset = -6; offset <= 6; offset++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-    const opt = document.createElement('option');
-    opt.value = `${d.getFullYear()}-${d.getMonth()}`;
-    opt.textContent = d.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
-    if (currentWeekStart && d.getFullYear() === currentWeekStart.getFullYear() && d.getMonth() === currentWeekStart.getMonth()) {
-      opt.selected = true;
-    } else if (!currentWeekStart && offset === 0) {
-      opt.selected = true;
-    }
-    sel.appendChild(opt);
-  }
-}
-
-function changeMonth() {
-  const val = document.getElementById('month-select').value;
-  const [year, month] = val.split('-').map(Number);
-  currentWeekStart = startOfWeek(new Date(year, month, 1));
-  render();
 }
 
 // ─── RICERCA CARDIOLOGO ───────────────────────────────────────
@@ -684,11 +767,6 @@ function highlightText(text) {
     + '<span class="search-highlight">' + text.slice(idx, idx + searchQuery.length) + '</span>'
     + text.slice(idx + searchQuery.length);
 }
-
-// ─── NAVIGAZIONE ──────────────────────────────────────────────
-document.getElementById('btn-prev').addEventListener('click', () => { currentWeekStart = addDays(currentWeekStart,-7); populateMonthSelector(); render(); });
-document.getElementById('btn-next').addEventListener('click', () => { currentWeekStart = addDays(currentWeekStart, 7); populateMonthSelector(); render(); });
-document.getElementById('btn-today').addEventListener('click', () => { currentWeekStart = startOfWeek(new Date()); populateMonthSelector(); render(); });
 
 // ─── UI HELPERS ───────────────────────────────────────────────
 function showLoading(msg) {

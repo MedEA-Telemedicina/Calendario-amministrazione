@@ -174,7 +174,7 @@
     <div class="icon">📅</div>
     <h1>Calendario Cardiologi</h1>
     <p>Visualizzazione settimanale dei turni medici.<br>Accedi con il tuo account Google per iniziare.</p>
-    <button class="btn-google" id="btn-login" disabled>
+    <button class="btn-google" id="btn-login">
       <svg viewBox="0 0 48 48"><path fill="#FFF" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z"/></svg>
       Accedi con Google
     </button>
@@ -303,13 +303,8 @@ function isRelevant(ev) {
 // ─── GAPI / GIS ───────────────────────────────────────────────
 function gapiLoaded() {
   gapi.load('client', async () => {
-    try {
-      await gapi.client.init({});
-    } catch(e) {
-      console.warn('gapi init:', e);
-    }
+    try { await gapi.client.init({}); } catch(e) {}
     gapiInited = true;
-    maybeEnable();
   });
 }
 function gisLoaded() {
@@ -325,14 +320,15 @@ function gisLoaded() {
     },
   });
   gisInited = true;
-  maybeEnable();
 }
-function maybeEnable() {
-  if (gapiInited && gisInited) document.getElementById('btn-login').disabled = false;
-}
+
 
 // ─── AUTH ─────────────────────────────────────────────────────
 document.getElementById('btn-login').addEventListener('click', () => {
+  if (!gisInited || !tokenClient) {
+    alert('Le librerie Google non sono ancora pronte. Attendi qualche secondo e riprova.');
+    return;
+  }
   showLoading('Autenticazione in corso...');
   tokenClient.requestAccessToken({ prompt: 'consent' });
 });
@@ -371,7 +367,7 @@ async function loadEvents() {
       };
       if (pageToken) p.pageToken = pageToken;
       const r = await gapi.client.request({
-        path: `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CALENDARS[currentCalIndex].id)}/events`,
+        path: 'https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent(CALENDARS[currentCalIndex].id) + '/events',
         params: p
       });
       items = items.concat(r.result.items || []);

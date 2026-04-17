@@ -108,8 +108,32 @@
     margin-bottom: 4px; line-height: 1.4; border-left: 3px solid transparent;
     word-break: break-word;
   }
-  .event-01 { background: #e8f5e9; color: #2e7d32; border-color: #43a047; }
-  .event-02 { background: #e3f2fd; color: #1565c0; border-color: #1e88e5; }
+  /* Google Calendar color IDs */
+  .event-gc-1  { background: #d6ddf0; color: #4a5a8a; border-color: #7986CB; } /* Lavanda */
+  .event-gc-2  { background: #d4f0e1; color: #1e7a4a; border-color: #33B679; } /* Salvia */
+  .event-gc-3  { background: #ebd4f6; color: #6a1b8a; border-color: #8E24AA; } /* Uva */
+  .event-gc-4  { background: #fce0dc; color: #b74a3f; border-color: #E67C73; } /* Fenicottero */
+  .event-gc-5  { background: #fdf2d0; color: #8a7a10; border-color: #F6BF26; } /* Banana */
+  .event-gc-6  { background: #fdd9cf; color: #bf3a0e; border-color: #F4511E; } /* Mandarino */
+  .event-gc-7  { background: #cfe9fa; color: #026ea8; border-color: #039BE5; } /* Pavone */
+  .event-gc-8  { background: #e0e0e0; color: #424242; border-color: #616161; } /* Grafite */
+  .event-gc-9  { background: #d6daf0; color: #2c367a; border-color: #3F51B5; } /* Mirtillo */
+  .event-gc-10 { background: #d0e8d6; color: #06602f; border-color: #0B8043; } /* Basilico */
+  .event-gc-11 { background: #f8d0d0; color: #a10000; border-color: #D50000; } /* Pomodoro */
+  .event-gc-default { background: #e3f2fd; color: #1565c0; border-color: #1e88e5; } /* Default calendario */
+  .event-holter { background: #f3e0f0; color: #6a1b5e; border-color: #8E24AA; } /* Holter - vinaccia */
+
+  /* Month selector */
+  .month-selector {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .month-selector label { font-size: 13px; font-weight: 700; color: #555; }
+  .month-selector select {
+    padding: 8px 14px; border-radius: 8px; border: 2px solid #1a73e8;
+    font-size: 13px; font-weight: 600; color: #1a73e8; background: white;
+    cursor: pointer; outline: none;
+  }
+  .month-selector select:focus { box-shadow: 0 0 0 3px rgba(26,115,232,0.2); }
 
   /* STATS */
   .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -212,6 +236,12 @@
     <button class="btn-today" id="btn-today">Oggi</button>
   </div>
 
+  <!-- Selezione mese -->
+  <div class="month-selector">
+    <label>📅 Mese:</label>
+    <select id="month-select" onchange="changeMonth()"></select>
+  </div>
+
   <!-- Griglia settimana -->
   <div class="calendar-grid" id="calendar-grid"></div>
 
@@ -281,7 +311,16 @@ const GIORNI = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerd�
 // ─── PARSING ──────────────────────────────────────────────────
 const TIME_WORDS = ['MATTINA','MATTINO','POMERIGGIO','POMERIGIO','SERA','NOTTE','AM','PM','MORNING','AFTERNOON'];
 
-function parseEvent(title) {
+// Rimuove suffissi tra parentesi come (ECG), (HOLTER), ecc. per unificare i nomi
+function normalizeDoctorName(name) {
+  return name.replace(/\s*\([^)]*\)\s*/g, '').trim();
+}
+
+function parseEvent(title, isHolter) {
+  if (isHolter) {
+    const name = normalizeDoctorName(title.trim().toUpperCase());
+    return { prefix: 'HOLTER', doctorName: name, turno: 'HOLTER', fullTitle: title };
+  }
   const m = title.match(/^(0[12])\s+(.+)$/i);
   if (!m) return null;
   const prefix = m[1];
@@ -291,11 +330,26 @@ function parseEvent(title) {
     const re = new RegExp(`\\s+${w}\\s*$`,'i');
     if (re.test(rest)) { turno = w; rest = rest.replace(re,'').trim(); break; }
   }
+  rest = normalizeDoctorName(rest);
   return { prefix, doctorName: rest, turno, fullTitle: title };
 }
 
 function isRelevant(ev) {
-  return ev.start && ev.start.date && /^0[12]\s+/i.test((ev.summary||'').trim());
+  if (!ev.start || !ev.start.date) return false;
+  const s = (ev.summary||'').trim();
+  if (/^0[12]\s+/i.test(s)) return true;
+  return false;
+}
+
+function isHolterEvent(ev) {
+  // All-day event, NOT starting with 01/02 → Holter shift (only on Medici in Turno calendar)
+  if (!ev.start || !ev.start.date) return false;
+  const s = (ev.summary||'').trim();
+  if (/^0[12]\s+/i.test(s)) return false;
+  if (!s) return false;
+  // Must have colorId 9 (grape/vinaccia) or be an all-day event with a name
+  // We include all non-01/02 all-day events on the turno calendar
+  return currentCalIndex === 1;
 }
 
 // ─── GAPI / GIS ───────────────────────────────────────────────
@@ -372,11 +426,27 @@ async function loadEvents() {
       pageToken = r.result.nextPageToken;
     } while (pageToken);
 
-    allEvents = items.filter(isRelevant).map(ev => ({
-      date: ev.start.date,
-      summary: ev.summary,
-      parsed: parseEvent(ev.summary || '')
-    }));
+    const relevant = [];
+    items.forEach(ev => {
+      if (isRelevant(ev)) {
+        relevant.push({
+          date: ev.start.date,
+          summary: ev.summary,
+          colorId: ev.colorId || null,
+          isHolter: false,
+          parsed: parseEvent(ev.summary || '', false)
+        });
+      } else if (isHolterEvent(ev)) {
+        relevant.push({
+          date: ev.start.date,
+          summary: ev.summary,
+          colorId: ev.colorId || null,
+          isHolter: true,
+          parsed: parseEvent(ev.summary || '', true)
+        });
+      }
+    });
+    allEvents = relevant;
 
     render();
     hideLoading();
@@ -388,7 +458,7 @@ async function loadEvents() {
 }
 
 // ─── RENDER ───────────────────────────────────────────────────
-function render() { renderWeek(); renderStats(); }
+function render() { populateMonthSelector(); renderWeek(); renderStats(); }
 
 function renderWeek() {
   const ws = currentWeekStart;
@@ -424,11 +494,19 @@ function renderWeek() {
 
     dayEvs.forEach(ev => {
       const pill = document.createElement('div');
-      const pfx  = ev.parsed ? ev.parsed.prefix : '01';
-      pill.className = `event-pill event-${pfx}`;
+      let colorClass;
+      if (ev.isHolter) {
+        colorClass = 'event-holter';
+      } else if (ev.colorId) {
+        colorClass = 'event-gc-' + ev.colorId;
+      } else {
+        colorClass = 'event-gc-default';
+      }
+      pill.className = 'event-pill ' + colorClass;
       let lbl = ev.parsed
         ? ev.parsed.doctorName + (ev.parsed.turno ? ' · ' + ev.parsed.turno : '')
         : ev.summary;
+      if (ev.isHolter) lbl = '🫀 ' + lbl;
       pill.textContent = lbl;
       pill.title = ev.summary;
       body.appendChild(pill);
@@ -471,11 +549,12 @@ function renderTable(id, events) {
   events.forEach(ev => {
     if (!ev.parsed) return;
     const k = ev.parsed.doctorName;
-    if (!counts[k]) counts[k] = { total:0, mat:0, pom:0, altro:0 };
+    if (!counts[k]) counts[k] = { total:0, mat:0, pom:0, holter:0, altro:0 };
     counts[k].total++;
     const t = ev.parsed.turno.toUpperCase();
     if (['MATTINA','MATTINO','AM','MORNING'].includes(t)) counts[k].mat++;
     else if (['POMERIGGIO','POMERIGIO','PM','AFTERNOON'].includes(t)) counts[k].pom++;
+    else if (t === 'HOLTER') counts[k].holter++;
     else counts[k].altro++;
   });
 
@@ -488,6 +567,7 @@ function renderTable(id, events) {
     <th style="text-align:center">Tot.</th>
     <th style="text-align:center">Mattina</th>
     <th style="text-align:center">Pomeriggio</th>
+    <th style="text-align:center">Holter</th>
     <th style="text-align:center">Altro</th>
   </tr></thead>`;
   const tbody = document.createElement('tbody');
@@ -496,19 +576,53 @@ function renderTable(id, events) {
     tr.innerHTML = `
       <td><strong>${name}</strong></td>
       <td style="text-align:center"><span class="${badgeClass(c.total)}">${c.total}</span></td>
-      <td style="text-align:center">${c.mat   > 0 ? c.mat   : '<span style="color:#ccc">–</span>'}</td>
-      <td style="text-align:center">${c.pom   > 0 ? c.pom   : '<span style="color:#ccc">–</span>'}</td>
-      <td style="text-align:center">${c.altro > 0 ? c.altro : '<span style="color:#ccc">–</span>'}</td>`;
+      <td style="text-align:center">${c.mat    > 0 ? c.mat    : '<span style="color:#ccc">–</span>'}</td>
+      <td style="text-align:center">${c.pom    > 0 ? c.pom    : '<span style="color:#ccc">–</span>'}</td>
+      <td style="text-align:center">${c.holter > 0 ? c.holter : '<span style="color:#ccc">–</span>'}</td>
+      <td style="text-align:center">${c.altro  > 0 ? c.altro  : '<span style="color:#ccc">–</span>'}</td>`;
     tbody.appendChild(tr);
   });
   tbl.appendChild(tbody);
   container.appendChild(tbl);
 }
 
+// ─── MONTH SELECTOR ───────────────────────────────────────────
+function populateMonthSelector() {
+  const sel = document.getElementById('month-select');
+  sel.innerHTML = '';
+  const now = new Date();
+  // Show 6 months back and 6 months forward
+  for (let offset = -6; offset <= 6; offset++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+    const opt = document.createElement('option');
+    opt.value = `${d.getFullYear()}-${d.getMonth()}`;
+    opt.textContent = d.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+    // Select the month matching currentWeekStart
+    if (currentWeekStart && d.getFullYear() === currentWeekStart.getFullYear() && d.getMonth() === currentWeekStart.getMonth()) {
+      opt.selected = true;
+    } else if (!currentWeekStart && offset === 0) {
+      opt.selected = true;
+    }
+    sel.appendChild(opt);
+  }
+}
+
+function changeMonth() {
+  const val = document.getElementById('month-select').value;
+  const [year, month] = val.split('-').map(Number);
+  // Go to the first Monday of that month
+  currentWeekStart = startOfWeek(new Date(year, month, 1));
+  // If that's in the previous month, advance a week
+  if (currentWeekStart.getMonth() < month && currentWeekStart.getDate() < 25) {
+    // startOfWeek might be in previous month, that's OK - show it
+  }
+  render();
+}
+
 // ─── NAVIGAZIONE ──────────────────────────────────────────────
-document.getElementById('btn-prev').addEventListener('click', () => { currentWeekStart = addDays(currentWeekStart,-7); render(); });
-document.getElementById('btn-next').addEventListener('click', () => { currentWeekStart = addDays(currentWeekStart, 7); render(); });
-document.getElementById('btn-today').addEventListener('click', () => { currentWeekStart = startOfWeek(new Date()); render(); });
+document.getElementById('btn-prev').addEventListener('click', () => { currentWeekStart = addDays(currentWeekStart,-7); populateMonthSelector(); render(); });
+document.getElementById('btn-next').addEventListener('click', () => { currentWeekStart = addDays(currentWeekStart, 7); populateMonthSelector(); render(); });
+document.getElementById('btn-today').addEventListener('click', () => { currentWeekStart = startOfWeek(new Date()); populateMonthSelector(); render(); });
 
 // ─── UI HELPERS ───────────────────────────────────────────────
 function showLoading(msg) {

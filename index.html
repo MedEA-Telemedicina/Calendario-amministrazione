@@ -648,11 +648,8 @@ function renderWeek() {
       }
       pill.className = 'event-pill ' + colorClass;
 
-      let lbl = ev.parsed
-        ? ev.parsed.doctorName + (ev.parsed.turno ? ' · ' + ev.parsed.turno : '')
-        : ev.summary;
+      let lbl = ev.summary.replace(/^0[12]\s+/i, '').trim();
       if (ev.isHolter && !ev.isEcg) lbl = '🫀 ' + lbl;
-      if (ev.isEcg) lbl = '💓 ' + lbl;
 
       pill.innerHTML = alwaysShow ? lbl : highlightText(lbl);
       pill.title = ev.summary;
@@ -697,10 +694,10 @@ function renderTable(id, events) {
     if (!counts[k]) counts[k] = { total:0, mat:0, pom:0, holter:0, ecg:0, altro:0 };
     counts[k].total++;
     const t = ev.parsed.turno.toUpperCase();
-    if (['MATTINA','MATTINO','AM','MORNING'].includes(t)) counts[k].mat++;
+    if (ev.isEcg) counts[k].ecg++;
+    else if (['MATTINA','MATTINO','AM','MORNING'].includes(t)) counts[k].mat++;
     else if (['POMERIGGIO','POMERIGIO','PM','AFTERNOON'].includes(t)) counts[k].pom++;
     else if (t === 'HOLTER') counts[k].holter++;
-    else if (t === 'ECG') counts[k].ecg++;
     else counts[k].altro++;
   });
 

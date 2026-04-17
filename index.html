@@ -5,11 +5,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Conteggio turni cardiologi</title>
+
   
-  <!-- Favicon -->
+<!-- Favicon -->
   <link rel="icon" type="image/png" href="MEDEA-LOGO-APP.png">
+
   
-  <style>
+<style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f0f4f8; color: #333; min-height: 100vh; }
 
@@ -35,15 +37,13 @@
   .btn-google:disabled { background: #a8c4f0; cursor: not-allowed; }
   .btn-google svg { width: 22px; height: 22px; flex-shrink: 0; }
   .login-note { font-size: 11px; color: #bbb; margin-top: 18px; }
-  .sort-bar {
-    display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;
-  }
-  .sort-bar label { font-size: 12px; font-weight: 700; color: #555; white-space: nowrap; }
+  .h3-right-controls { display: flex; align-items: center; gap: 8px; }
   .sort-select {
-    padding: 6px 12px; border-radius: 8px; border: 2px solid #1a73e8;
-    font-size: 13px; color: #333; background: white; cursor: pointer; outline: none;
+    padding: 4px 8px; border-radius: 6px; border: 1px solid #ccd;
+    font-size: 12px; color: #444; background: white; cursor: pointer; outline: none;
+    font-weight: 500;
   }
-  .sort-select:focus { box-shadow: 0 0 0 3px rgba(26,115,232,.2); }
+  .sort-select:focus { box-shadow: 0 0 0 2px rgba(26,115,232,.15); border-color: #1a73e8; }
   .btn-export {
     display: inline-flex; align-items: center; gap: 7px;
     background: #1e7e34; color: white; border: none; padding: 7px 16px;
@@ -67,6 +67,19 @@
   .header-logo-block img { height: 52px; width: auto; object-fit: contain; }
   .header-subtitle { font-size: 11px; font-weight: 600; color: #0d47a1; letter-spacing: 0.4px; margin-top: 3px; text-align: center; }
   .header-right { display: flex; align-items: center; gap: 10px; }
+  .btn-refresh {
+    background: none;
+    border: none;
+    font-size: 26px;
+    line-height: 1;
+    color: #1a73e8;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 50%;
+    transition: transform 0.4s, color 0.2s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .btn-refresh:hover { color: #0d47a1; transform: rotate(360deg); }
   .btn-sm {
     background: #1a73e8; border: none;
     color: white; padding: 7px 14px; border-radius: 7px; cursor: pointer; font-size: 13px;
@@ -282,7 +295,7 @@
       <span class="header-subtitle">Conteggio turni cardiologi</span>
     </div>
     <div class="header-right">
-      <span id="header-cal-label" style="font-size:13px;font-weight:600;color:#555;"></span>
+      <button class="btn-refresh" id="btn-refresh" title="Aggiorna dati" onclick="loadEvents()">&#x21BB;</button>
       <button class="btn-sm" id="btn-signout">Esci</button>
     </div>
   </div>
@@ -318,7 +331,18 @@
   <div class="stats-card">
     <h3>
       <span>📆 <span id="month-label-stat"></span> — conteggio per medico</span>
-      <button class="h3-export-btn" onclick="exportToExcel('stats-month')">⬇ Esporta Excel</button>
+      <div class="h3-right-controls">
+        <select id="sort-select-stats-month" class="sort-select" onchange="setSort('stats-month', this.value)">
+          <option value="alpha">A → Z</option>
+          <option value="total">Totale ↓</option>
+          <option value="mat">Mattina ↓</option>
+          <option value="pom">Pomeriggio ↓</option>
+          <option value="holter">Holter ↓</option>
+          <option value="ecg">ECG ↓</option>
+          <option value="altro">Altro ↓</option>
+        </select>
+        <button class="h3-export-btn" onclick="exportToExcel('stats-month')">⬇ Esporta Excel</button>
+      </div>
     </h3>
     <div id="stats-month"></div>
   </div>
@@ -343,7 +367,18 @@
   <div class="stats-card">
     <h3>
       <span>📊 Settimana — conteggio per medico</span>
-      <button class="h3-export-btn" onclick="exportToExcel('stats-week')">⬇ Esporta Excel</button>
+      <div class="h3-right-controls">
+        <select id="sort-select-stats-week" class="sort-select" onchange="setSort('stats-week', this.value)">
+          <option value="alpha">A → Z</option>
+          <option value="total">Totale ↓</option>
+          <option value="mat">Mattina ↓</option>
+          <option value="pom">Pomeriggio ↓</option>
+          <option value="holter">Holter ↓</option>
+          <option value="ecg">ECG ↓</option>
+          <option value="altro">Altro ↓</option>
+        </select>
+        <button class="h3-export-btn" onclick="exportToExcel('stats-week')">⬇ Esporta Excel</button>
+      </div>
     </h3>
     <div id="stats-week"></div>
   </div>
@@ -371,6 +406,7 @@ let gapiInited = false;
 let gisInited  = false;
 let tokenClient;
 let allEvents  = [];
+let loadedMin = null, loadedMax = null;
 let currentMonth;       // primo giorno del mese corrente
 let currentWeekStart;   // primo giorno della settimana corrente
 let currentCalIndex = 0;
@@ -514,12 +550,12 @@ document.getElementById('btn-prev-month').addEventListener('click', () => {
   currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
   // Allinea settimana al mese selezionato
   currentWeekStart = startOfWeek(currentMonth);
-  render();
+  if (loadedMin && currentMonth < loadedMin) { loadEvents(); } else { render(); }
 });
 document.getElementById('btn-next-month').addEventListener('click', () => {
   currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
   currentWeekStart = startOfWeek(currentMonth);
-  render();
+  if (loadedMax && currentMonth >= loadedMax) { loadEvents(); } else { render(); }
 });
 document.getElementById('btn-today-month').addEventListener('click', () => {
   const now = new Date();
@@ -562,8 +598,9 @@ async function loadEvents() {
   hideError();
   try {
     const ref   = currentMonth || new Date();
-    const tMin  = new Date(ref.getFullYear(), ref.getMonth() - 3, 1);
-    const tMax  = new Date(ref.getFullYear(), ref.getMonth() + 4, 1);
+    const tMin  = new Date(ref.getFullYear(), ref.getMonth() - 12, 1);
+    const tMax  = new Date(ref.getFullYear(), ref.getMonth() + 13, 1);
+    loadedMin = new Date(tMin); loadedMax = new Date(tMax);
     let items = [], pageToken;
     do {
       const p = {

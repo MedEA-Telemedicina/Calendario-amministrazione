@@ -108,20 +108,14 @@
     margin-bottom: 4px; line-height: 1.4; border-left: 3px solid transparent;
     word-break: break-word;
   }
-  /* Google Calendar color IDs */
-  .event-gc-1  { background: #d6ddf0; color: #4a5a8a; border-color: #7986CB; } /* Lavanda */
-  .event-gc-2  { background: #d4f0e1; color: #1e7a4a; border-color: #33B679; } /* Salvia */
-  .event-gc-3  { background: #ebd4f6; color: #6a1b8a; border-color: #8E24AA; } /* Uva */
-  .event-gc-4  { background: #fce0dc; color: #b74a3f; border-color: #E67C73; } /* Fenicottero */
-  .event-gc-5  { background: #fdf2d0; color: #8a7a10; border-color: #F6BF26; } /* Banana */
-  .event-gc-6  { background: #fdd9cf; color: #bf3a0e; border-color: #F4511E; } /* Mandarino */
-  .event-gc-7  { background: #cfe9fa; color: #026ea8; border-color: #039BE5; } /* Pavone */
-  .event-gc-8  { background: #e0e0e0; color: #424242; border-color: #616161; } /* Grafite */
-  .event-gc-9  { background: #d6daf0; color: #2c367a; border-color: #3F51B5; } /* Mirtillo */
-  .event-gc-10 { background: #d0e8d6; color: #06602f; border-color: #0B8043; } /* Basilico */
-  .event-gc-11 { background: #f8d0d0; color: #a10000; border-color: #D50000; } /* Pomodoro */
-  .event-gc-default { background: #e3f2fd; color: #1565c0; border-color: #1e88e5; } /* Default calendario */
-  .event-holter { background: #f3e0f0; color: #6a1b5e; border-color: #8E24AA; } /* Holter - vinaccia */
+
+  /* ── 3 COLORI FISSI ── */
+  /* Verde – Medici a Consuntivo */
+  .event-consuntivo { background: #d4f0d8; color: #1a5c20; border-color: #43a047; }
+  /* Blu – Medici in Turno */
+  .event-turno      { background: #d0e4ff; color: #0d3b8a; border-color: #1a73e8; }
+  /* Vinaccia – Turni Holter */
+  .event-holter     { background: #f0d4de; color: #6b0a25; border-color: #8b1a3a; }
 
   /* Month selector */
   .month-selector {
@@ -165,6 +159,25 @@
   .badge-red    { background: #e53935; }
   .empty-msg { color: #bbb; font-size: 13px; text-align: center; padding: 24px 0; }
 
+  /* SEARCH BAR */
+  .search-bar {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
+    background: white; border-radius: 10px; padding: 10px 16px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.09);
+  }
+  .search-bar label { font-size: 13px; font-weight: 700; color: #555; white-space: nowrap; }
+  .search-bar input {
+    flex: 1; padding: 8px 14px; border-radius: 8px; border: 2px solid #1a73e8;
+    font-size: 14px; outline: none; color: #333; transition: box-shadow .2s;
+  }
+  .search-bar input:focus { box-shadow: 0 0 0 3px rgba(26,115,232,0.2); }
+  .search-bar button {
+    background: #e8f0fe; border: none; border-radius: 7px; padding: 8px 14px;
+    color: #1a73e8; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .2s;
+  }
+  .search-bar button:hover { background: #d2e3fc; }
+  .search-highlight { background: #fff176; border-radius: 3px; padding: 0 2px; }
+
   /* LOADING */
   #loading-overlay {
     display: none; position: fixed; inset: 0; background: rgba(255,255,255,.82);
@@ -193,7 +206,7 @@
 </div>
 
 <!-- LOGIN SCREEN -->
-<div id="login-screen">
+<div id="login-screen" style="display:none;">
   <div class="login-card">
     <div class="icon">📅</div>
     <h1>Calendario Cardiologi</h1>
@@ -242,6 +255,13 @@
     <select id="month-select" onchange="changeMonth()"></select>
   </div>
 
+  <!-- Ricerca cardiologo -->
+  <div class="search-bar">
+    <label>🔍 Cerca cardiologo:</label>
+    <input type="text" id="search-input" placeholder="Nome medico..." oninput="applySearch()" />
+    <button onclick="clearSearch()">✕ Cancella</button>
+  </div>
+
   <!-- Griglia settimana -->
   <div class="calendar-grid" id="calendar-grid"></div>
 
@@ -282,6 +302,7 @@ let tokenClient;
 let allEvents  = [];
 let currentWeekStart;
 let currentCalIndex = 0;
+let autoLoginAttempted = false;
 
 // ─── DATE UTILS ───────────────────────────────────────────────
 function startOfWeek(date) {
@@ -311,7 +332,6 @@ const GIORNI = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerd�
 // ─── PARSING ──────────────────────────────────────────────────
 const TIME_WORDS = ['MATTINA','MATTINO','POMERIGGIO','POMERIGIO','SERA','NOTTE','AM','PM','MORNING','AFTERNOON'];
 
-// Rimuove suffissi tra parentesi come (ECG), (HOLTER), ecc. per unificare i nomi
 function normalizeDoctorName(name) {
   return name.replace(/\s*\([^)]*\)\s*/g, '').trim();
 }
@@ -342,14 +362,27 @@ function isRelevant(ev) {
 }
 
 function isHolterEvent(ev) {
-  // All-day event, NOT starting with 01/02 → Holter shift (only on Medici in Turno calendar)
   if (!ev.start || !ev.start.date) return false;
   const s = (ev.summary||'').trim();
   if (/^0[12]\s+/i.test(s)) return false;
   if (!s) return false;
-  // Must have colorId 9 (grape/vinaccia) or be an all-day event with a name
-  // We include all non-01/02 all-day events on the turno calendar
   return currentCalIndex === 1;
+}
+
+// ─── AUTH CALLBACK ────────────────────────────────────────────
+function handleTokenResponse(resp) {
+  if (resp.error) {
+    // Accesso silenzioso fallito → mostra schermata di login
+    hideLoading();
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+    return;
+  }
+  // Accesso riuscito
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  if (!currentWeekStart) currentWeekStart = startOfWeek(new Date());
+  loadEvents();
 }
 
 // ─── GAPI / GIS ───────────────────────────────────────────────
@@ -357,37 +390,45 @@ function gapiLoaded() {
   gapi.load('client', async () => {
     try { await gapi.client.init({}); } catch(e) {}
     gapiInited = true;
+    maybeAutoLogin();
   });
 }
+
 function gisLoaded() {
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
     scope: 'https://www.googleapis.com/auth/calendar.readonly',
-    callback: async (resp) => {
-      if (resp.error) { hideLoading(); showError('Errore autenticazione: ' + resp.error); return; }
-      document.getElementById('login-screen').style.display = 'none';
-      document.getElementById('app').style.display = 'block';
-      currentWeekStart = startOfWeek(new Date());
-      await loadEvents();
-    },
+    callback: handleTokenResponse,
   });
   gisInited = true;
+  maybeAutoLogin();
 }
 
+// Tenta accesso automatico silenzioso (senza popup) se già autorizzato
+function maybeAutoLogin() {
+  if (!gapiInited || !gisInited || autoLoginAttempted) return;
+  autoLoginAttempted = true;
+  showLoading('Accesso automatico...');
+  // prompt='' → silenzioso se già autorizzato, altrimenti mostra selezione account (senza ri-chiedere consenso)
+  tokenClient.requestAccessToken({ prompt: '' });
+}
 
-// ─── AUTH ─────────────────────────────────────────────────────
+// ─── PULSANTE LOGIN ───────────────────────────────────────────
 document.getElementById('btn-login').addEventListener('click', () => {
   if (!gisInited || !tokenClient) {
     alert('Le librerie Google non sono ancora pronte. Attendi qualche secondo e riprova.');
     return;
   }
   showLoading('Autenticazione in corso...');
-  tokenClient.requestAccessToken({ prompt: 'consent' });
+  // prompt='' → non ri-chiede consenso se già concesso
+  tokenClient.requestAccessToken({ prompt: '' });
 });
+
 document.getElementById('btn-signout').addEventListener('click', () => {
   const t = gapi.client.getToken();
   if (t) google.accounts.oauth2.revoke(t.access_token);
   gapi.client.setToken('');
+  autoLoginAttempted = false;
   allEvents = [];
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
@@ -492,22 +533,23 @@ function renderWeek() {
     num.textContent = day.getDate();
     body.appendChild(num);
 
-    dayEvs.forEach(ev => {
+    dayEvs.filter(ev => matchesSearch(ev)).forEach(ev => {
       const pill = document.createElement('div');
+      // ── Colori fissi: verde / blu / vinaccia ──
       let colorClass;
       if (ev.isHolter) {
-        colorClass = 'event-holter';
-      } else if (ev.colorId) {
-        colorClass = 'event-gc-' + ev.colorId;
+        colorClass = 'event-holter';      // vinaccia
+      } else if (currentCalIndex === 0) {
+        colorClass = 'event-consuntivo';  // verde
       } else {
-        colorClass = 'event-gc-default';
+        colorClass = 'event-turno';       // blu
       }
       pill.className = 'event-pill ' + colorClass;
       let lbl = ev.parsed
         ? ev.parsed.doctorName + (ev.parsed.turno ? ' · ' + ev.parsed.turno : '')
         : ev.summary;
       if (ev.isHolter) lbl = '🫀 ' + lbl;
-      pill.textContent = lbl;
+      pill.innerHTML = highlightText(lbl);
       pill.title = ev.summary;
       body.appendChild(pill);
     });
@@ -546,7 +588,7 @@ function renderTable(id, events) {
     container.innerHTML = '<p class="empty-msg">Nessun evento trovato</p>'; return;
   }
   const counts = {};
-  events.forEach(ev => {
+  events.filter(ev => matchesSearch(ev)).forEach(ev => {
     if (!ev.parsed) return;
     const k = ev.parsed.doctorName;
     if (!counts[k]) counts[k] = { total:0, mat:0, pom:0, holter:0, altro:0 };
@@ -574,7 +616,7 @@ function renderTable(id, events) {
   sorted.forEach(([name, c]) => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td><strong>${name}</strong></td>
+      <td><strong>${highlightText(name)}</strong></td>
       <td style="text-align:center"><span class="${badgeClass(c.total)}">${c.total}</span></td>
       <td style="text-align:center">${c.mat    > 0 ? c.mat    : '<span style="color:#ccc">–</span>'}</td>
       <td style="text-align:center">${c.pom    > 0 ? c.pom    : '<span style="color:#ccc">–</span>'}</td>
@@ -591,13 +633,11 @@ function populateMonthSelector() {
   const sel = document.getElementById('month-select');
   sel.innerHTML = '';
   const now = new Date();
-  // Show 6 months back and 6 months forward
   for (let offset = -6; offset <= 6; offset++) {
     const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
     const opt = document.createElement('option');
     opt.value = `${d.getFullYear()}-${d.getMonth()}`;
     opt.textContent = d.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
-    // Select the month matching currentWeekStart
     if (currentWeekStart && d.getFullYear() === currentWeekStart.getFullYear() && d.getMonth() === currentWeekStart.getMonth()) {
       opt.selected = true;
     } else if (!currentWeekStart && offset === 0) {
@@ -610,13 +650,39 @@ function populateMonthSelector() {
 function changeMonth() {
   const val = document.getElementById('month-select').value;
   const [year, month] = val.split('-').map(Number);
-  // Go to the first Monday of that month
   currentWeekStart = startOfWeek(new Date(year, month, 1));
-  // If that's in the previous month, advance a week
-  if (currentWeekStart.getMonth() < month && currentWeekStart.getDate() < 25) {
-    // startOfWeek might be in previous month, that's OK - show it
-  }
   render();
+}
+
+// ─── RICERCA CARDIOLOGO ───────────────────────────────────────
+let searchQuery = '';
+
+function applySearch() {
+  searchQuery = (document.getElementById('search-input').value || '').trim().toUpperCase();
+  renderWeek();
+  renderStats();
+}
+
+function clearSearch() {
+  document.getElementById('search-input').value = '';
+  searchQuery = '';
+  renderWeek();
+  renderStats();
+}
+
+function matchesSearch(ev) {
+  if (!searchQuery) return true;
+  const name = ev.parsed ? ev.parsed.doctorName : (ev.summary || '').toUpperCase();
+  return name.includes(searchQuery);
+}
+
+function highlightText(text) {
+  if (!searchQuery) return text;
+  const idx = text.toUpperCase().indexOf(searchQuery);
+  if (idx === -1) return text;
+  return text.slice(0, idx)
+    + '<span class="search-highlight">' + text.slice(idx, idx + searchQuery.length) + '</span>'
+    + text.slice(idx + searchQuery.length);
 }
 
 // ─── NAVIGAZIONE ──────────────────────────────────────────────

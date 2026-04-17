@@ -6,14 +6,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Conteggio turni cardiologi</title>
   
-   <!-- Favicon -->
+  <!-- Favicon -->
   <link rel="icon" type="image/png" href="MEDEA-LOGO-APP.png">
   
-<style>
+  <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f0f4f8; color: #333; min-height: 100vh; }
 
-  
   /* ── LOGIN SCREEN ── */
   #login-screen {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -136,7 +135,15 @@
   .stats-card h3 {
     font-size: 15px; font-weight: 700; color: #1a73e8; margin-bottom: 14px;
     padding-bottom: 10px; border-bottom: 2px solid #e8f0fe;
+    display: flex; align-items: center; justify-content: space-between;
   }
+  .h3-export-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: transparent; color: #999; border: 1px solid #ddd;
+    padding: 4px 11px; border-radius: 6px; font-size: 11px; font-weight: 500;
+    cursor: pointer; transition: all .2s; white-space: nowrap;
+  }
+  .h3-export-btn:hover { background: #f5f5f5; color: #444; border-color: #bbb; }
   .stats-table { width: 100%; border-collapse: collapse; }
   .stats-table th {
     text-align: left; padding: 7px 10px; font-size: 11px; color: #888;
@@ -309,7 +316,10 @@
 
   <!-- ═══ VISTA MENSILE (principale) ═══ -->
   <div class="stats-card">
-    <h3>📆 <span id="month-label-stat"></span> — conteggio per medico</h3>
+    <h3>
+      <span>📆 <span id="month-label-stat"></span> — conteggio per medico</span>
+      <button class="h3-export-btn" onclick="exportToExcel('stats-month')">⬇ Esporta Excel</button>
+    </h3>
     <div id="stats-month"></div>
   </div>
 
@@ -331,7 +341,10 @@
 
   <!-- Lista settimanale -->
   <div class="stats-card">
-    <h3>📊 Settimana — conteggio per medico</h3>
+    <h3>
+      <span>📊 Settimana — conteggio per medico</span>
+      <button class="h3-export-btn" onclick="exportToExcel('stats-week')">⬇ Esporta Excel</button>
+    </h3>
     <div id="stats-week"></div>
   </div>
 </div>
@@ -795,12 +808,7 @@ function renderTable(id, events) {
     </select>`;
   container.appendChild(sortBar);
 
-  // export button
-  const exportBtn = document.createElement('button');
-  exportBtn.className = 'btn-export';
-  exportBtn.innerHTML = '⬇ Esporta Excel';
-  exportBtn.onclick = () => exportToExcel(id);
-  container.appendChild(exportBtn);
+
 
   const tbl = document.createElement('table');
   tbl.className = 'stats-table';

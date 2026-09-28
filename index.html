@@ -332,7 +332,7 @@
           <option value="mat">Mattina ↓</option>
           <option value="pom">Pomeriggio ↓</option>
           <option value="dom">Domenica ↓</option>
-          <option value="ecg">ECG ↓</option>
+          <option value="ecg">di cui ECG ↓</option>
           <option value="holter">Holter (10hc/10hp) ↓</option>
           <option value="holter16">Holter (16hc) ↓</option>
           <option value="altro">Non riconosciuto ↓</option>
@@ -370,7 +370,7 @@
           <option value="mat">Mattina ↓</option>
           <option value="pom">Pomeriggio ↓</option>
           <option value="dom">Domenica ↓</option>
-          <option value="ecg">ECG ↓</option>
+          <option value="ecg">di cui ECG ↓</option>
           <option value="holter">Holter (10hc/10hp) ↓</option>
           <option value="holter16">Holter (16hc) ↓</option>
           <option value="altro">Non riconosciuto ↓</option>
@@ -762,7 +762,7 @@ const _tableData = {};
 function exportToExcel(id) {
   const data = _tableData[id];
   if (!data || !data.rows.length) { alert('Nessun dato da esportare.'); return; }
-  const wsData = [['Medico','Totale','Mattina','Pomeriggio','Domenica','ECG','Holter (10hc/10hp)','Holter (16hc)','Non riconosciuto']];
+  const wsData = [['Medico','Totale','Mattina','Pomeriggio','Domenica','di cui ECG','Holter (10hc/10hp)','Holter (16hc)','Non riconosciuto']];
   data.rows.forEach(([name, c]) => {
     wsData.push([name, c.total, c.mat, c.pom, c.dom, c.ecg, c.holter, c.holter16, c.altro]);
   });
@@ -814,13 +814,15 @@ function renderTable(id, events) {
     counts[k].total++;
     const t = ev.parsed.turno.toUpperCase();
     const isSunday = new Date(ev.date + 'T00:00:00').getDay() === 0;
+    // ECG è un conteggio "trasversale": si somma in aggiunta a mattina/pomeriggio/domenica
+    if (ev.isEcg) counts[k].ecg++;
     if (isSunday) {
       // Turni di domenica: compaiono SOLO nella colonna Domenica (con o senza mattina/pomeriggio)
       counts[k].dom++;
     }
     else if (['MATTINA','MATTINO','AM','MORNING'].includes(t)) counts[k].mat++;
     else if (['POMERIGGIO','POMERIGIO','PM','AFTERNOON'].includes(t)) counts[k].pom++;
-    else if (ev.isEcg) counts[k].ecg++;
+    else if (ev.isEcg) { /* già contato sopra come ECG: non finisce in 'Non riconosciuto' */ }
     else if (t === 'HOLTER') { if (ev.parsed.holter16) counts[k].holter16++; else counts[k].holter++; }
     else counts[k].altro++;
   });
@@ -858,7 +860,7 @@ function renderTable(id, events) {
     <th style="text-align:center">Mattina</th>
     <th style="text-align:center">Pomeriggio</th>
     <th style="text-align:center">Domenica</th>
-    <th style="text-align:center">ECG</th>
+    <th style="text-align:center">di cui ECG</th>
     <th style="text-align:center">Holter (10hc/10hp)</th>
     <th style="text-align:center">Holter (16hc)</th>
     <th style="text-align:center">Non riconosciuto</th>

@@ -4,10 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Conteggio turni cardiologi</title>
-
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="MEDEA-LOGO-APP.png">
-  
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text y='52' font-size='56'>🗒️</text></svg>">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f0f4f8; color: #333; min-height: 100vh; }
@@ -334,9 +331,11 @@
           <option value="total">Totale ↓</option>
           <option value="mat">Mattina ↓</option>
           <option value="pom">Pomeriggio ↓</option>
-          <option value="holter">Holter ↓</option>
+          <option value="holter">Holter (10hc/10hp) ↓</option>
+          <option value="holter16">Holter (16 hc) ↓</option>
           <option value="ecg">ECG ↓</option>
           <option value="altro">Altro ↓</option>
+          <option value="dom">Domenica ↓</option>
         </select>
         <button class="h3-export-btn" onclick="exportToExcel('stats-month')">⬇ Esporta Excel</button>
       </div>
@@ -370,9 +369,11 @@
           <option value="total">Totale ↓</option>
           <option value="mat">Mattina ↓</option>
           <option value="pom">Pomeriggio ↓</option>
-          <option value="holter">Holter ↓</option>
+          <option value="holter">Holter (10hc/10hp) ↓</option>
+          <option value="holter16">Holter (16 hc) ↓</option>
           <option value="ecg">ECG ↓</option>
           <option value="altro">Altro ↓</option>
+          <option value="dom">Domenica ↓</option>
         </select>
         <button class="h3-export-btn" onclick="exportToExcel('stats-week')">⬇ Esporta Excel</button>
       </div>
@@ -444,12 +445,14 @@ function normalizeDoctorName(name) {
 function parseEvent(title, isHolter) {
   if (isHolter) {
     const name = normalizeDoctorName(title.trim().toUpperCase());
-    return { prefix: 'HOLTER', doctorName: name, turno: 'HOLTER', fullTitle: title };
+    const is16 = /16\s*H\s*C/i.test(title);
+    return { prefix: 'HOLTER', doctorName: name, turno: 'HOLTER', holter16: is16, fullTitle: title };
   }
   const m = title.match(/^(0[12])\s+(.+)$/i);
   if (!m) return null;
   const prefix = m[1];
-  let rest = m[2].trim().toUpperCase();
+  // Ignora qualsiasi testo tra parentesi (es. "(ECG)", "(14-18)") prima di cercare il turno
+  let rest = m[2].replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase();
   let turno = '';
   for (const w of TIME_WORDS) {
     const re = new RegExp(`\\s+${w}\\s*$`,'i');
@@ -759,20 +762,20 @@ const _tableData = {};
 function exportToExcel(id) {
   const data = _tableData[id];
   if (!data || !data.rows.length) { alert('Nessun dato da esportare.'); return; }
-  const wsData = [['Medico','Totale','Mattina','Pomeriggio','Holter','ECG','Altro']];
+  const wsData = [['Medico','Totale','Mattina','Pomeriggio','Holter (10hc/10hp)','Holter (16 hc)','ECG','Altro','Domenica']];
   data.rows.forEach(([name, c]) => {
-    wsData.push([name, c.total, c.mat, c.pom, c.holter, c.ecg, c.altro]);
+    wsData.push([name, c.total, c.mat, c.pom, c.holter, c.holter16, c.ecg, c.altro, c.dom]);
   });
   // Totals row
   const tot = data.rows.reduce((acc,[,c]) => {
     acc.total+=c.total; acc.mat+=c.mat; acc.pom+=c.pom;
-    acc.holter+=c.holter; acc.ecg+=c.ecg; acc.altro+=c.altro; return acc;
-  }, {total:0,mat:0,pom:0,holter:0,ecg:0,altro:0});
-  wsData.push(['TOTALE', tot.total, tot.mat, tot.pom, tot.holter, tot.ecg, tot.altro]);
+    acc.holter+=c.holter; acc.holter16+=c.holter16; acc.ecg+=c.ecg; acc.altro+=c.altro; acc.dom+=c.dom; return acc;
+  }, {total:0,mat:0,pom:0,holter:0,holter16:0,ecg:0,altro:0,dom:0});
+  wsData.push(['TOTALE', tot.total, tot.mat, tot.pom, tot.holter, tot.holter16, tot.ecg, tot.altro, tot.dom]);
 
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(wsData);
-  ws['!cols'] = [{wch:28},{wch:8},{wch:10},{wch:12},{wch:8},{wch:6},{wch:7}];
+  ws['!cols'] = [{wch:28},{wch:8},{wch:10},{wch:12},{wch:18},{wch:14},{wch:6},{wch:7},{wch:10}];
   XLSX.utils.book_append_sheet(wb, ws, data.title);
   XLSX.writeFile(wb, `turni_${data.title.toLowerCase().replace(/\s+/g,'_')}.xlsx`);
 }
@@ -807,14 +810,16 @@ function renderTable(id, events) {
   events.filter(ev => matchesSearch(ev) && !ev.isEcgOnly).forEach(ev => {
     if (!ev.parsed) return;
     const k = ev.parsed.doctorName;
-    if (!counts[k]) counts[k] = { total:0, mat:0, pom:0, holter:0, ecg:0, altro:0 };
+    if (!counts[k]) counts[k] = { total:0, mat:0, pom:0, holter:0, holter16:0, ecg:0, altro:0, dom:0 };
     counts[k].total++;
     const t = ev.parsed.turno.toUpperCase();
-    if (ev.isEcg) counts[k].ecg++;
-    else if (['MATTINA','MATTINO','AM','MORNING'].includes(t)) counts[k].mat++;
+    if (['MATTINA','MATTINO','AM','MORNING'].includes(t)) counts[k].mat++;
     else if (['POMERIGGIO','POMERIGIO','PM','AFTERNOON'].includes(t)) counts[k].pom++;
-    else if (t === 'HOLTER') counts[k].holter++;
+    else if (ev.isEcg) counts[k].ecg++;
+    else if (t === 'HOLTER') { if (ev.parsed.holter16) counts[k].holter16++; else counts[k].holter++; }
     else counts[k].altro++;
+    // Turni di domenica (si aggiunge a quanto sopra)
+    if (new Date(ev.date + 'T00:00:00').getDay() === 0) counts[k].dom++;
   });
 
   const sortKey = _sortState[id] || 'alpha';
@@ -824,8 +829,10 @@ function renderTable(id, events) {
     if (sortKey === 'mat')    return b[1].mat     - a[1].mat;
     if (sortKey === 'pom')    return b[1].pom     - a[1].pom;
     if (sortKey === 'holter') return b[1].holter  - a[1].holter;
+    if (sortKey === 'holter16') return b[1].holter16 - a[1].holter16;
     if (sortKey === 'ecg')    return b[1].ecg     - a[1].ecg;
     if (sortKey === 'altro')  return b[1].altro   - a[1].altro;
+    if (sortKey === 'dom')    return b[1].dom     - a[1].dom;
     return 0;
   });
   if (!sorted.length) {
@@ -847,9 +854,11 @@ function renderTable(id, events) {
     <th style="text-align:center">Tot.</th>
     <th style="text-align:center">Mattina</th>
     <th style="text-align:center">Pomeriggio</th>
-    <th style="text-align:center">Holter</th>
+    <th style="text-align:center">Holter (10hc/10hp)</th>
+    <th style="text-align:center">Holter (16 hc)</th>
     <th style="text-align:center">ECG</th>
     <th style="text-align:center">Altro</th>
+    <th style="text-align:center">Domenica</th>
   </tr></thead>`;
   const tbody = document.createElement('tbody');
   sorted.forEach(([name, c]) => {
@@ -860,8 +869,10 @@ function renderTable(id, events) {
       <td style="text-align:center">${c.mat    > 0 ? c.mat    : '<span style="color:#ccc">–</span>'}</td>
       <td style="text-align:center">${c.pom    > 0 ? c.pom    : '<span style="color:#ccc">–</span>'}</td>
       <td style="text-align:center">${c.holter > 0 ? c.holter : '<span style="color:#ccc">–</span>'}</td>
+      <td style="text-align:center">${c.holter16 > 0 ? c.holter16 : '<span style="color:#ccc">–</span>'}</td>
       <td style="text-align:center">${c.ecg    > 0 ? c.ecg    : '<span style="color:#ccc">–</span>'}</td>
-      <td style="text-align:center">${c.altro  > 0 ? c.altro  : '<span style="color:#ccc">–</span>'}`;
+      <td style="text-align:center">${c.altro  > 0 ? c.altro  : '<span style="color:#ccc">–</span>'}</td>
+      <td style="text-align:center">${c.dom    > 0 ? c.dom    : '<span style="color:#ccc">–</span>'}</td>`;
     tbody.appendChild(tr);
   });
   tbl.appendChild(tbody);

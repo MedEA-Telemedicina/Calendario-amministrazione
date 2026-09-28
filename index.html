@@ -813,13 +813,16 @@ function renderTable(id, events) {
     if (!counts[k]) counts[k] = { total:0, mat:0, pom:0, holter:0, holter16:0, ecg:0, altro:0, dom:0 };
     counts[k].total++;
     const t = ev.parsed.turno.toUpperCase();
-    if (['MATTINA','MATTINO','AM','MORNING'].includes(t)) counts[k].mat++;
+    const isSunday = new Date(ev.date + 'T00:00:00').getDay() === 0;
+    if (isSunday) {
+      // Turni di domenica: compaiono SOLO nella colonna Domenica (con o senza mattina/pomeriggio)
+      counts[k].dom++;
+    }
+    else if (['MATTINA','MATTINO','AM','MORNING'].includes(t)) counts[k].mat++;
     else if (['POMERIGGIO','POMERIGIO','PM','AFTERNOON'].includes(t)) counts[k].pom++;
     else if (ev.isEcg) counts[k].ecg++;
     else if (t === 'HOLTER') { if (ev.parsed.holter16) counts[k].holter16++; else counts[k].holter++; }
     else counts[k].altro++;
-    // Turni di domenica (si aggiunge a quanto sopra)
-    if (new Date(ev.date + 'T00:00:00').getDay() === 0) counts[k].dom++;
   });
 
   const sortKey = _sortState[id] || 'alpha';

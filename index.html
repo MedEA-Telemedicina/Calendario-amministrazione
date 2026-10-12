@@ -1174,6 +1174,7 @@ const VOCI = {
 const TIPO_LABEL = { turno: 'A turno', consuntivo: 'A prestazione' };
 const LEGACY_KEY = 'rend_medici_v1';
 
+const ADMIN_FUNCTION = 'quick-processor';   // nome della Edge Function pubblicata su Supabase
 const ADMIN_EMAIL = 'a.marino@mail.it';   // deve coincidere con ADMIN_EMAIL della Edge Function
 let sb = null;
 let currentUser = null;
@@ -1301,7 +1302,7 @@ async function changeOwnPassword() {
 
 // ─── ADMIN: gestione utenti (via Edge Function "admin-users") ─
 async function callAdmin(body) {
-  const { data, error } = await getSb().functions.invoke('admin-users', { body });
+  const { data, error } = await getSb().functions.invoke(ADMIN_FUNCTION, { body });
   if (error) {
     let msg = error.message;
     try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch (e) {}
@@ -1324,7 +1325,7 @@ async function loadUsers() {
     renderUsers();
   } catch (e) {
     document.getElementById('users-list').innerHTML = '';
-    setUsersStatus('Impossibile caricare gli utenti: ' + e.message + ' (la Edge Function "admin-users" è stata pubblicata?)');
+    setUsersStatus('Impossibile caricare gli utenti: ' + e.message + ' (la Edge Function "'+ADMIN_FUNCTION+'" è stata pubblicata?)');
   }
 }
 function renderUsers() {

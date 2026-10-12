@@ -373,6 +373,10 @@
   .modal .tc-extra input { width: 64px; padding: 5px 8px; border-radius: 6px; border: 2px solid #cdd6e3; font-size: 13px; outline: none; text-align: center; }
   .modal .tc-extra input:focus { border-color: #1a73e8; }
 
+
+  .modal input.invalid, .modal .tc-extra input.invalid { border-color: #c62828 !important; background: #fdecea; }
+  .modal-err { color: #c62828; font-size: 12px; font-weight: 600; margin-top: 14px; min-height: 16px; }
+
   @media (max-width: 760px) {
     .calendar-grid { grid-template-columns: repeat(3,1fr); }
   }
@@ -577,11 +581,12 @@
             <label class="attivo-lbl"><input type="checkbox" id="m-attivo" checked> Attivo (compare nella rendicontazione)</label>
           </div>
 
-          <div style="font-size:12px;color:#888;margin-top:14px">Spunta le tipologie che il medico può eseguire e inserisci la tariffa di ciascuna.</div>
+          <div style="font-size:12px;color:#888;margin-top:14px">Spunta le tipologie che il medico può eseguire: per ogni voce spuntata l'<b>importo è obbligatorio</b>. Per il turno completo indica anche <b>quanti holter</b> esegue.</div>
           <div id="m-voci"></div>
 
           <label>Note</label>
           <textarea id="m-note" rows="2"></textarea>
+          <div class="modal-err" id="m-err"></div>
           <div class="modal-actions">
             <button class="btn-act" onclick="closeDoctorModal()">Annulla</button>
             <button class="btn-primary" id="m-save" onclick="saveDoctorModal()">💾 Salva</button>
@@ -1198,12 +1203,14 @@ const GRUPPI = [
     { k: 'turno_ecg_75',   l: 'Turno ECG 75' },
     { k: 'turno_ecg_100',  l: 'Turno ECG 100' },
     { k: 'turno_holter',   l: 'Turno Holter (10hc e 10hp)' },
-    { k: 'turno_16hc',     l: 'Turno 16 HC' }
+    { k: 'turno_16hc',     l: 'Turno 16 HC' },
+    { k: 'turno_domenica', l: 'Turno domenica' }
   ]},
   { titolo: 'Esami a consuntivo (pagati a prestazione)', voci: [
     { k: 'ecg',             l: 'ECG' },
     { k: 'hc',              l: 'HC' },
     { k: 'hp',              l: 'HP' },
+    { k: 'holter_12der',    l: 'Holter cardiaco 12 der.' },
     { k: 'spirometria',     l: 'Spirometria' },
     { k: 'polisonnografia', l: 'Polisonnografia' }
   ]}
@@ -1475,7 +1482,7 @@ function openDoctorModal(id) {
   document.getElementById('m-nome').value = modalDoc ? modalDoc.nome : '';
   document.getElementById('m-attivo').checked = modalDoc ? modalDoc.attivo : true;
   document.getElementById('m-note').value = modalDoc ? modalDoc.note : '';
-  renderModalVoci();
+  renderModalVoci(); clearModalErrors();
   document.getElementById('doc-modal').classList.add('open');
   setTimeout(() => document.getElementById('m-nome').focus(), 50);
 }
@@ -1487,11 +1494,11 @@ function renderModalVoci() {
     g.voci.map(v => {
       const st = modalState[v.k];
       let h = `<label class="chk"><input type="checkbox" data-chk="${v.k}" ${st.on ? 'checked' : ''} onchange="onVoceToggle('${v.k}', this.checked)"> ${escHtml(v.l)}</label>` +
-              `<div class="price-wrap"><input type="text" inputmode="decimal" data-price="${v.k}" placeholder="0,00" value="${escHtml(st.price)}" ${st.on ? '' : 'disabled'}></div>`;
+              `<div class="price-wrap"><input type="text" inputmode="decimal" data-price="${v.k}" placeholder="importo *" value="${escHtml(st.price)}" ${st.on ? '' : 'disabled'}></div>`;
       if (v.k === 'turno_completo') {
-        h += `<div class="tc-extra" id="tc-extra" style="${st.on ? '' : 'display:none'}"><span>Holter eseguiti nel turno:</span>` +
-             `<label>HC <input type="number" min="0" step="1" id="m-tc-hc" placeholder="0" value="${escHtml(modalTc.hc)}"></label>` +
-             `<label>HP <input type="number" min="0" step="1" id="m-tc-hp" placeholder="0" value="${escHtml(modalTc.hp)}"></label></div>`;
+        h += `<div class="tc-extra" id="tc-extra" style="${st.on ? '' : 'display:none'}"><span>Holter eseguiti nel turno (0 se nessuno):</span>` +
+             `<label>HC * <input type="number" min="0" step="1" id="m-tc-hc" placeholder="0" value="${escHtml(modalTc.hc)}"></label>` +
+             `<label>HP * <input type="number" min="0" step="1" id="m-tc-hp" placeholder="0" value="${escHtml(modalTc.hp)}"></label></div>`;
       }
       return h;
     }).join('') + '</div>'
@@ -1519,27 +1526,49 @@ function parsePrice(v) {
   return (isFinite(n) && n >= 0) ? Math.round(n * 100) / 100 : NaN;
 }
 
+
+function clearModalErrors() {
+  document.getElementById('m-err').textContent = '';
+  document.querySelectorAll('#doc-modal .invalid').forEach(el => el.classList.remove('invalid'));
+}
+function modalError(msg, selector) {
+  document.getElementById('m-err').textContent = msg;
+  if (selector) {
+    const el = document.querySelector(selector);
+    if (el) { el.classList.add('invalid'); el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.focus(); }
+  }
+}
+document.getElementById('doc-modal').addEventListener('input', e => { e.target.classList.remove('invalid'); document.getElementById('m-err').textContent = ''; });
+
 async function saveDoctorModal() {
   const nome = document.getElementById('m-nome').value.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase();
   const attivo = document.getElementById('m-attivo').checked;
   const note = document.getElementById('m-note').value.trim();
   if (!nome) { alert('Inserisci il nome del medico.'); return; }
   readModalState();
+  clearModalErrors();
   const upserts = [], removes = [];
   for (const v of VOCI_ALL) {
     const st = modalState[v.k];
     if (!st.on) { removes.push(v.k); continue; }
     const n = parsePrice(st.price);
-    if (n === null || Number.isNaN(n)) { alert('Inserisci un importo valido per "' + v.l + '".'); return; }
+    if (n === null || Number.isNaN(n) || n <= 0) {
+      modalError('Inserisci l\'importo (maggiore di 0) per "' + v.l + '".', `#m-voci input[data-price="${v.k}"]`);
+      return;
+    }
     upserts.push({ voce: v.k, importo: n });
   }
-  if (!upserts.length) { alert('Seleziona almeno una tipologia di turno o di esame.'); return; }
-  // holter eseguiti nel turno completo (0 se il medico non fa il turno completo)
+  if (!upserts.length) { modalError('Seleziona almeno una tipologia di turno o di esame.'); return; }
+
+  // turno completo: numero di holter obbligatorio (HC e HP, 0 se nessuno; almeno un holter in totale)
   let tcHc = 0, tcHp = 0;
   if (modalState.turno_completo.on) {
-    const toInt = x => { const t = String(x).trim(); if (t === '') return 0; const n = Number(t); return (Number.isInteger(n) && n >= 0) ? n : NaN; };
-    tcHc = toInt(modalTc.hc); tcHp = toInt(modalTc.hp);
-    if (Number.isNaN(tcHc) || Number.isNaN(tcHp)) { alert('Il numero di holter deve essere un intero (0 o più).'); return; }
+    const parseInt0 = x => { const t = String(x).trim(); if (t === '') return null; const n = Number(t); return (Number.isInteger(n) && n >= 0) ? n : NaN; };
+    const hc = parseInt0(modalTc.hc), hp = parseInt0(modalTc.hp);
+    if (hc === null || Number.isNaN(hc)) { modalError('Turno completo: indica quanti holter HC esegue (0 se nessuno).', '#m-tc-hc'); return; }
+    if (hp === null || Number.isNaN(hp)) { modalError('Turno completo: indica quanti holter HP esegue (0 se nessuno).', '#m-tc-hp'); return; }
+    if (hc + hp === 0) { modalError('Turno completo: inserisci almeno un holter (HC o HP).', '#m-tc-hc'); return; }
+    tcHc = hc; tcHp = hp;
   }
 
   const btn = document.getElementById('m-save'); btn.disabled = true;

@@ -351,6 +351,20 @@
   .acc-msg.err { color: #c62828; } .acc-msg.ok { color: #2e7d32; }
   .pw-row { display: flex; gap: 8px; }
 
+
+  .modal { max-width: 520px; }
+  .grp-title { font-size: 12px; font-weight: 800; color: #1a73e8; margin: 18px 0 8px; text-transform: uppercase; letter-spacing: .4px; }
+  .voce-row { display: grid; grid-template-columns: 1fr 130px; gap: 8px 12px; align-items: center; }
+  .modal label.chk { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #333; margin: 0; cursor: pointer; }
+  .modal label.chk input { width: 16px; height: 16px; cursor: pointer; }
+  .price-wrap input:disabled { background: #f3f5f8; color: #bbb; border-color: #e3e8ef; }
+  .chip { display: inline-block; background: #eef3fb; border-radius: 6px; padding: 2px 8px; margin: 2px 4px 2px 0; font-size: 12px; color: #444; white-space: nowrap; }
+  .chip b { color: #222; }
+  .row-actions { flex-wrap: wrap; }
+  .attivo-row { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
+  .modal label.attivo-lbl { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: #333; margin: 0; cursor: pointer; }
+  .active-list { margin-top: 10px; }
+
   @media (max-width: 760px) {
     .calendar-grid { grid-template-columns: repeat(3,1fr); }
   }
@@ -550,13 +564,14 @@
           <h3 id="m-title">Nuovo medico</h3>
           <label>Nome (come nel calendario)</label>
           <input type="text" id="m-nome" placeholder="es. ROSSI">
-          <label>Tipo di compenso</label>
-          <select id="m-tipo" onchange="onModalTipoChange()">
-            <option value="turno">A turno</option>
-            <option value="consuntivo">A prestazione (consuntivo)</option>
-          </select>
-          <label>Tariffe</label>
-          <div class="price-grid" id="m-prices"></div>
+
+          <div class="attivo-row">
+            <label class="attivo-lbl"><input type="checkbox" id="m-attivo" checked> Attivo (compare nella rendicontazione)</label>
+          </div>
+
+          <div style="font-size:12px;color:#888;margin-top:14px">Spunta le tipologie che il medico può eseguire e inserisci la tariffa di ciascuna.</div>
+          <div id="m-voci"></div>
+
           <label>Note</label>
           <textarea id="m-note" rows="2"></textarea>
           <div class="modal-actions">
@@ -571,6 +586,7 @@
         <div class="stats-card">
           <h3><span>🧮 Conteggi</span></h3>
           <div class="placeholder-box">🚧 Sezione in sviluppo<br>I conteggi verranno aggiunti qui.</div>
+          <div class="doc-summary active-list" id="cont-active"></div>
         </div>
       </div>
 
@@ -1166,12 +1182,25 @@ const SUPABASE_URL      = 'https://gfqhwxppgvjdjfntyush.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_wLtwBGmsy_BBPlOFmKLnfA_D6H3j8Zo';
 const REND_EMAIL_DOMAIN = 'mail.it';   // suffisso interno: l'utente digita solo lo username
 
-// Voci di tariffa per tipo di compenso (la chiave `k` è salvata nel DB: aggiungere voci non richiede modifiche al DB)
-const VOCI = {
-  turno:      [ {k:'mattina', l:'Mattina'}, {k:'pomeriggio', l:'Pomeriggio'}, {k:'domenica', l:'Domenica'} ],
-  consuntivo: [ {k:'ecg', l:'ECG'}, {k:'holter_10', l:'Holter (10hc/10hp)'}, {k:'holter_16', l:'Holter (16hc)'} ]
-};
-const TIPO_LABEL = { turno: 'A turno', consuntivo: 'A prestazione' };
+// Tipologie eseguibili dai medici. La chiave `k` è salvata nel DB (tabella medici_tariffe.voce):
+// per aggiungerne di nuove basta aggiungerle qui, senza modifiche al database.
+const GRUPPI = [
+  { titolo: 'Turni', voci: [
+    { k: 'turno_completo', l: 'Turno completo' },
+    { k: 'turno_ecg_75',   l: 'Turno ECG 75' },
+    { k: 'turno_ecg_100',  l: 'Turno ECG 100' },
+    { k: 'turno_holter',   l: 'Turno Holter (10hc e 10hp)' },
+    { k: 'turno_16hc',     l: 'Turno 16 HC' }
+  ]},
+  { titolo: 'Esami a consuntivo (pagati a prestazione)', voci: [
+    { k: 'ecg',             l: 'ECG' },
+    { k: 'hc',              l: 'HC' },
+    { k: 'hp',              l: 'HP' },
+    { k: 'spirometria',     l: 'Spirometria' },
+    { k: 'polisonnografia', l: 'Polisonnografia' }
+  ]}
+];
+const VOCI_ALL = GRUPPI.flatMap(g => g.voci);
 const LEGACY_KEY = 'rend_medici_v1';
 
 const ADMIN_FUNCTION = 'quick-processor';   // nome della Edge Function pubblicata su Supabase
@@ -1181,7 +1210,7 @@ let currentUser = null;
 let rendUnlocked = false;
 let doctors = [];
 let modalDoc = null;   // medico in modifica (null = nuovo)
-let modalPrices = {};  // valori tariffe correnti nel modale
+let modalState = {};   // voce -> { on, price } nel modale
 
 function supabaseConfigured() { return !SUPABASE_URL.includes('XXXX') && !SUPABASE_ANON_KEY.startsWith('INSERISCI'); }
 function getSb() {
@@ -1392,13 +1421,15 @@ async function deleteUser(id) {
 }
 
 // ─── CRUD MEDICI ──────────────────────────────────────────────
+function activeDoctors() { return doctors.filter(d => d.attivo); }   // per i conteggi: solo i medici attivi
+
 async function loadDoctors() {
   setRendStatus('');
   document.getElementById('doc-list').innerHTML = '<div class="empty-msg">Caricamento…</div>';
   const { data, error } = await getSb().from('medici').select('*, medici_tariffe(voce, importo)').order('nome');
   if (error) { setRendStatus('Errore nel caricamento: ' + error.message); doctors = []; renderDoctors(); return; }
   doctors = data.map(d => ({
-    id: d.id, nome: d.nome, tipo: d.tipo_compenso, paused: d.in_pausa, note: d.note || '',
+    id: d.id, nome: d.nome, attivo: d.attivo !== false, note: d.note || '',
     tariffe: Object.fromEntries((d.medici_tariffe || []).map(t => [t.voce, Number(t.importo)]))
   }));
   renderDoctors();
@@ -1406,9 +1437,9 @@ async function loadDoctors() {
 
 async function toggleDoctor(id) {
   const d = doctors.find(x => x.id === id); if (!d) return;
-  const { error } = await getSb().from('medici').update({ in_pausa: !d.paused }).eq('id', id);
+  const { error } = await getSb().from('medici').update({ attivo: !d.attivo }).eq('id', id);
   if (error) { setRendStatus('Errore: ' + error.message); return; }
-  d.paused = !d.paused; renderDoctors();
+  d.attivo = !d.attivo; renderDoctors();
 }
 async function deleteDoctor(id) {
   const d = doctors.find(x => x.id === id);
@@ -1418,28 +1449,46 @@ async function deleteDoctor(id) {
   doctors = doctors.filter(x => x.id !== id); renderDoctors();
 }
 
-// ─── MODALE ───────────────────────────────────────────────────
+// ─── MODALE MEDICO ────────────────────────────────────────────
 function openDoctorModal(id) {
   modalDoc = id ? doctors.find(x => x.id === id) : null;
-  modalPrices = modalDoc ? { ...modalDoc.tariffe } : {};
+  modalState = {};
+  VOCI_ALL.forEach(v => {
+    const t = modalDoc ? modalDoc.tariffe[v.k] : undefined;
+    modalState[v.k] = { on: t != null, price: t != null ? String(t).replace('.', ',') : '' };
+  });
   document.getElementById('m-title').textContent = modalDoc ? 'Modifica medico' : 'Nuovo medico';
   document.getElementById('m-nome').value = modalDoc ? modalDoc.nome : '';
-  document.getElementById('m-tipo').value = modalDoc ? modalDoc.tipo : 'turno';
+  document.getElementById('m-attivo').checked = modalDoc ? modalDoc.attivo : true;
   document.getElementById('m-note').value = modalDoc ? modalDoc.note : '';
-  renderModalPrices();
+  renderModalVoci();
   document.getElementById('doc-modal').classList.add('open');
   setTimeout(() => document.getElementById('m-nome').focus(), 50);
 }
 function closeDoctorModal() { document.getElementById('doc-modal').classList.remove('open'); }
-function readModalPrices() {
-  document.querySelectorAll('#m-prices input[data-voce]').forEach(i => { modalPrices[i.dataset.voce] = i.value; });
-}
-function onModalTipoChange() { readModalPrices(); renderModalPrices(); }
-function renderModalPrices() {
-  const tipo = document.getElementById('m-tipo').value;
-  document.getElementById('m-prices').innerHTML = VOCI[tipo].map(v =>
-    `<span>${escHtml(v.l)}</span><div class="price-wrap"><input type="text" inputmode="decimal" data-voce="${v.k}" placeholder="0,00" value="${escHtml(modalPrices[v.k] ?? '')}"></div>`
+
+function renderModalVoci() {
+  document.getElementById('m-voci').innerHTML = GRUPPI.map(g =>
+    `<div class="grp-title">${escHtml(g.titolo)}</div><div class="voce-row">` +
+    g.voci.map(v => {
+      const st = modalState[v.k];
+      return `<label class="chk"><input type="checkbox" data-chk="${v.k}" ${st.on ? 'checked' : ''} onchange="onVoceToggle('${v.k}', this.checked)"> ${escHtml(v.l)}</label>` +
+             `<div class="price-wrap"><input type="text" inputmode="decimal" data-price="${v.k}" placeholder="0,00" value="${escHtml(st.price)}" ${st.on ? '' : 'disabled'}></div>`;
+    }).join('') + '</div>'
   ).join('');
+}
+function onVoceToggle(k, on) {
+  modalState[k].on = on;
+  const inp = document.querySelector(`#m-voci input[data-price="${k}"]`);
+  inp.disabled = !on;
+  if (on) inp.focus();
+}
+function readModalState() {
+  VOCI_ALL.forEach(v => {
+    const chk = document.querySelector(`#m-voci input[data-chk="${v.k}"]`);
+    const inp = document.querySelector(`#m-voci input[data-price="${v.k}"]`);
+    modalState[v.k] = { on: chk.checked, price: inp.value };
+  });
 }
 function parsePrice(v) {
   const t = String(v).trim().replace(/\s/g, '').replace(',', '.');
@@ -1450,25 +1499,25 @@ function parsePrice(v) {
 
 async function saveDoctorModal() {
   const nome = document.getElementById('m-nome').value.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase();
-  const tipo = document.getElementById('m-tipo').value;
+  const attivo = document.getElementById('m-attivo').checked;
   const note = document.getElementById('m-note').value.trim();
   if (!nome) { alert('Inserisci il nome del medico.'); return; }
-  readModalPrices();
+  readModalState();
   const upserts = [], removes = [];
-  for (const v of VOCI[tipo]) {
-    const n = parsePrice(modalPrices[v.k] ?? '');
-    if (Number.isNaN(n)) { alert('Importo non valido per "' + v.l + '".'); return; }
-    if (n === null) removes.push(v.k); else upserts.push({ voce: v.k, importo: n });
+  for (const v of VOCI_ALL) {
+    const st = modalState[v.k];
+    if (!st.on) { removes.push(v.k); continue; }
+    const n = parsePrice(st.price);
+    if (n === null || Number.isNaN(n)) { alert('Inserisci un importo valido per "' + v.l + '".'); return; }
+    upserts.push({ voce: v.k, importo: n });
   }
-  // voci dell'altro tipo (se si è cambiato tipo) vanno rimosse
-  const altro = tipo === 'turno' ? 'consuntivo' : 'turno';
-  VOCI[altro].forEach(v => removes.push(v.k));
+  if (!upserts.length) { alert('Seleziona almeno una tipologia di turno o di esame.'); return; }
 
   const btn = document.getElementById('m-save'); btn.disabled = true;
   try {
     const db = getSb();
     let id = modalDoc ? modalDoc.id : null;
-    const row = { nome, tipo_compenso: tipo, note: note || null };
+    const row = { nome, attivo, note: note || null };
     if (id) {
       const { error } = await db.from('medici').update(row).eq('id', id);
       if (error) throw error;
@@ -1477,13 +1526,11 @@ async function saveDoctorModal() {
       if (error) throw error;
       id = data.id;
     }
-    if (upserts.length) {
-      const { error } = await db.from('medici_tariffe').upsert(upserts.map(u => ({ medico_id: id, ...u })), { onConflict: 'medico_id,voce' });
-      if (error) throw error;
-    }
+    const { error: e1 } = await db.from('medici_tariffe').upsert(upserts.map(u => ({ medico_id: id, ...u })), { onConflict: 'medico_id,voce' });
+    if (e1) throw e1;
     if (removes.length) {
-      const { error } = await db.from('medici_tariffe').delete().eq('medico_id', id).in('voce', removes);
-      if (error) throw error;
+      const { error: e2 } = await db.from('medici_tariffe').delete().eq('medico_id', id).in('voce', removes);
+      if (e2) throw e2;
     }
     closeDoctorModal();
     await loadDoctors();
@@ -1497,39 +1544,42 @@ async function maybeImportLegacy() {
   let old = [];
   try { old = JSON.parse(localStorage.getItem(LEGACY_KEY)) || []; } catch (e) {}
   if (!old.length) return;
-  if (!confirm(`Trovati ${old.length} medici salvati in questo browser dalla versione precedente.\nImportarli su Supabase?`)) return;
-  const rows = old.filter(o => o.name).map(o => ({ nome: String(o.name).toUpperCase(), in_pausa: !!o.paused, tipo_compenso: 'turno' }));
-  const { error } = await getSb().from('medici').upsert(rows, { onConflict: 'nome', ignoreDuplicates: true });
-  if (error) {
-    // l'indice univoco è su upper(nome): fallback inserendo uno alla volta
-    const existing = new Set(doctors.map(d => d.nome));
-    for (const r of rows) if (!existing.has(r.nome)) await getSb().from('medici').insert(r);
+  if (!confirm(`Trovati ${old.length} medici salvati in questo browser dalla versione precedente.\nImportarli su Supabase? (andranno poi completati con le tipologie e le tariffe)`)) return;
+  const existing = new Set(doctors.map(d => d.nome));
+  for (const o of old) {
+    const nome = String(o.name || '').toUpperCase();
+    if (nome && !existing.has(nome)) await getSb().from('medici').insert({ nome, attivo: !o.paused });
   }
   localStorage.removeItem(LEGACY_KEY);
   await loadDoctors();
 }
 
 // ─── RENDER LISTA ─────────────────────────────────────────────
-function tariffeSummary(d) {
-  const parts = VOCI[d.tipo].filter(v => d.tariffe[v.k] != null).map(v => `${escHtml(v.l)}: <b>${fmtEuro(d.tariffe[v.k])}</b>`);
-  return parts.length ? parts.join(' · ') : '<span style="color:#bbb">— nessuna tariffa —</span>';
+function chipsFor(d, gruppo) {
+  const items = gruppo.voci.filter(v => d.tariffe[v.k] != null)
+    .map(v => `<span class="chip">${escHtml(v.l)}: <b>${fmtEuro(d.tariffe[v.k])}</b></span>`);
+  return items.length ? items.join('') : '<span style="color:#ccc">—</span>';
 }
 function renderDoctors() {
   const list = document.getElementById('doc-list');
-  const active = doctors.filter(d => !d.paused).length;
+  const nAttivi = activeDoctors().length;
   document.getElementById('doc-summary').textContent =
-    doctors.length ? `${doctors.length} medici · ${active} attivi · ${doctors.length - active} in pausa` : '';
+    doctors.length ? `${doctors.length} medici · ${nAttivi} attivi · ${doctors.length - nAttivi} non attivi` : '';
+  const act = document.getElementById('cont-active');
+  if (act) act.textContent = doctors.length
+    ? `Medici attivi inclusi nella rendicontazione (${nAttivi}): ` + (nAttivi ? activeDoctors().map(d => d.nome).sort((a, b) => a.localeCompare(b, 'it')).join(', ') : 'nessuno')
+    : '';
   if (!doctors.length) { list.innerHTML = '<div class="empty-msg">Nessun medico inserito.</div>'; return; }
-  let html = '<table class="stats-table"><tr><th>Medico</th><th>Compenso</th><th>Tariffe</th><th>Stato</th><th></th></tr>';
+  let html = '<table class="stats-table"><tr><th>Medico</th><th>Turni</th><th>Esami a consuntivo</th><th>Stato</th><th></th></tr>';
   [...doctors].sort((a, b) => a.nome.localeCompare(b.nome, 'it')).forEach(d => {
-    html += `<tr class="doc-row${d.paused ? ' paused' : ''}">` +
+    html += `<tr class="doc-row${d.attivo ? '' : ' paused'}">` +
       `<td><span class="doc-name">${escHtml(d.nome)}</span>${d.note ? `<div style="font-size:11px;color:#999;font-weight:400">${escHtml(d.note)}</div>` : ''}</td>` +
-      `<td><span class="badge ${d.tipo === 'turno' ? 'badge-blue' : 'badge-orange'}">${TIPO_LABEL[d.tipo]}</span></td>` +
-      `<td class="tariffe-sum">${tariffeSummary(d)}</td>` +
-      `<td><span class="badge ${d.paused ? 'badge-grey' : 'badge-green'}">${d.paused ? 'In pausa' : 'Attivo'}</span></td>` +
+      `<td>${chipsFor(d, GRUPPI[0])}</td>` +
+      `<td>${chipsFor(d, GRUPPI[1])}</td>` +
+      `<td><span class="badge ${d.attivo ? 'badge-green' : 'badge-grey'}">${d.attivo ? 'Attivo' : 'Non attivo'}</span></td>` +
       `<td><div class="row-actions">` +
       `<button class="btn-act" onclick="openDoctorModal('${d.id}')">✏️ Modifica</button>` +
-      `<button class="btn-act" onclick="toggleDoctor('${d.id}')">${d.paused ? '▶ Riattiva' : '⏸ Pausa'}</button>` +
+      `<button class="btn-act" onclick="toggleDoctor('${d.id}')">${d.attivo ? '⏸ Disattiva' : '▶ Attiva'}</button>` +
       `<button class="btn-act danger" onclick="deleteDoctor('${d.id}')">🗑 Elimina</button>` +
       `</div></td></tr>`;
   });

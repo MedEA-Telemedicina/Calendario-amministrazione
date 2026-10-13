@@ -268,7 +268,7 @@
   @keyframes rFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
   @keyframes rPop  { from { opacity: 0; transform: translateY(14px) scale(.96); } to { opacity: 1; transform: none; } }
   @keyframes rShim { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
-  @keyframes rFlash { 0% { box-shadow: 0 0 0 0 rgba(26,115,232,.55); } 100% { box-shadow: 0 0 0 16px rgba(26,115,232,0); } }
+  @keyframes rFlashRow { 0% { background: #cfe0fc; } 100% { background: transparent; } }
 
   /* ═══════════ BOTTONI / CAMPI ═══════════ */
   .r-btn {
@@ -351,9 +351,6 @@
   .r-kpi .ic { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 21px; flex-shrink: 0; }
   .r-kpi .n { font-size: 28px; font-weight: 800; line-height: 1; color: #1f2933; }
   .r-kpi .l { font-size: 12px; color: #7b8794; margin-top: 5px; font-weight: 600; }
-  .r-namechips { display: flex; flex-wrap: wrap; gap: 8px; }
-  .r-namechip { display: inline-flex; align-items: center; gap: 8px; background: #f3f7fd; border-radius: 30px; padding: 4px 13px 4px 4px; font-size: 12.5px; font-weight: 700; color: #33415c; }
-  .r-namechip .r-avatar { width: 24px; height: 24px; font-size: 10px; }
   .r-soon { border: 2px dashed #cfd9e6; border-radius: 16px; text-align: center; padding: 44px 20px; color: #7b8794; font-size: 13.5px; line-height: 1.6; }
   .r-soon .big { font-size: 42px; margin-bottom: 8px; }
   .r-soon b { color: #3b4a5c; font-size: 15px; }
@@ -376,25 +373,25 @@
   .r-pill i { font-style: normal; opacity: .7; margin-left: 5px; font-weight: 600; }
   .r-select { padding: 11px 12px; border-radius: 13px; border: none; background: #fff; box-shadow: var(--r-sh); font-size: 13px; font-weight: 600; color: #3b4a5c; cursor: pointer; outline: none; font-family: inherit; max-width: 100%; }
   .r-spacer { flex: 1; }
-  .r-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
-  .r-doc {
-    background: #fff; border-radius: 18px; padding: 16px 16px 10px; box-shadow: var(--r-sh); cursor: pointer; position: relative;
-    transition: transform .18s, box-shadow .18s, opacity .2s; content-visibility: auto; contain-intrinsic-size: auto 150px;
-  }
-  .r-doc:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(16,24,40,.13); }
-  .r-doc.off { opacity: .6; }
-  .r-doc.off .r-avatar { filter: grayscale(1); }
-  .r-doc.flash { animation: rFlash 1.3s ease; }
-  .r-doc-head { display: flex; align-items: center; gap: 12px; }
-  .r-doc-head .r-avatar { width: 42px; height: 42px; font-size: 15px; }
-  .r-doc-name { font-weight: 800; font-size: 15px; color: #1f2933; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .r-doc-sub { font-size: 11.5px; color: #9aa5b1; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .r-grp { font-size: 10.5px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; color: #9aa5b1; margin: 12px 0 6px; }
-  .r-tag { display: inline-flex; align-items: center; gap: 6px; border-radius: 9px; padding: 4px 10px; margin: 0 5px 5px 0; font-size: 12px; font-weight: 600; background: #eaf2ff; color: #274a85; }
-  .r-tag.ex { background: #fff2e0; color: #84500a; }
-  .r-tag b { font-weight: 800; }
-  .r-tag small { font-weight: 800; font-size: 11px; color: #1a73e8; background: #fff; border-radius: 6px; padding: 1px 6px; }
-  .r-doc-act { display: flex; gap: 4px; flex-shrink: 0; }
+  .r-tablewrap { background: #fff; border-radius: 18px; box-shadow: var(--r-sh); overflow: hidden; }
+  .r-table { width: 100%; border-collapse: collapse; }
+  .r-table thead th { text-align: left; font-size: 11px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; color: #8a97a8; padding: 12px 14px; background: #f7f9fc; border-bottom: 1px solid #e8edf3; white-space: nowrap; }
+  .r-table th.c, .r-table td.c { text-align: center; width: 84px; }
+  .r-table th.a, .r-table td.a { width: 88px; }
+  .r-table td { padding: 11px 14px; vertical-align: middle; border-top: 1px solid #f0f3f7; font-size: 13px; }
+  .r-table tbody tr:first-child td { border-top: none; }
+  .r-doc { cursor: pointer; transition: background .15s; }
+  .r-doc:hover { background: #f5f9ff; }
+  .r-doc.off td.n, .r-doc.off td.t { opacity: .5; }
+  .r-doc.flash td { animation: rFlashRow 1.6s ease; }
+  .r-doc-name { display: block; font-weight: 800; font-size: 14px; color: #1f2933; }
+  .r-doc-sub { display: block; font-size: 11.5px; color: #9aa5b1; margin-top: 2px; }
+  .r-line { display: flex; align-items: baseline; gap: 6px; padding: 1px 0; line-height: 1.5; flex-wrap: wrap; }
+  .r-line span { color: #52606d; }
+  .r-line b { color: #1f2933; font-weight: 800; }
+  .r-line small { font-weight: 800; font-size: 11px; color: #1a73e8; background: #eaf2ff; border-radius: 6px; padding: 1px 7px; }
+  .r-none { color: #c4ccd6; }
+  .r-doc-act { display: flex; gap: 4px; justify-content: flex-end; }
   .r-doc-act .r-ico-btn { width: 32px; height: 32px; font-size: 14px; }
   .r-ico-btn { border: none; background: #f3f6fa; width: 34px; height: 34px; border-radius: 10px; cursor: pointer; font-size: 15px; display: grid; place-items: center; transition: background .15s, transform .15s; }
   .r-ico-btn:hover { background: #e3ebf6; transform: scale(1.07); }
@@ -462,7 +459,18 @@
   .r-toast.err { background: #c62828; } .r-toast.ok { background: #1e7e34; }
 
   @media (max-width: 640px) {
-    .r-grid { grid-template-columns: 1fr; }
+    .r-table thead { display: none; }
+    .r-table, .r-table tbody { display: block; }
+    .r-table tr.r-doc { display: grid; grid-template-columns: 1fr auto auto; gap: 6px 10px; padding: 12px 14px; align-items: center; border-top: 1px solid #f0f3f7; }
+    .r-table tbody tr.r-doc:first-child { border-top: none; }
+    .r-table td { display: block; padding: 0; border: none; }
+    .r-table td.n { grid-column: 1; grid-row: 1; }
+    .r-table td.c { grid-column: 2; grid-row: 1; width: auto; }
+    .r-table td.a { grid-column: 3; grid-row: 1; width: auto; }
+    .r-table td.t { grid-column: 1 / -1; }
+    .r-table td.t1 { grid-row: 2; } .r-table td.t2 { grid-row: 3; }
+    .r-table td.t.empty { display: none; }
+    .r-table td.t::before { content: attr(data-label); display: block; font-size: 10.5px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; color: #9aa5b1; margin-bottom: 3px; }
     .r-tab { padding: 9px 12px; }
     .r-user { display: none; }
     .r-voce { grid-template-columns: 1fr 112px; }
@@ -670,10 +678,6 @@
           <div class="r-kpi"><div class="ic" style="background:#eef0f3">⏸</div><div><div class="n" id="k-off">–</div><div class="l">Non attivi (esclusi)</div></div></div>
         </div>
         <div class="r-panel">
-          <h3><span>👥 Medici inclusi nella rendicontazione</span></h3>
-          <div class="r-namechips" id="cont-active"></div>
-        </div>
-        <div class="r-panel">
           <div class="r-soon"><div class="big">🚧</div><b>Conteggi in arrivo</b><br>Qui compariranno i conteggi di turni ed esami per i medici attivi.</div>
         </div>
       </section>
@@ -694,7 +698,7 @@
           <button class="r-btn primary" id="btn-new-doc">＋ Nuovo medico</button>
         </div>
         <div class="r-banner" id="rend-status"></div>
-        <div class="r-grid" id="doc-list"></div>
+        <div id="doc-list"></div>
       </section>
 
       <!-- ── Account ── -->
@@ -1609,7 +1613,7 @@ function mkDoctor(d) {
 }
 async function loadDoctors() {
   setBanner('rend-status', '');
-  if (!doctorsLoaded) byId('doc-list').innerHTML = '<div class="r-sk"></div>'.repeat(6);
+  if (!doctorsLoaded) byId('doc-list').innerHTML = '<div class="r-sk" style="height:54px;margin-bottom:8px"></div>'.repeat(6);
   const { data, error } = await getSb().from('medici').select('*, medici_tariffe(voce, importo)').order('nome');
   if (error) { setBanner('rend-status', 'Errore nel caricamento: ' + error.message); doctors = []; }
   else {
@@ -1628,7 +1632,6 @@ async function toggleDoctor(id, on, input) {
   d.attivo = on; d._h = null;                       // aggiornamento immediato (ottimistico)
   const card = input.closest('.r-doc');
   card.classList.toggle('off', !on);
-  card.querySelector('.r-st').textContent = on ? 'Attivo' : 'Non attivo';
   updateStats();
   if (docFilter !== 'all') renderDoctors();
   const { error } = await getSb().from('medici').update({ attivo: on }).eq('id', id);
@@ -1651,11 +1654,8 @@ function updateStats() {
   const off = doctors.length - on;
   setTxt('k-attivi', on); setTxt('k-turno', turno); setTxt('k-cons', cons); setTxt('k-off', off);
   setTxt('f-all', doctors.length); setTxt('f-on', on); setTxt('f-off', off); setTxt('cnt-medici', doctors.length);
-  byId('cont-active').innerHTML = on
-    ? doctors.filter(d => d.attivo).map(d => `<span class="r-namechip"><span class="r-avatar" style="background:${avColor(d.nome)}">${escHtml(initials(d.nome))}</span>${escHtml(d.nome)}</span>`).join('')
-    : '<span class="r-usub">Nessun medico attivo.</span>';
 }
-function tagsFor(d, gi) {
+function linesFor(d, gi) {
   const items = GRUPPI[gi].voci.filter(v => d.tariffe[v.k] != null).map(v => {
     let extra = '';
     if (v.k === 'turno_completo') {
@@ -1664,27 +1664,28 @@ function tagsFor(d, gi) {
       if (d.tcHp > 0) p.push(d.tcHp + ' HP');
       if (p.length) extra = ` <small>${p.join(' + ')}</small>`;
     }
-    return `<span class="r-tag${gi ? ' ex' : ''}">${escHtml(v.l)} <b>${fmtEuro(d.tariffe[v.k])}</b>${extra}</span>`;
+    return `<div class="r-line"><span>${escHtml(v.l)}</span> <b>${fmtEuro(d.tariffe[v.k])}</b>${extra}</div>`;
   });
-  return items.length ? `<div class="r-grp">${GRP_SHORT[gi]}</div>` + items.join('') : '';
+  return items.join('');
 }
-function cardHtml(d) {
-  return d._h || (d._h =
-    `<article class="r-doc${d.attivo ? '' : ' off'}" data-id="${d.id}">` +
-      `<div class="r-doc-head"><span class="r-avatar" style="background:${avColor(d.nome)}">${escHtml(initials(d.nome))}</span>` +
-      `<div style="flex:1;min-width:0"><div class="r-doc-name" title="${escHtml(d.nome)}">${escHtml(d.nome)}</div>` +
-      `<div class="r-doc-sub"><span class="r-st">${d.attivo ? 'Attivo' : 'Non attivo'}</span>${d.note ? ' · ' + escHtml(d.note) : ''}</div></div>` +
-      `<div class="r-doc-act"><button class="r-ico-btn" data-act="edit" title="Modifica">✏️</button>` +
-      `<button class="r-ico-btn del" data-act="del" title="Elimina">🗑</button></div>` +
-      `<label class="r-switch" title="Attivo / Non attivo"><input type="checkbox" data-act="toggle" ${d.attivo ? 'checked' : ''}><span></span></label></div>` +
-      (tagsFor(d, 0) + tagsFor(d, 1) || '<div class="r-doc-sub" style="margin-top:12px">Nessuna tipologia assegnata</div>') +
-    `</article>`);
+function rowHtml(d) {
+  if (d._h) return d._h;
+  const t1 = linesFor(d, 0), t2 = linesFor(d, 1);
+  return d._h =
+    `<tr class="r-doc${d.attivo ? '' : ' off'}" data-id="${d.id}">` +
+      `<td class="n"><span class="r-doc-name">${escHtml(d.nome)}</span>${d.note ? `<span class="r-doc-sub">${escHtml(d.note)}</span>` : ''}</td>` +
+      `<td class="t t1${t1 ? '' : ' empty'}" data-label="Turni">${t1 || '<span class="r-none">—</span>'}</td>` +
+      `<td class="t t2${t2 ? '' : ' empty'}" data-label="Esami a consuntivo">${t2 || '<span class="r-none">—</span>'}</td>` +
+      `<td class="c"><label class="r-switch" title="Attivo / Non attivo"><input type="checkbox" data-act="toggle" ${d.attivo ? 'checked' : ''}><span></span></label></td>` +
+      `<td class="a"><div class="r-doc-act"><button class="r-ico-btn" data-act="edit" title="Modifica">✏️</button>` +
+      `<button class="r-ico-btn del" data-act="del" title="Elimina">🗑</button></div></td>` +
+    `</tr>`;
 }
 function renderDoctors() {
   const list = byId('doc-list');
   if (!doctorsLoaded) return;
   if (!doctors.length) {
-    list.innerHTML = '<div class="r-empty"><div class="big">👨‍⚕️</div>Nessun medico inserito.<br><button class="r-btn primary" data-act="new">＋ Aggiungi il primo medico</button></div>';
+    list.innerHTML = '<div class="r-tablewrap"><div class="r-empty"><div class="big">👨‍⚕️</div>Nessun medico inserito.<br><button class="r-btn primary" data-act="new">＋ Aggiungi il primo medico</button></div></div>';
     return;
   }
   const q = normTxt(docQuery.trim());
@@ -1692,8 +1693,10 @@ function renderDoctors() {
     (docFilter === 'all' || (docFilter === 'on') === d.attivo) &&
     (!docVoce || d.tariffe[docVoce] != null) &&
     (!q || d._n.includes(q)));
-  list.innerHTML = shown.length ? shown.map(cardHtml).join('')
-    : '<div class="r-empty"><div class="big">🔍</div>Nessun medico trovato con questi filtri.</div>';
+  list.innerHTML = '<div class="r-tablewrap">' + (shown.length
+    ? '<table class="r-table"><thead><tr><th>Medico</th><th>Turni</th><th>Esami a consuntivo</th><th class="c">Attivo</th><th class="a"></th></tr></thead><tbody>' +
+      shown.map(rowHtml).join('') + '</tbody></table>'
+    : '<div class="r-empty"><div class="big">🔍</div>Nessun medico trovato con questi filtri.</div>') + '</div>';
 }
 
 // ── medici: modale ──

@@ -695,6 +695,7 @@
           </div>
           <select class="r-select" id="doc-voce" aria-label="Filtra per tipologia"></select>
           <span class="r-spacer"></span>
+          <button class="r-btn ghost" id="btn-doc-xlsx" type="button" title="Scarica la lista medici in Excel">⬇ Excel</button>
           <button class="r-btn primary" id="btn-new-doc">＋ Nuovo medico</button>
         </div>
         <div class="r-banner" id="rend-status"></div>
@@ -722,6 +723,13 @@
             <h3><span>👥 Gestione utenti</span><button class="r-btn primary" id="btn-new-user">＋ Nuovo utente</button></h3>
             <div class="r-banner" id="users-status"></div>
             <div id="users-list"></div>
+          </div>
+
+          <div class="r-panel" id="admin-backup-card" style="display:none;">
+            <h3><span>💾 Backup rendicontazione</span></h3>
+            <div class="r-hint" style="margin-top:0">Scarica un file JSON con <b>tutti i dati della rendicontazione</b> (medici, stato attivo, note, holter del turno completo e tutte le tariffe), letti direttamente dal database.</div>
+            <div class="r-msg" id="backup-msg"></div>
+            <button class="r-btn primary" id="btn-backup" type="button" style="margin-top:8px">⬇ Esporta backup</button>
           </div>
         </div>
       </section>
@@ -1477,6 +1485,7 @@ async function finishUnlock() {
   setTxt('r-user-name', name); setTxt('acc-user', name);
   setTxt('acc-role', isAdmin() ? 'admin' : 'utente');
   byId('admin-users-card').style.display = isAdmin() ? 'block' : 'none';
+  byId('admin-backup-card').style.display = isAdmin() ? 'block' : 'none';
   switchSubTab('conteggi');
   requestAnimationFrame(moveIndicator);
   await loadDoctors();
@@ -1827,6 +1836,76 @@ async function saveDoctorModal() {
   } finally { btn.disabled = false; btn.textContent = '💾 Salva medico'; }
 }
 
+// ── export Excel della lista medici ──
+function exportDoctorsExcel() {
+  if (!doctorsLoaded || !doctors.length) { toast('Nessun medico da esportare', 'err'); return; }
+  const q = normTxt(docQuery.trim());
+  const rows = doctors.filter(d =>      // stessi filtri della lista a schermo
+    (docFilter === 'all' || (docFilter === 'on') === d.attivo) &&
+    (!docVoce || d.tariffe[docVoce] != null) &&
+    (!q || d._n.includes(q)));
+  if (!rows.length) { toast('Nessun medico con questi filtri', 'err'); return; }
+  const header = ['Medico', 'Attivo', ...VOCI_ALL.map(v => v.l + ' (€)'), 'Holter HC nel turno completo', 'Holter HP nel turno completo', 'Note'];
+  const aoa = [header, ...rows.map(d => [
+    d.nome, d.attivo ? 'Sì' : 'No',
+    ...VOCI_ALL.map(v => d.tariffe[v.k] != null ? d.tariffe[v.k] : ''),
+    d.tariffe.turno_completo != null ? d.tcHc : '',
+    d.tariffe.turno_completo != null ? d.tcHp : '',
+    d.note || ''
+  ])];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = header.map((h, i) => ({ wch: i === 0 ? 26 : i === header.length - 1 ? 40 : Math.max(12, Math.min(22, h.length)) }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Medici');
+  XLSX.writeFile(wb, 'medici_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+  toast('Excel scaricato (' + rows.length + ' medici)', 'ok');
+}
+
+// ── admin: backup completo della rendicontazione ──
+async function fetchAllRows(table, orderCols) {
+  const out = [], STEP = 1000;
+  for (let from = 0; ; from += STEP) {
+    let q = getSb().from(table).select('*');
+    orderCols.forEach(c => { q = q.order(c); });
+    const { data, error } = await q.range(from, from + STEP - 1);
+    if (error) throw error;
+    out.push(...data);
+    if (data.length < STEP) break;
+  }
+  return out;
+}
+async function exportBackup() {
+  if (!isAdmin()) { toast('Solo l\'admin può esportare il backup', 'err'); return; }
+  const btn = byId('btn-backup'), msg = byId('backup-msg');
+  btn.disabled = true; btn.textContent = 'Esportazione…'; msg.className = 'r-msg'; msg.textContent = '';
+  try {
+    const [medici, tariffe] = await Promise.all([
+      fetchAllRows('medici', ['id']),
+      fetchAllRows('medici_tariffe', ['medico_id', 'voce'])
+    ]);
+    const backup = {
+      app: 'Conteggio turni cardiologi - Rendicontazione',
+      version: 1,
+      exported_at: new Date().toISOString(),
+      exported_by: currentUser.email,
+      counts: { medici: medici.length, medici_tariffe: tariffe.length },
+      tables: { medici, medici_tariffe: tariffe }
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'backup_rendicontazione_' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    msg.className = 'r-msg ok';
+    msg.textContent = 'Backup scaricato: ' + medici.length + ' medici, ' + tariffe.length + ' tariffe.';
+    toast('Backup esportato', 'ok');
+  } catch (e) {
+    msg.className = 'r-msg err'; msg.textContent = 'Errore nell\'esportazione: ' + (e.message || e);
+    toast('Errore nel backup', 'err');
+  } finally { btn.disabled = false; btn.textContent = '⬇ Esporta backup'; }
+}
+
 // ── import una tantum dal vecchio localStorage ──
 async function maybeImportLegacy() {
   let old = [];
@@ -1874,6 +1953,8 @@ async function maybeImportLegacy() {
   });
   byId('doc-voce').addEventListener('change', e => { docVoce = e.target.value; renderDoctors(); });
   byId('btn-new-doc').addEventListener('click', () => openDoctorModal());
+  byId('btn-doc-xlsx').addEventListener('click', exportDoctorsExcel);
+  byId('btn-backup').addEventListener('click', exportBackup);
 
   // lista medici: un solo listener per tutte le card
   const list = byId('doc-list');

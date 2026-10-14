@@ -353,43 +353,49 @@
   .r-kpi .l { font-size: 12px; color: #7b8794; margin-top: 5px; font-weight: 600; }
 
   /* ═══════════ CONTEGGI ═══════════ */
-  .c-nav { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 16px; }
+  .c-nav { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 16px; flex-wrap: wrap; }
   .c-month { font-size: 20px; font-weight: 800; color: #1f2933; min-width: 190px; text-align: center; }
   .c-arrow { width: 38px; height: 38px; border-radius: 12px; border: none; background: #fff; box-shadow: var(--r-sh); font-size: 22px; line-height: 1; cursor: pointer; color: #1a73e8; font-weight: 700; }
   .c-arrow:hover { background: #eaf2ff; }
+  .c-search { max-width: 220px; margin-left: 12px; padding: 9px 14px; }
   .c-note { text-align: center; color: #7b8794; font-size: 13.5px; }
   .c-drop { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; border: 2px dashed #b9c9de; border-radius: 16px; padding: 42px 20px; cursor: pointer; background: #f8fafc; color: #3b4a5c; transition: background .2s, border-color .2s; line-height: 1.5; }
   .c-drop:hover, .c-drop.over { background: #eaf2ff; border-color: #1a73e8; }
   .c-drop.busy { opacity: .6; pointer-events: none; }
   .c-drop .big { font-size: 38px; }
   .c-file { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 18px; }
+  .c-btns { display: flex; gap: 8px; flex-wrap: wrap; }
   .c-warn { background: #fff4e5; color: #8a4b00; border-radius: 12px; padding: 10px 14px; font-size: 13px; font-weight: 600; margin-bottom: 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .c-warn.c-info { background: #eaf2ff; color: #0d3b8a; }
-  .c-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .c-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
   .c-chip { background: #fff; border-radius: 16px; padding: 12px 16px; box-shadow: var(--r-sh); }
-  .c-chip b { display: block; font-size: 22px; font-weight: 800; color: #1f2933; }
+  .c-chip b { display: block; font-size: 21px; font-weight: 800; color: #1f2933; }
   .c-chip span { font-size: 12px; color: #7b8794; font-weight: 600; }
   .c-chip.tot { background: linear-gradient(135deg, #1a73e8, #3d8bf5); } .c-chip.tot b, .c-chip.tot span { color: #fff; }
-  .c-panel { padding: 0; overflow: hidden; }
-  .c-wrap { overflow: auto; max-height: 72vh; }
-  .c-table { border-collapse: separate; border-spacing: 0; font-size: 12px; width: max-content; min-width: 100%; }
-  .c-table th, .c-table td { padding: 6px 4px; border-bottom: 1px solid #eef2f7; text-align: center; white-space: nowrap; }
-  .c-table thead th { position: sticky; top: 0; background: #f4f7fb; z-index: 2; font-weight: 700; color: #5b6b7f; }
-  .c-table th.c-d { min-width: 28px; padding: 4px 2px; } .c-table th.c-d span { display: block; font-size: 12px; color: #1f2933; } .c-table th.c-d i { font-style: normal; font-size: 10px; color: #9aa5b1; }
-  .c-name { position: sticky; left: 0; z-index: 1; background: #fff; text-align: left !important; padding-left: 14px !important; padding-right: 12px !important; font-weight: 700; color: #1f2933; border-right: 1px solid #e3e8ef; }
-  .c-table thead .c-name { z-index: 3; background: #f4f7fb; }
-  .c-d.sat { background: #fafbfd; } .c-d.sun { background: #f3f5f9; }
-  td.c-ok { background: #d4f0d8 !important; color: #1a5c20; font-weight: 800; }
-  td.c-no { color: #d93025; font-weight: 800; background: #fdecea !important; }
-  td.c-x { color: #1a73e8; font-weight: 700; background: #eaf2ff !important; }
-  .c-tt { font-weight: 800; padding: 6px 10px !important; } .c-tt small { color: #9aa5b1; font-weight: 600; }
-  .c-comp { text-align: left !important; padding: 6px 14px !important; min-width: 190px; }
-  .c-comp b { display: block; color: #1f2933; } .c-comp small { display: block; color: #7b8794; font-size: 10.5px; } .c-comp small.w { color: #c25e00; white-space: normal; max-width: 230px; }
-  .c-table tbody tr:hover td { filter: brightness(.97); }
-  .c-table tfoot td { position: sticky; bottom: 0; background: #f4f7fb; font-weight: 800; border-top: 2px solid #dbe3ee; z-index: 2; }
-  .c-legend { padding: 10px 16px 14px; margin: 0; }
-  .c-legend .lg { display: inline-block; width: 16px; height: 16px; border-radius: 4px; vertical-align: middle; text-align: center; font-size: 11px; line-height: 16px; font-weight: 800; }
-  .c-legend .lg.ok { background: #d4f0d8; } .c-legend .lg.no { background: #fdecea; color: #d93025; } .c-legend .lg.x { background: #eaf2ff; }
+  .c-docs { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+  .c-doc { background: #fff; border-radius: 16px; box-shadow: var(--r-sh); overflow: hidden; }
+  .c-doc[hidden] { display: none; }
+  .c-doc > summary { display: flex; align-items: center; gap: 18px; padding: 14px 18px; cursor: pointer; list-style: none; }
+  .c-doc > summary::-webkit-details-marker { display: none; }
+  .c-doc > summary::before { content: '▸'; color: #9aa5b1; transition: transform .15s; }
+  .c-doc[open] > summary::before { transform: rotate(90deg); }
+  .c-doc > summary:hover { background: #f8fafc; }
+  .c-doc .n { font-size: 15px; font-weight: 800; color: #1f2933; flex: 1; }
+  .c-doc .m { font-size: 12.5px; color: #5b6b7f; } .c-doc .m b { color: #1f2933; font-size: 14px; }
+  .c-doc .t { font-size: 15px; font-weight: 800; color: #1a73e8; min-width: 110px; text-align: right; }
+  .c-dbody { padding: 4px 18px 18px; border-top: 1px solid #eef2f7; display: grid; gap: 16px; }
+  .c-tb { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
+  .c-tb th { text-align: left; font-size: 11.5px; color: #7b8794; font-weight: 700; padding: 6px 10px; border-bottom: 2px solid #e3e8ef; }
+  .c-tb td { padding: 7px 10px; border-bottom: 1px solid #f0f3f7; vertical-align: top; }
+  .c-tb th:not(:first-child), .c-tb td:not(:first-child) { text-align: right; }
+  .c-tb td small { display: block; color: #c25e00; font-size: 11px; font-weight: 600; }
+  .c-tb tfoot td { font-weight: 800; border-top: 2px solid #dbe3ee; border-bottom: none; background: #f8fafc; }
+  .c-tb .mut, .mut { color: #9aa5b1; font-weight: 500; }
+  .c-days .c-tb td:nth-child(2), .c-days .c-tb th:nth-child(2), .c-days .c-tb td:nth-child(3), .c-days .c-tb th:nth-child(3) { text-align: left; }
+  .okk { color: #1e7e34; font-weight: 700; } .noo { color: #d93025; font-weight: 700; }
+  .c-w { background: #fff4e5; color: #8a4b00; border-radius: 10px; padding: 8px 12px; font-size: 12.5px; font-weight: 600; }
+  .c-grand { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; background: #eaf2ff; border-radius: 12px; padding: 12px 16px; font-size: 13px; color: #0d3b8a; } .c-grand b { font-size: 16px; }
+  .c-days > summary { cursor: pointer; font-weight: 700; font-size: 13px; color: #3b4a5c; }
   .c-det { background: #fff; border-radius: 14px; box-shadow: var(--r-sh); padding: 12px 16px; margin-bottom: 12px; font-size: 13px; color: #3b4a5c; }
   .c-det summary { cursor: pointer; font-weight: 700; } .c-det > div { margin-top: 10px; line-height: 1.7; max-height: 260px; overflow: auto; }
   .c-det.warn summary { color: #c25e00; }
@@ -723,6 +729,7 @@
           <button class="c-arrow" data-cnt="prev" type="button" title="Mese precedente">‹</button>
           <div class="c-month" id="cnt-month">–</div>
           <button class="c-arrow" data-cnt="next" type="button" title="Mese successivo">›</button>
+          <input class="r-input c-search" id="cnt-search" type="search" placeholder="🔍 Cerca medico…" autocomplete="off">
         </div>
         <div id="cnt-body"></div>
       </section>
@@ -2030,6 +2037,10 @@ function cntVoce(ev, d) {
 }
 const vocLabel = k => (VOCI_ALL.find(v => v.k === k) || {}).l || k;
 
+const CNT_TIPO_VOCE = { 'ECG': 'ecg', 'HOLTER CARDIACO': 'hc', 'HOLTER PRESSORIO': 'hp', 'HOLTER CARDIACO 12D': 'holter_12der', 'SPIROMETRIA': 'spirometria', 'POLISONNOGRAFIA': 'polisonnografia' };
+const GG = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
+const cents = x => Math.round(x * 100);
+
 function cntCompute() {
   const dati = cnt.rec.dati, matchers = doctors.map(cntMatcher);
   const byDoc = new Map(), unmatched = [], inactive = [];
@@ -2046,30 +2057,90 @@ function cntCompute() {
   });
   const shiftsBy = new Map();
   (cnt.shifts || []).forEach(ev => { const k = nameKey(ev.doctor); (shiftsBy.get(k) || shiftsBy.set(k, []).get(k)).push(ev); });
-  let totEsami = 0, totTurni = 0, totCents = 0;
+  const T = { esami: 0, turni: 0, centsT: 0, centsE: 0 };
   const rows = doctors.filter(d => d.attivo).map(d => {
-    const ex = byDoc.get(d.id) || {}, cells = {}; let esami = 0;
-    Object.entries(ex).forEach(([day, types]) => { const tot = Object.values(types).reduce((a, b) => a + b, 0); cells[day] = { tot, types }; esami += tot; });
-    let inCal = 0, ok = 0, cents = 0; const brk = {}, warn = new Set();
+    const ex = byDoc.get(d.id) || {}, cells = {}, types = {}; let esami = 0;
+    Object.entries(ex).forEach(([day, tp]) => {
+      const tot = Object.values(tp).reduce((a, b) => a + b, 0);
+      cells[day] = { tot, types: tp, evs: [] }; esami += tot;
+      Object.entries(tp).forEach(([t, v]) => types[t] = (types[t] || 0) + v);
+    });
+    // turni
+    let inCal = 0, ok = 0, centsT = 0, senzaEsami = 0; const brk = {}, warn = new Set();
     (shiftsBy.get(nameKey(d.nome)) || []).forEach(ev => {
       inCal++;
-      const c = cells[ev.date] || (cells[ev.date] = { tot: 0, types: {} });
-      c.inTurno = true; (c.evs = c.evs || []).push(ev.title);
-      if (!c.tot) return;                              // in turno ma nessun esame: non conteggiato
+      const c = cells[ev.date] || (cells[ev.date] = { tot: 0, types: {}, evs: [] });
+      c.evs.push(ev.title);
+      if (!c.tot) { senzaEsami++; return; }
       ok++; c.ok = true;
       const v = cntVoce(ev, d);
       if (v.amb) { warn.add('Impostate sia «Turno ECG 75» sia «Turno ECG 100»: turno ECG non valorizzato'); return; }
-      if (v.miss || d.tariffe[v.k] == null) { warn.add('Manca la tariffa «' + (v.miss || vocLabel(v.k)) + '»'); return; }
+      if (v.miss || d.tariffe[v.k] == null) { warn.add('Manca la tariffa «' + (v.miss || vocLabel(v.k)) + '»: turno non valorizzato'); return; }
       const b = brk[v.k] || (brk[v.k] = { n: 0, imp: d.tariffe[v.k] });
-      b.n++; cents += Math.round(d.tariffe[v.k] * 100);
+      b.n++; centsT += cents(d.tariffe[v.k]);
     });
-    totEsami += esami; totTurni += ok; totCents += cents;
-    return { d, cells, esami, inCal, ok, cents, brk, warn: [...warn] };
+    // esami per tipologia (holter inclusi nel turno completo non vengono pagati a parte)
+    const nTc = brk.turno_completo ? brk.turno_completo.n : 0;
+    const incl = { 'HOLTER CARDIACO': nTc * (d.tcHc || 0), 'HOLTER PRESSORIO': nTc * (d.tcHp || 0) };
+    const typeRows = Object.entries(types).sort((a, b) => b[1] - a[1]).map(([t, n]) => {
+      const voce = CNT_TIPO_VOCE[t] || null;
+      const prezzo = voce && d.tariffe[voce] != null ? d.tariffe[voce] : null;
+      const inc = Math.min(n, incl[t] || 0), pay = n - inc;
+      return { t, n, prezzo, inc, pay, c: prezzo != null ? cents(prezzo) * pay : 0 };
+    });
+    const centsE = typeRows.reduce((a, r) => a + r.c, 0);
+    T.esami += esami; T.turni += ok; T.centsT += centsT; T.centsE += centsE;
+    return { d, cells, esami, inCal, ok, senzaEsami, centsT, centsE, brk, warn: [...warn], typeRows };
   });
-  return { rows, unmatched, inactive, totEsami, totTurni, totCents };
+  return { rows, unmatched, inactive, T };
 }
 
 // ── rendering ──
+function cntApplyFilter() {
+  const q = nameKey(cnt.q || '');
+  document.querySelectorAll('#cnt-body .c-doc').forEach(e => { e.hidden = !!q && !e.dataset.n.includes(q); });
+}
+function cntDocBlock(x, hasShifts, ym) {
+  const total = x.centsT + x.centsE;
+  let h = '<details class="c-doc" open data-n="' + escHtml(nameKey(x.d.nome)) + '"><summary><span class="n">' + escHtml(x.d.nome) + '</span>'
+    + '<span class="m"><b>' + x.esami.toLocaleString('it-IT') + '</b> esami</span>'
+    + '<span class="m"><b>' + (hasShifts ? x.ok : '–') + '</b> turni</span>'
+    + '<span class="t">' + fmtEuro(total / 100) + '</span></summary><div class="c-dbody">';
+  // esami per tipologia
+  h += '<table class="c-tb"><thead><tr><th>Tipologia esame</th><th>Esami</th><th>Prezzo unitario</th><th>Importo</th></tr></thead><tbody>';
+  if (!x.typeRows.length) h += '<tr><td colspan="4" class="mut">Nessun esame refertato nel mese</td></tr>';
+  x.typeRows.forEach(r => {
+    h += '<tr><td>' + escHtml(r.t) + '</td><td><b>' + r.n + '</b>' + (r.inc ? '<small>' + r.inc + ' inclusi nel turno completo → ' + r.pay + ' a pagamento</small>' : '') + '</td>'
+      + '<td>' + (r.prezzo != null ? fmtEuro(r.prezzo) : '<span class="mut">non a consuntivo</span>') + '</td>'
+      + '<td>' + (r.prezzo != null ? fmtEuro(r.c / 100) : '<span class="mut">—</span>') + '</td></tr>';
+  });
+  h += '</tbody><tfoot><tr><td>Totale esami</td><td>' + x.esami + '</td><td></td><td>' + fmtEuro(x.centsE / 100) + '</td></tr></tfoot></table>';
+  // turni
+  h += '<table class="c-tb"><thead><tr><th>Tipo di turno</th><th>Turni conteggiati</th><th>Tariffa turno</th><th>Importo</th></tr></thead><tbody>';
+  if (!hasShifts) h += '<tr><td colspan="4" class="mut">Turni non disponibili (calendario non letto)</td></tr>';
+  else {
+    const br = Object.entries(x.brk);
+    if (!br.length) h += '<tr><td colspan="4" class="mut">Nessun turno conteggiato' + (x.inCal ? '' : ' (nessun turno in calendario)') + '</td></tr>';
+    br.forEach(([k, b]) => { h += '<tr><td>' + escHtml(vocLabel(k)) + '</td><td><b>' + b.n + '</b></td><td>' + fmtEuro(b.imp) + '</td><td>' + fmtEuro(b.n * b.imp) + '</td></tr>'; });
+    if (x.senzaEsami) h += '<tr class="mut"><td colspan="4">○ ' + x.senzaEsami + (x.senzaEsami === 1 ? ' turno in calendario senza esami: non conteggiato' : ' turni in calendario senza esami: non conteggiati') + '</td></tr>';
+  }
+  h += '</tbody><tfoot><tr><td>Totale turni</td><td>' + (hasShifts ? x.ok : '–') + '</td><td></td><td>' + (hasShifts ? fmtEuro(x.centsT / 100) : '–') + '</td></tr></tfoot></table>';
+  x.warn.forEach(w => { h += '<div class="c-w">⚠ ' + escHtml(w) + '</div>'; });
+  h += '<div class="c-grand"><span>Turni ' + fmtEuro(x.centsT / 100) + ' + Esami a consuntivo ' + fmtEuro(x.centsE / 100) + '</span><b>Totale ' + fmtEuro(total / 100) + '</b></div>';
+  // dettaglio giorni
+  const days = Object.keys(x.cells).filter(k => x.cells[k].tot || x.cells[k].evs.length).sort();
+  if (days.length) {
+    h += '<details class="c-days"><summary>Dettaglio per giorno (' + days.length + ')</summary><table class="c-tb"><thead><tr><th>Giorno</th><th>Esami</th><th>Turno</th></tr></thead><tbody>';
+    days.forEach(k => {
+      const c = x.cells[k], dt = new Date(k + 'T00:00:00');
+      h += '<tr><td>' + GG[dt.getDay()] + ' ' + pad2(dt.getDate()) + '/' + pad2(dt.getMonth() + 1) + '</td><td>'
+        + (c.tot ? '<b>' + c.tot + '</b> — ' + Object.entries(c.types).map(([t, v]) => escHtml(t) + ' ' + v).join(' · ') : '<span class="mut">—</span>') + '</td><td>'
+        + (c.evs.length ? escHtml(c.evs.join(' + ')) + (c.ok ? ' <span class="okk">✓ conteggiato</span>' : ' <span class="noo">○ nessun esame</span>') : '<span class="mut">nessun turno in calendario</span>') + '</td></tr>';
+    });
+    h += '</tbody></table></details>';
+  }
+  return h + '</div></details>';
+}
 function cntRender() {
   const body = byId('cnt-body'); if (!body || !cnt.ym) return;
   setTxt('cnt-month', ymLabel(cnt.ym));
@@ -2090,40 +2161,22 @@ function cntRender() {
     return;
   }
   if (!doctorsLoaded) { body.innerHTML = '<div class="r-panel c-note">Elenco medici non ancora caricato…</div>'; return; }
-  const r = cnt.rec, ign = r.dati.ignorati || {}, R = cntCompute(), n = ymDays(cnt.ym);
-  const hasShifts = !!cnt.shifts;
+  const r = cnt.rec, ign = r.dati.ignorati || {}, R = cntCompute(), hasShifts = !!cnt.shifts, T = R.T;
   let h = '<div class="r-panel c-file"><div>📄 <b>' + escHtml(r.nome_file || 'file') + '</b><div class="r-usub">'
     + (r.righe_totali || 0).toLocaleString('it-IT') + ' righe · ' + (r.righe_conteggiate || 0).toLocaleString('it-IT') + ' esami refertati conteggiati · caricato il '
     + (r.caricato_il ? new Date(r.caricato_il).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '–') + (r.caricato_da ? ' da ' + escHtml(r.caricato_da) : '') + '</div></div>'
-    + '<button class="r-btn ghost" data-cnt="del">🗑 Elimina e ricarica</button></div>';
+    + '<div class="c-btns"><button class="r-btn ghost" data-cnt="expand">Espandi tutti</button><button class="r-btn ghost" data-cnt="collapse">Comprimi tutti</button>'
+    + '<button class="r-btn ghost" data-cnt="del">🗑 Elimina e ricarica</button></div></div>';
   if (cnt.shiftsLoading) h += '<div class="c-warn c-info">⏳ Lettura dei turni dal calendario…</div>';
-  else if (cnt.shiftsErr) h += '<div class="c-warn">Turni non disponibili (' + escHtml(cnt.shiftsErr) + ') — vedi solo gli esami, senza turni né compensi. <button class="r-btn ghost" data-cnt="shifts">↻ Riprova</button></div>';
-  h += '<div class="c-chips"><div class="c-chip"><b>' + R.totEsami.toLocaleString('it-IT') + '</b><span>esami dei medici attivi</span></div>'
-    + '<div class="c-chip"><b>' + (hasShifts ? R.totTurni : '–') + '</b><span>turni conteggiati</span></div>'
-    + '<div class="c-chip tot"><b>' + (hasShifts ? fmtEuro(R.totCents / 100) : '–') + '</b><span>compenso turni del mese</span></div></div>';
-  h += '<div class="r-panel c-panel"><div class="c-wrap"><table class="c-table"><thead><tr><th class="c-name">Medico</th>';
-  for (let d = 1; d <= n; d++) {
-    const wd = new Date(+cnt.ym.slice(0, 4), +cnt.ym.slice(5) - 1, d).getDay();
-    h += '<th class="c-d' + (wd === 0 ? ' sun' : wd === 6 ? ' sat' : '') + '"><span>' + d + '</span><i>' + WD[wd] + '</i></th>';
-  }
-  h += '<th class="c-tt">Esami</th><th class="c-tt">Turni</th><th class="c-comp">Compenso turni</th></tr></thead><tbody>';
-  R.rows.forEach(x => {
-    h += '<tr><td class="c-name">' + escHtml(x.d.nome) + '</td>';
-    for (let d = 1; d <= n; d++) {
-      const ds = cnt.ym + '-' + pad2(d), c = x.cells[ds], wd = new Date(ds + 'T00:00:00').getDay();
-      const we = wd === 0 ? ' sun' : wd === 6 ? ' sat' : '';
-      if (c && c.inTurno && c.tot > 0) h += '<td class="c-d c-ok' + we + '" title="' + escHtml('In turno: ' + c.evs.join(' + ') + ' — ' + Object.entries(c.types).map(([t, v]) => t + ' ' + v).join(', ')) + '">' + c.tot + '</td>';
-      else if (c && c.inTurno) h += '<td class="c-d c-no' + we + '" title="' + escHtml('In turno (' + c.evs.join(' + ') + ') ma nessun esame: turno non conteggiato') + '">○</td>';
-      else if (c && c.tot > 0) h += '<td class="c-d c-x' + we + '" title="' + escHtml(Object.entries(c.types).map(([t, v]) => t + ' ' + v).join(', ') + ' (senza turno in calendario)') + '">' + c.tot + '</td>';
-      else h += '<td class="c-d' + we + '"></td>';
-    }
-    h += '<td class="c-tt">' + (x.esami || '') + '</td><td class="c-tt">' + (hasShifts ? (x.ok + (x.inCal !== x.ok ? '<small>/' + x.inCal + '</small>' : '')) : '–') + '</td>';
-    h += '<td class="c-comp">' + (hasShifts ? (x.inCal || x.cents ? '<b>' + fmtEuro(x.cents / 100) + '</b>' : '') : '')
-      + Object.entries(x.brk).map(([k, b]) => '<small>' + escHtml(vocLabel(k)) + ' ×' + b.n + ' × ' + EUR.format(b.imp) + '</small>').join('')
-      + x.warn.map(w => '<small class="w">⚠ ' + escHtml(w) + '</small>').join('') + '</td></tr>';
-  });
-  h += '</tbody><tfoot><tr><td class="c-name">Totale</td><td colspan="' + n + '"></td><td class="c-tt">' + R.totEsami.toLocaleString('it-IT') + '</td><td class="c-tt">' + (hasShifts ? R.totTurni : '–') + '</td><td class="c-comp"><b>' + (hasShifts ? fmtEuro(R.totCents / 100) : '–') + '</b></td></tr></tfoot></table></div>'
-    + '<div class="r-hint c-legend"><span class="lg ok"></span> in turno con esami (turno conteggiato) &nbsp; <span class="lg no">○</span> in turno senza esami (non conteggiato) &nbsp; <span class="lg x"></span> esami in un giorno senza turno in calendario</div></div>';
+  else if (cnt.shiftsErr) h += '<div class="c-warn">Turni non disponibili (' + escHtml(cnt.shiftsErr) + ') — sono mostrati solo gli esami. <button class="r-btn ghost" data-cnt="shifts">↻ Riprova</button></div>';
+  h += '<div class="c-chips"><div class="c-chip"><b>' + T.esami.toLocaleString('it-IT') + '</b><span>esami dei medici attivi</span></div>'
+    + '<div class="c-chip"><b>' + (hasShifts ? T.turni : '–') + '</b><span>turni conteggiati</span></div>'
+    + '<div class="c-chip"><b>' + (hasShifts ? fmtEuro(T.centsT / 100) : '–') + '</b><span>compenso turni</span></div>'
+    + '<div class="c-chip"><b>' + fmtEuro(T.centsE / 100) + '</b><span>compenso esami a consuntivo</span></div>'
+    + '<div class="c-chip tot"><b>' + fmtEuro((T.centsT + T.centsE) / 100) + '</b><span>totale mese</span></div></div>';
+  const withData = R.rows.filter(x => x.esami || x.inCal), without = R.rows.filter(x => !x.esami && !x.inCal);
+  h += '<div class="c-docs">' + withData.map(x => cntDocBlock(x, hasShifts)).join('') + '</div>';
+  if (without.length) h += '<details class="c-det"><summary>Medici attivi senza esami né turni nel mese (' + without.length + ')</summary><div>' + without.map(x => escHtml(x.d.nome)).join(' · ') + '</div></details>';
   const ignTxt = [];
   if (ign.rifiutati) ignTxt.push(ign.rifiutati + ' esami rifiutati/non refertati');
   if (ign.senzaMedico) ignTxt.push(ign.senzaMedico + ' refertati senza medico');
@@ -2136,6 +2189,7 @@ function cntRender() {
   if (R.inactive.length) h += '<details class="c-det"><summary>Medici non attivi con esami (esclusi)</summary><div>'
     + R.inactive.sort((a, b) => b.n - a.n).map(x => escHtml(x.name) + ' → ' + escHtml(x.doc) + ' — ' + x.n).join('<br>') + '</div></details>';
   body.innerHTML = h;
+  cntApplyFilter();
 }
 
 // ── caricamento dati / azioni ──
@@ -2314,8 +2368,10 @@ async function maybeImportLegacy() {
       const a = b.dataset.cnt;
       if (a === 'prev') cntGo(-1); else if (a === 'next') cntGo(1);
       else if (a === 'del') cntDelete(); else if (a === 'reload') cntLoad();
+      else if (a === 'expand' || a === 'collapse') document.querySelectorAll('#cnt-body .c-doc').forEach(e => { e.open = a === 'expand'; });
       else if (a === 'shifts') { const my = ++cnt.req; cnt.shiftsLoading = true; cntRender(); cntLoadShifts(my).then(() => { if (my === cnt.req) cntRender(); }); }
     });
+    byId('cnt-search').addEventListener('input', e => { cnt.q = e.target.value; cntApplyFilter(); });
     root.addEventListener('change', e => { if (e.target.id === 'cnt-file' && e.target.files[0]) { const f = e.target.files[0]; e.target.value = ''; cntUpload(f); } });
     root.addEventListener('dragover', e => { const d = e.target.closest('.c-drop'); if (d) { e.preventDefault(); d.classList.add('over'); } });
     root.addEventListener('dragleave', e => { const d = e.target.closest('.c-drop'); if (d) d.classList.remove('over'); });

@@ -351,6 +351,48 @@
   .r-kpi .ic { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 21px; flex-shrink: 0; }
   .r-kpi .n { font-size: 28px; font-weight: 800; line-height: 1; color: #1f2933; }
   .r-kpi .l { font-size: 12px; color: #7b8794; margin-top: 5px; font-weight: 600; }
+
+  /* ═══════════ CONTEGGI ═══════════ */
+  .c-nav { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 16px; }
+  .c-month { font-size: 20px; font-weight: 800; color: #1f2933; min-width: 190px; text-align: center; }
+  .c-arrow { width: 38px; height: 38px; border-radius: 12px; border: none; background: #fff; box-shadow: var(--r-sh); font-size: 22px; line-height: 1; cursor: pointer; color: #1a73e8; font-weight: 700; }
+  .c-arrow:hover { background: #eaf2ff; }
+  .c-note { text-align: center; color: #7b8794; font-size: 13.5px; }
+  .c-drop { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; border: 2px dashed #b9c9de; border-radius: 16px; padding: 42px 20px; cursor: pointer; background: #f8fafc; color: #3b4a5c; transition: background .2s, border-color .2s; line-height: 1.5; }
+  .c-drop:hover, .c-drop.over { background: #eaf2ff; border-color: #1a73e8; }
+  .c-drop.busy { opacity: .6; pointer-events: none; }
+  .c-drop .big { font-size: 38px; }
+  .c-file { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 18px; }
+  .c-warn { background: #fff4e5; color: #8a4b00; border-radius: 12px; padding: 10px 14px; font-size: 13px; font-weight: 600; margin-bottom: 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .c-warn.c-info { background: #eaf2ff; color: #0d3b8a; }
+  .c-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .c-chip { background: #fff; border-radius: 16px; padding: 12px 16px; box-shadow: var(--r-sh); }
+  .c-chip b { display: block; font-size: 22px; font-weight: 800; color: #1f2933; }
+  .c-chip span { font-size: 12px; color: #7b8794; font-weight: 600; }
+  .c-chip.tot { background: linear-gradient(135deg, #1a73e8, #3d8bf5); } .c-chip.tot b, .c-chip.tot span { color: #fff; }
+  .c-panel { padding: 0; overflow: hidden; }
+  .c-wrap { overflow: auto; max-height: 72vh; }
+  .c-table { border-collapse: separate; border-spacing: 0; font-size: 12px; width: max-content; min-width: 100%; }
+  .c-table th, .c-table td { padding: 6px 4px; border-bottom: 1px solid #eef2f7; text-align: center; white-space: nowrap; }
+  .c-table thead th { position: sticky; top: 0; background: #f4f7fb; z-index: 2; font-weight: 700; color: #5b6b7f; }
+  .c-table th.c-d { min-width: 28px; padding: 4px 2px; } .c-table th.c-d span { display: block; font-size: 12px; color: #1f2933; } .c-table th.c-d i { font-style: normal; font-size: 10px; color: #9aa5b1; }
+  .c-name { position: sticky; left: 0; z-index: 1; background: #fff; text-align: left !important; padding-left: 14px !important; padding-right: 12px !important; font-weight: 700; color: #1f2933; border-right: 1px solid #e3e8ef; }
+  .c-table thead .c-name { z-index: 3; background: #f4f7fb; }
+  .c-d.sat { background: #fafbfd; } .c-d.sun { background: #f3f5f9; }
+  td.c-ok { background: #d4f0d8 !important; color: #1a5c20; font-weight: 800; }
+  td.c-no { color: #d93025; font-weight: 800; background: #fdecea !important; }
+  td.c-x { color: #1a73e8; font-weight: 700; background: #eaf2ff !important; }
+  .c-tt { font-weight: 800; padding: 6px 10px !important; } .c-tt small { color: #9aa5b1; font-weight: 600; }
+  .c-comp { text-align: left !important; padding: 6px 14px !important; min-width: 190px; }
+  .c-comp b { display: block; color: #1f2933; } .c-comp small { display: block; color: #7b8794; font-size: 10.5px; } .c-comp small.w { color: #c25e00; white-space: normal; max-width: 230px; }
+  .c-table tbody tr:hover td { filter: brightness(.97); }
+  .c-table tfoot td { position: sticky; bottom: 0; background: #f4f7fb; font-weight: 800; border-top: 2px solid #dbe3ee; z-index: 2; }
+  .c-legend { padding: 10px 16px 14px; margin: 0; }
+  .c-legend .lg { display: inline-block; width: 16px; height: 16px; border-radius: 4px; vertical-align: middle; text-align: center; font-size: 11px; line-height: 16px; font-weight: 800; }
+  .c-legend .lg.ok { background: #d4f0d8; } .c-legend .lg.no { background: #fdecea; color: #d93025; } .c-legend .lg.x { background: #eaf2ff; }
+  .c-det { background: #fff; border-radius: 14px; box-shadow: var(--r-sh); padding: 12px 16px; margin-bottom: 12px; font-size: 13px; color: #3b4a5c; }
+  .c-det summary { cursor: pointer; font-weight: 700; } .c-det > div { margin-top: 10px; line-height: 1.7; max-height: 260px; overflow: auto; }
+  .c-det.warn summary { color: #c25e00; }
   .r-soon { border: 2px dashed #cfd9e6; border-radius: 16px; text-align: center; padding: 44px 20px; color: #7b8794; font-size: 13.5px; line-height: 1.6; }
   .r-soon .big { font-size: 42px; margin-bottom: 8px; }
   .r-soon b { color: #3b4a5c; font-size: 15px; }
@@ -677,9 +719,12 @@
           <div class="r-kpi"><div class="ic" style="background:#fff2e0">🩺</div><div><div class="n" id="k-cons">–</div><div class="l">Attivi a consuntivo</div></div></div>
           <div class="r-kpi"><div class="ic" style="background:#eef0f3">⏸</div><div><div class="n" id="k-off">–</div><div class="l">Non attivi (esclusi)</div></div></div>
         </div>
-        <div class="r-panel">
-          <div class="r-soon"><div class="big">🚧</div><b>Conteggi in arrivo</b><br>Qui compariranno i conteggi di turni ed esami per i medici attivi.</div>
+        <div class="c-nav">
+          <button class="c-arrow" data-cnt="prev" type="button" title="Mese precedente">‹</button>
+          <div class="c-month" id="cnt-month">–</div>
+          <button class="c-arrow" data-cnt="next" type="button" title="Mese successivo">›</button>
         </div>
+        <div id="cnt-body"></div>
       </section>
 
       <!-- ── Medici ── -->
@@ -1431,6 +1476,7 @@ function switchSubTab(tab) {
   });
   moveIndicator();
   if (tab === 'account' && isAdmin() && !usersLoaded) loadUsers();   // caricamento solo quando serve
+  if (tab === 'conteggi') cntOnShow();
 }
 
 // ── accesso ──
@@ -1489,11 +1535,13 @@ async function finishUnlock() {
   switchSubTab('conteggi');
   requestAnimationFrame(moveIndicator);
   await loadDoctors();
+  cntRender();
   await maybeImportLegacy();
 }
 async function lockRend() {
   rendUnlocked = false; currentUser = null;
   doctors = []; doctorsLoaded = false; adminUsers = []; usersLoaded = false;
+  cntReset(); if (byId('cnt-body')) byId('cnt-body').innerHTML = '';
   docFilter = 'all'; docVoce = ''; docQuery = '';
   closeDoctorModal(); closeUserModal();
   try { if (sb) await sb.auth.signOut(); } catch (e) {}
@@ -1836,6 +1884,310 @@ async function saveDoctorModal() {
   } finally { btn.disabled = false; btn.textContent = '💾 Salva medico'; }
 }
 
+// ═══════════ CONTEGGI MENSILI ═══════════
+// File esami del mese -> salvato (già aggregato) su Supabase in `conteggi_mesi`.
+// Turno conteggiato = medico in turno nel calendario "Medici in Turno" con almeno 1 esame refertato quel giorno.
+const cnt = { ym: null, rec: null, loaded: false, loading: false, err: '', shifts: null, shiftsErr: '', shiftsLoading: false, req: 0 };
+const pad2 = n => String(n).padStart(2, '0');
+const WD = ['D', 'L', 'M', 'M', 'G', 'V', 'S'];
+function ymLabel(ym) { const [y, m] = ym.split('-').map(Number); const s = new Date(y, m - 1, 1).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' }); return s.charAt(0).toUpperCase() + s.slice(1); }
+function ymAdd(ym, n) { const [y, m] = ym.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); return d.getFullYear() + '-' + pad2(d.getMonth() + 1); }
+function ymDays(ym) { const [y, m] = ym.split('-').map(Number); return new Date(y, m, 0).getDate(); }
+const nameKey = t => normTxt(t).replace(/['’`´.]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+
+// ── lettura file ──
+function cntParseCsv(text) {
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const nl = text.indexOf('\n'), first = nl < 0 ? text : text.slice(0, nl);
+  const delim = first.split(';').length >= first.split(',').length ? ';' : ',';
+  const rows = []; let row = [], f = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
+    else if (c === '"') q = true;
+    else if (c === delim) { row.push(f); f = ''; }
+    else if (c === '\n') { row.push(f); rows.push(row); row = []; f = ''; }
+    else if (c !== '\r') f += c;
+  }
+  if (f !== '' || row.length) { row.push(f); rows.push(row); }
+  return rows;
+}
+async function cntReadFile(file) {
+  const buf = await file.arrayBuffer();
+  if (/\.csv$|\.txt$/i.test(file.name)) {
+    let text;
+    try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch (e) { text = new TextDecoder('windows-1252').decode(buf); }
+    return cntParseCsv(text);
+  }
+  const wb = XLSX.read(buf, { type: 'array' });
+  return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' });
+}
+function cntDate(v) {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') { const p = XLSX.SSF.parse_date_code(v); return p ? p.y + '-' + pad2(p.m) + '-' + pad2(p.d) : null; }
+  const s = String(v).trim();
+  let m = s.match(/(\d{4})-(\d{2})-(\d{2})/); if (m) return m[1] + '-' + m[2] + '-' + m[3];
+  m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})/); if (m) return m[3] + '-' + pad2(m[2]) + '-' + pad2(m[1]);
+  return null;
+}
+// verifica del mese + aggregazione (medico -> giorno -> tipologia -> n)
+function cntAnalyze(rows, ym) {
+  if (!rows || rows.length < 2) throw new Error('Il file è vuoto.');
+  const hdr = rows[0].map(h => normTxt(h).replace(/[^a-z]/g, ''));
+  const iT = hdr.indexOf('tipologia'), iS = hdr.indexOf('stato'), iM = hdr.indexOf('medico'),
+        iR = hdr.indexOf('datarefertazione'), iQ = hdr.indexOf('datarichiesta');
+  const miss = [['TIPOLOGIA', iT], ['STATO', iS], ['MEDICO', iM], ['DATA REFERTAZIONE', iR]].filter(x => x[1] < 0).map(x => x[0]);
+  if (miss.length) throw new Error('Colonne mancanti nel file: ' + miss.join(', ') + '. Il file non sembra l\'esportazione degli esami.');
+  const body = rows.slice(1).filter(r => r.some(c => String(c).trim() !== ''));
+  // 1) il mese del file: mese più frequente di DATA RICHIESTA (se manca, DATA REFERTAZIONE)
+  const ci = iQ >= 0 ? iQ : iR, hist = {}; let nDated = 0;
+  body.forEach(r => { const d = cntDate(r[ci]); if (d) { const k = d.slice(0, 7); hist[k] = (hist[k] || 0) + 1; nDated++; } });
+  if (!nDated) throw new Error('Non trovo date valide nel file.');
+  const months = Object.entries(hist).sort((a, b) => b[1] - a[1]);
+  if (months[0][0] !== ym) {
+    const det = months.slice(0, 3).map(([k, n]) => ymLabel(k) + ' (' + Math.round(n * 100 / nDated) + '%)').join(', ');
+    throw new Error('Mese non corretto: il file contiene esami di ' + det + ', ma hai selezionato ' + ymLabel(ym) + '. Controlla il file oppure cambia mese.');
+  }
+  // 2) aggregazione
+  const doctors = {}, ign = { rifiutati: 0, senzaMedico: 0, fuoriMese: 0, dataNonValida: 0 };
+  let counted = 0;
+  body.forEach(r => {
+    if (normTxt(r[iS]).trim() !== 'refertato') { ign.rifiutati++; return; }
+    const med = String(r[iM] == null ? '' : r[iM]).replace(/\s+/g, ' ').trim();
+    if (!med) { ign.senzaMedico++; return; }
+    const d = cntDate(r[iR]);
+    if (!d) { ign.dataNonValida++; return; }
+    if (d.slice(0, 7) !== ym) { ign.fuoriMese++; return; }
+    const t = String(r[iT] || '').replace(/\s+/g, ' ').trim().toUpperCase() || 'ALTRO';
+    const a = doctors[med] || (doctors[med] = {}), b = a[d] || (a[d] = {});
+    b[t] = (b[t] || 0) + 1; counted++;
+  });
+  return { righe: body.length, counted, dati: { v: 1, doctors, ignorati: ign } };
+}
+
+// ── associazione nome file ("Cognome Nome") -> medico in elenco ("COGNOME N.") ──
+function cntMatcher(d) {
+  const t = nameKey(d.nome).split(' ').filter(Boolean), ini = [];
+  while (t.length > 1 && t[t.length - 1].length === 1) ini.unshift(t.pop());
+  return { d, sur: t, ini };
+}
+function cntMatch(csvName, matchers) {
+  const c = nameKey(csvName).split(' ').filter(Boolean); let best = null, bs = -1;
+  for (const m of matchers) {
+    if (!m.sur.length || m.sur.length > c.length || !m.sur.every((w, i) => c[i] === w)) continue;
+    if (m.ini.length) {
+      const rest = c.slice(m.sur.length);
+      if (rest.length < m.ini.length || !m.ini.every((x, i) => rest[i][0] === x)) continue;
+    }
+    const sc = m.ini.length * 10 + m.sur.length;
+    if (sc > bs) { bs = sc; best = m.d; }
+  }
+  return best;
+}
+
+// ── turni dal calendario "Medici in Turno" ──
+async function cntLoadShifts(my) {
+  cnt.shiftsLoading = true; cnt.shiftsErr = ''; cnt.shifts = null;
+  try {
+    if (typeof gapi === 'undefined' || !gapi.client || !gapi.client.getToken || !gapi.client.getToken())
+      throw new Error('Accesso a Google non attivo: i turni non sono leggibili.');
+    const [y, m] = cnt.ym.split('-').map(Number);
+    const tMin = new Date(y, m - 1, 1), tMax = new Date(y, m, 1), cal = CALENDARS[1];
+    let items = [], pageToken;
+    do {
+      const p = { calendarId: cal.id, timeMin: tMin.toISOString(), timeMax: tMax.toISOString(), singleEvents: true, orderBy: 'startTime', maxResults: 2500 };
+      if (pageToken) p.pageToken = pageToken;
+      const r = await gapi.client.request({ path: 'https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent(cal.id) + '/events', params: p });
+      items = items.concat(r.result.items || []); pageToken = r.result.nextPageToken;
+    } while (pageToken);
+    const out = [];
+    items.forEach(ev => {
+      if (!ev.start || !ev.start.date) return;
+      const s = (ev.summary || '').trim(); if (!s) return;
+      const hasEcg = /\bECG\b/i.test(s);
+      if (/^0[12]\s+/i.test(s)) { const p = parseEvent(s, false); if (p && p.doctorName) out.push({ date: ev.start.date, doctor: p.doctorName, kind: hasEcg ? 'ecg' : 'std', title: s }); }
+      else if (hasEcg) return;                       // ECG senza medico
+      else { const p = parseEvent(s, true); if (p.doctorName) out.push({ date: ev.start.date, doctor: p.doctorName, kind: p.holter16 ? 'h16' : 'holter', title: s }); }
+    });
+    if (my !== cnt.req) return;
+    cnt.shifts = out;
+  } catch (e) {
+    if (my !== cnt.req) return;
+    cnt.shiftsErr = e.result && e.result.error ? e.result.error.message : (e.message || String(e));
+  } finally { if (my === cnt.req) cnt.shiftsLoading = false; }
+}
+// tipo di turno -> voce di tariffa
+function cntVoce(ev, d) {
+  if (new Date(ev.date + 'T00:00:00').getDay() === 0) return { k: 'turno_domenica' };
+  if (ev.kind === 'h16') return { k: 'turno_16hc' };
+  if (ev.kind === 'holter') return { k: 'turno_holter' };
+  if (ev.kind === 'ecg') {
+    const a = d.tariffe.turno_ecg_75 != null, b = d.tariffe.turno_ecg_100 != null;
+    if (a && b) return { amb: true };
+    return a ? { k: 'turno_ecg_75' } : b ? { k: 'turno_ecg_100' } : { miss: 'Turno ECG 75/100' };
+  }
+  return { k: 'turno_completo' };
+}
+const vocLabel = k => (VOCI_ALL.find(v => v.k === k) || {}).l || k;
+
+function cntCompute() {
+  const dati = cnt.rec.dati, matchers = doctors.map(cntMatcher);
+  const byDoc = new Map(), unmatched = [], inactive = [];
+  Object.entries(dati.doctors || {}).forEach(([name, days]) => {
+    let n = 0; Object.values(days).forEach(t => Object.values(t).forEach(v => n += v));
+    const d = cntMatch(name, matchers);
+    if (!d) { unmatched.push({ name, n }); return; }
+    if (!d.attivo) { inactive.push({ name, n, doc: d.nome }); return; }
+    const e = byDoc.get(d.id) || byDoc.set(d.id, {}).get(d.id);
+    Object.entries(days).forEach(([day, types]) => {
+      const a = e[day] || (e[day] = {});
+      Object.entries(types).forEach(([t, v]) => a[t] = (a[t] || 0) + v);
+    });
+  });
+  const shiftsBy = new Map();
+  (cnt.shifts || []).forEach(ev => { const k = nameKey(ev.doctor); (shiftsBy.get(k) || shiftsBy.set(k, []).get(k)).push(ev); });
+  let totEsami = 0, totTurni = 0, totCents = 0;
+  const rows = doctors.filter(d => d.attivo).map(d => {
+    const ex = byDoc.get(d.id) || {}, cells = {}; let esami = 0;
+    Object.entries(ex).forEach(([day, types]) => { const tot = Object.values(types).reduce((a, b) => a + b, 0); cells[day] = { tot, types }; esami += tot; });
+    let inCal = 0, ok = 0, cents = 0; const brk = {}, warn = new Set();
+    (shiftsBy.get(nameKey(d.nome)) || []).forEach(ev => {
+      inCal++;
+      const c = cells[ev.date] || (cells[ev.date] = { tot: 0, types: {} });
+      c.inTurno = true; (c.evs = c.evs || []).push(ev.title);
+      if (!c.tot) return;                              // in turno ma nessun esame: non conteggiato
+      ok++; c.ok = true;
+      const v = cntVoce(ev, d);
+      if (v.amb) { warn.add('Impostate sia «Turno ECG 75» sia «Turno ECG 100»: turno ECG non valorizzato'); return; }
+      if (v.miss || d.tariffe[v.k] == null) { warn.add('Manca la tariffa «' + (v.miss || vocLabel(v.k)) + '»'); return; }
+      const b = brk[v.k] || (brk[v.k] = { n: 0, imp: d.tariffe[v.k] });
+      b.n++; cents += Math.round(d.tariffe[v.k] * 100);
+    });
+    totEsami += esami; totTurni += ok; totCents += cents;
+    return { d, cells, esami, inCal, ok, cents, brk, warn: [...warn] };
+  });
+  return { rows, unmatched, inactive, totEsami, totTurni, totCents };
+}
+
+// ── rendering ──
+function cntRender() {
+  const body = byId('cnt-body'); if (!body || !cnt.ym) return;
+  setTxt('cnt-month', ymLabel(cnt.ym));
+  if (cnt.loading) { body.innerHTML = '<div class="r-panel c-note">Caricamento…</div>'; return; }
+  if (cnt.err) {
+    const missing = /conteggi_mesi|42P01|does not exist|schema cache/i.test(cnt.err);
+    body.innerHTML = '<div class="r-panel"><div class="r-banner" style="display:block">' + (missing
+      ? 'Tabella <b>conteggi_mesi</b> non trovata su Supabase. Esegui lo script <b>supabase_conteggi.sql</b> nel SQL Editor e riprova.'
+      : 'Errore nel caricamento: ' + escHtml(cnt.err)) + '</div><button class="r-btn ghost" data-cnt="reload">↻ Riprova</button></div>';
+    return;
+  }
+  if (!cnt.rec) {
+    body.innerHTML = '<div class="r-panel"><label class="c-drop" id="cnt-drop"><div class="big">📄</div>'
+      + '<b>Carica il file degli esami di ' + escHtml(ymLabel(cnt.ym)) + '</b>'
+      + '<span class="r-usub">Trascina qui il file (.xlsx, .xls o .csv) oppure clicca per sceglierlo.<br>Verifico per prima cosa che gli esami appartengano al mese selezionato.</span>'
+      + '<input type="file" id="cnt-file" accept=".xlsx,.xls,.csv" hidden></label>'
+      + '<div class="r-msg err" id="cnt-up-msg"></div></div>';
+    return;
+  }
+  if (!doctorsLoaded) { body.innerHTML = '<div class="r-panel c-note">Elenco medici non ancora caricato…</div>'; return; }
+  const r = cnt.rec, ign = r.dati.ignorati || {}, R = cntCompute(), n = ymDays(cnt.ym);
+  const hasShifts = !!cnt.shifts;
+  let h = '<div class="r-panel c-file"><div>📄 <b>' + escHtml(r.nome_file || 'file') + '</b><div class="r-usub">'
+    + (r.righe_totali || 0).toLocaleString('it-IT') + ' righe · ' + (r.righe_conteggiate || 0).toLocaleString('it-IT') + ' esami refertati conteggiati · caricato il '
+    + (r.caricato_il ? new Date(r.caricato_il).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '–') + (r.caricato_da ? ' da ' + escHtml(r.caricato_da) : '') + '</div></div>'
+    + '<button class="r-btn ghost" data-cnt="del">🗑 Elimina e ricarica</button></div>';
+  if (cnt.shiftsLoading) h += '<div class="c-warn c-info">⏳ Lettura dei turni dal calendario…</div>';
+  else if (cnt.shiftsErr) h += '<div class="c-warn">Turni non disponibili (' + escHtml(cnt.shiftsErr) + ') — vedi solo gli esami, senza turni né compensi. <button class="r-btn ghost" data-cnt="shifts">↻ Riprova</button></div>';
+  h += '<div class="c-chips"><div class="c-chip"><b>' + R.totEsami.toLocaleString('it-IT') + '</b><span>esami dei medici attivi</span></div>'
+    + '<div class="c-chip"><b>' + (hasShifts ? R.totTurni : '–') + '</b><span>turni conteggiati</span></div>'
+    + '<div class="c-chip tot"><b>' + (hasShifts ? fmtEuro(R.totCents / 100) : '–') + '</b><span>compenso turni del mese</span></div></div>';
+  h += '<div class="r-panel c-panel"><div class="c-wrap"><table class="c-table"><thead><tr><th class="c-name">Medico</th>';
+  for (let d = 1; d <= n; d++) {
+    const wd = new Date(+cnt.ym.slice(0, 4), +cnt.ym.slice(5) - 1, d).getDay();
+    h += '<th class="c-d' + (wd === 0 ? ' sun' : wd === 6 ? ' sat' : '') + '"><span>' + d + '</span><i>' + WD[wd] + '</i></th>';
+  }
+  h += '<th class="c-tt">Esami</th><th class="c-tt">Turni</th><th class="c-comp">Compenso turni</th></tr></thead><tbody>';
+  R.rows.forEach(x => {
+    h += '<tr><td class="c-name">' + escHtml(x.d.nome) + '</td>';
+    for (let d = 1; d <= n; d++) {
+      const ds = cnt.ym + '-' + pad2(d), c = x.cells[ds], wd = new Date(ds + 'T00:00:00').getDay();
+      const we = wd === 0 ? ' sun' : wd === 6 ? ' sat' : '';
+      if (c && c.inTurno && c.tot > 0) h += '<td class="c-d c-ok' + we + '" title="' + escHtml('In turno: ' + c.evs.join(' + ') + ' — ' + Object.entries(c.types).map(([t, v]) => t + ' ' + v).join(', ')) + '">' + c.tot + '</td>';
+      else if (c && c.inTurno) h += '<td class="c-d c-no' + we + '" title="' + escHtml('In turno (' + c.evs.join(' + ') + ') ma nessun esame: turno non conteggiato') + '">○</td>';
+      else if (c && c.tot > 0) h += '<td class="c-d c-x' + we + '" title="' + escHtml(Object.entries(c.types).map(([t, v]) => t + ' ' + v).join(', ') + ' (senza turno in calendario)') + '">' + c.tot + '</td>';
+      else h += '<td class="c-d' + we + '"></td>';
+    }
+    h += '<td class="c-tt">' + (x.esami || '') + '</td><td class="c-tt">' + (hasShifts ? (x.ok + (x.inCal !== x.ok ? '<small>/' + x.inCal + '</small>' : '')) : '–') + '</td>';
+    h += '<td class="c-comp">' + (hasShifts ? (x.inCal || x.cents ? '<b>' + fmtEuro(x.cents / 100) + '</b>' : '') : '')
+      + Object.entries(x.brk).map(([k, b]) => '<small>' + escHtml(vocLabel(k)) + ' ×' + b.n + ' × ' + EUR.format(b.imp) + '</small>').join('')
+      + x.warn.map(w => '<small class="w">⚠ ' + escHtml(w) + '</small>').join('') + '</td></tr>';
+  });
+  h += '</tbody><tfoot><tr><td class="c-name">Totale</td><td colspan="' + n + '"></td><td class="c-tt">' + R.totEsami.toLocaleString('it-IT') + '</td><td class="c-tt">' + (hasShifts ? R.totTurni : '–') + '</td><td class="c-comp"><b>' + (hasShifts ? fmtEuro(R.totCents / 100) : '–') + '</b></td></tr></tfoot></table></div>'
+    + '<div class="r-hint c-legend"><span class="lg ok"></span> in turno con esami (turno conteggiato) &nbsp; <span class="lg no">○</span> in turno senza esami (non conteggiato) &nbsp; <span class="lg x"></span> esami in un giorno senza turno in calendario</div></div>';
+  const ignTxt = [];
+  if (ign.rifiutati) ignTxt.push(ign.rifiutati + ' esami rifiutati/non refertati');
+  if (ign.senzaMedico) ignTxt.push(ign.senzaMedico + ' refertati senza medico');
+  if (ign.fuoriMese) ignTxt.push(ign.fuoriMese + ' refertati in un altro mese (non conteggiati qui)');
+  if (ign.dataNonValida) ignTxt.push(ign.dataNonValida + ' senza data di refertazione valida');
+  if (ignTxt.length) h += '<details class="c-det"><summary>Righe escluse dal conteggio</summary><div>' + ignTxt.map(escHtml).join('<br>') + '</div></details>';
+  const un = R.unmatched.filter(x => x.n > 0).sort((a, b) => b.n - a.n);
+  if (un.length) h += '<details class="c-det warn"><summary>⚠ ' + un.length + ' medici nel file non associati a nessun medico in elenco (' + un.reduce((a, b) => a + b.n, 0).toLocaleString('it-IT') + ' esami)</summary><div>'
+    + un.map(x => escHtml(x.name) + ' — ' + x.n).join('<br>') + '<div class="r-usub" style="margin-top:8px">Il nome in elenco deve essere del tipo COGNOME N. (cognome e iniziale del nome come nel file).</div></div></details>';
+  if (R.inactive.length) h += '<details class="c-det"><summary>Medici non attivi con esami (esclusi)</summary><div>'
+    + R.inactive.sort((a, b) => b.n - a.n).map(x => escHtml(x.name) + ' → ' + escHtml(x.doc) + ' — ' + x.n).join('<br>') + '</div></details>';
+  body.innerHTML = h;
+}
+
+// ── caricamento dati / azioni ──
+async function cntLoad() {
+  const my = ++cnt.req;
+  cnt.loading = true; cnt.err = ''; cnt.rec = null; cnt.shifts = null; cnt.shiftsErr = ''; cnt.shiftsLoading = false; cnt.loaded = false;
+  cntRender();
+  try {
+    const { data, error } = await getSb().from('conteggi_mesi').select('*').eq('mese', cnt.ym).maybeSingle();
+    if (my !== cnt.req) return;
+    if (error) throw error;
+    cnt.rec = data || null; cnt.loaded = true;
+  } catch (e) { if (my !== cnt.req) return; cnt.err = e.message || String(e); }
+  cnt.loading = false; cntRender();
+  if (cnt.rec) { cnt.shiftsLoading = true; cntRender(); await cntLoadShifts(my); if (my === cnt.req) cntRender(); }
+}
+function cntOnShow() {
+  if (!cnt.ym) cnt.ym = ymAdd(new Date().getFullYear() + '-' + pad2(new Date().getMonth() + 1), -1);   // default: mese appena chiuso
+  if (!cnt.loaded && !cnt.loading) cntLoad(); else cntRender();
+}
+function cntGo(delta) { cnt.ym = ymAdd(cnt.ym, delta); cntLoad(); }
+async function cntUpload(file) {
+  const msg = byId('cnt-up-msg'), drop = byId('cnt-drop');
+  const say = (t, cls) => { if (msg) { msg.className = 'r-msg ' + (cls || 'err'); msg.textContent = t; } };
+  const ym = cnt.ym;
+  if (drop) drop.classList.add('busy');
+  say('Lettura del file…', 'ok');
+  try {
+    const res = cntAnalyze(await cntReadFile(file), ym);
+    if (ym !== cnt.ym) return;
+    say('Salvataggio…', 'ok');
+    const payload = { mese: ym, nome_file: file.name, righe_totali: res.righe, righe_conteggiate: res.counted, dati: res.dati, caricato_da: displayName(currentUser.email) };
+    const { error } = await getSb().from('conteggi_mesi').upsert(payload, { onConflict: 'mese' });
+    if (error) throw error;
+    cnt.rec = Object.assign({ caricato_il: new Date().toISOString() }, payload);
+    toast('Conteggi di ' + ymLabel(ym) + ' salvati', 'ok');
+    const my = ++cnt.req; cnt.shifts = null; cnt.shiftsErr = ''; cnt.shiftsLoading = true; cntRender();
+    await cntLoadShifts(my); if (my === cnt.req) cntRender();
+  } catch (e) {
+    if (drop) drop.classList.remove('busy');
+    say(e.message || String(e));
+  }
+}
+async function cntDelete() {
+  if (!cnt.rec || !confirm('Eliminare i conteggi di ' + ymLabel(cnt.ym) + ' salvati? Potrai ricaricare il file.')) return;
+  const { error } = await getSb().from('conteggi_mesi').delete().eq('mese', cnt.ym);
+  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  cnt.req++; cnt.rec = null; cnt.shifts = null; cnt.shiftsErr = ''; cnt.shiftsLoading = false;
+  toast('Conteggi eliminati', 'ok'); cntRender();
+}
+function cntReset() { cnt.req++; cnt.ym = null; cnt.rec = null; cnt.loaded = false; cnt.loading = false; cnt.err = ''; cnt.shifts = null; cnt.shiftsErr = ''; cnt.shiftsLoading = false; }
+
 // ── export Excel della lista medici ──
 function exportDoctorsExcel() {
   if (!doctorsLoaded || !doctors.length) { toast('Nessun medico da esportare', 'err'); return; }
@@ -1955,6 +2307,20 @@ async function maybeImportLegacy() {
   byId('btn-new-doc').addEventListener('click', () => openDoctorModal());
   byId('btn-doc-xlsx').addEventListener('click', exportDoctorsExcel);
   byId('btn-backup').addEventListener('click', exportBackup);
+  (function () {
+    const root = byId('sub-view-conteggi');
+    root.addEventListener('click', e => {
+      const b = e.target.closest('[data-cnt]'); if (!b) return;
+      const a = b.dataset.cnt;
+      if (a === 'prev') cntGo(-1); else if (a === 'next') cntGo(1);
+      else if (a === 'del') cntDelete(); else if (a === 'reload') cntLoad();
+      else if (a === 'shifts') { const my = ++cnt.req; cnt.shiftsLoading = true; cntRender(); cntLoadShifts(my).then(() => { if (my === cnt.req) cntRender(); }); }
+    });
+    root.addEventListener('change', e => { if (e.target.id === 'cnt-file' && e.target.files[0]) { const f = e.target.files[0]; e.target.value = ''; cntUpload(f); } });
+    root.addEventListener('dragover', e => { const d = e.target.closest('.c-drop'); if (d) { e.preventDefault(); d.classList.add('over'); } });
+    root.addEventListener('dragleave', e => { const d = e.target.closest('.c-drop'); if (d) d.classList.remove('over'); });
+    root.addEventListener('drop', e => { const d = e.target.closest('.c-drop'); if (d) { e.preventDefault(); d.classList.remove('over'); if (e.dataTransfer.files[0]) cntUpload(e.dataTransfer.files[0]); } });
+  })();
 
   // lista medici: un solo listener per tutte le card
   const list = byId('doc-list');

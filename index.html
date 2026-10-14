@@ -2023,21 +2023,47 @@ async function cntLoadShifts(my) {
     cnt.shiftsErr = e.result && e.result.error ? e.result.error.message : (e.message || String(e));
   } finally { if (my === cnt.req) cnt.shiftsLoading = false; }
 }
-// tipo di turno -> voce di tariffa
-function cntVoce(ev, d) {
+// tipo di turno -> voce di tariffa. 75/100 = limite di ECG inviabili a turno.
+// Se il titolo dell'evento contiene 75 o 100 vale quello; se il medico ha una sola tariffa vale quella;
+// se ha entrambe, si deduce dal numero di ECG del giorno (oltre 75 -> turno da 100).
+function cntVoce(ev, d, ecgN) {
   if (new Date(ev.date + 'T00:00:00').getDay() === 0) return { k: 'turno_domenica' };
   if (ev.kind === 'h16') return { k: 'turno_16hc' };
   if (ev.kind === 'holter') return { k: 'turno_holter' };
   if (ev.kind === 'ecg') {
+    const m = ev.title.match(/(^|\D)(75|100)(\D|$)/);
+    if (m) { const k = 'turno_ecg_' + m[2]; return d.tariffe[k] != null ? { k, lim: +m[2] } : { miss: 'Turno ECG ' + m[2] }; }
     const a = d.tariffe.turno_ecg_75 != null, b = d.tariffe.turno_ecg_100 != null;
-    if (a && b) return { amb: true };
-    return a ? { k: 'turno_ecg_75' } : b ? { k: 'turno_ecg_100' } : { miss: 'Turno ECG 75/100' };
+    if (a && b) { const lim = ecgN > 75 ? 100 : 75; return { k: 'turno_ecg_' + lim, lim, inferred: true }; }
+    if (a) return { k: 'turno_ecg_75', lim: 75 };
+    if (b) return { k: 'turno_ecg_100', lim: 100 };
+    return { miss: 'Turno ECG 75 / 100' };
   }
   return { k: 'turno_completo' };
 }
 const vocLabel = k => (VOCI_ALL.find(v => v.k === k) || {}).l || k;
 
 const CNT_TIPO_VOCE = { 'ECG': 'ecg', 'HOLTER CARDIACO': 'hc', 'HOLTER PRESSORIO': 'hp', 'HOLTER CARDIACO 12D': 'holter_12der', 'SPIROMETRIA': 'spirometria', 'POLISONNOGRAFIA': 'polisonnografia' };
+const CNT_CONS = ['ecg', 'hc', 'hp', 'holter_12der', 'spirometria', 'polisonnografia'];
+const CNT_TURNI = ['turno_completo', 'turno_ecg_75', 'turno_ecg_100', 'turno_holter', 'turno_16hc', 'turno_domenica'];
+// medico "solo turni" con esami in un giorno senza evento in calendario: il turno si deduce dagli esami
+function cntInferVoce(d, c, date) {
+  if (new Date(date + 'T00:00:00').getDay() === 0) return { k: 'turno_domenica' };
+  const T = CNT_TURNI.filter(k => k !== 'turno_domenica' && d.tariffe[k] != null);
+  if (!T.length) return null;
+  const has = k => T.includes(k);
+  const ecg = c.types['ECG'] || 0, hc = c.types['HOLTER CARDIACO'] || 0;
+  const hol = hc + (c.types['HOLTER PRESSORIO'] || 0) + (c.types['HOLTER CARDIACO 12D'] || 0);
+  const ecgK = has('turno_ecg_75') && has('turno_ecg_100') ? (ecg > 75 ? 'turno_ecg_100' : 'turno_ecg_75') : has('turno_ecg_75') ? 'turno_ecg_75' : has('turno_ecg_100') ? 'turno_ecg_100' : null;
+  if (T.length === 1) return { k: T[0] };
+  if (!hol && ecgK) return { k: ecgK };
+  if (!ecg && hol) {
+    if (has('turno_16hc') && has('turno_holter')) return { k: hc >= 16 ? 'turno_16hc' : 'turno_holter' };
+    if (has('turno_holter')) return { k: 'turno_holter' };
+    if (has('turno_16hc')) return { k: 'turno_16hc' };
+  }
+  return { k: has('turno_completo') ? 'turno_completo' : T[0] };
+}
 const GG = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const cents = x => Math.round(x * 100);
 
@@ -2057,7 +2083,7 @@ function cntCompute() {
   });
   const shiftsBy = new Map();
   (cnt.shifts || []).forEach(ev => { const k = nameKey(ev.doctor); (shiftsBy.get(k) || shiftsBy.set(k, []).get(k)).push(ev); });
-  const T = { esami: 0, turni: 0, centsT: 0, centsE: 0 };
+  const T = { esami: 0, turni: 0, centsT: 0, centsE: 0, anyCons: false };
   const rows = doctors.filter(d => d.attivo).map(d => {
     const ex = byDoc.get(d.id) || {}, cells = {}, types = {}; let esami = 0;
     Object.entries(ex).forEach(([day, tp]) => {
@@ -2067,21 +2093,47 @@ function cntCompute() {
     });
     // turni
     let inCal = 0, ok = 0, centsT = 0, senzaEsami = 0; const brk = {}, warn = new Set();
-    (shiftsBy.get(nameKey(d.nome)) || []).forEach(ev => {
+    const evs = shiftsBy.get(nameKey(d.nome)) || [], ecgEv = {};
+    evs.forEach(ev => { if (ev.kind === 'ecg') ecgEv[ev.date] = (ecgEv[ev.date] || 0) + 1; });
+    evs.forEach(ev => {
       inCal++;
       const c = cells[ev.date] || (cells[ev.date] = { tot: 0, types: {}, evs: [] });
       c.evs.push(ev.title);
       if (!c.tot) { senzaEsami++; return; }
       ok++; c.ok = true;
-      const v = cntVoce(ev, d);
-      if (v.amb) { warn.add('Impostate sia «Turno ECG 75» sia «Turno ECG 100»: turno ECG non valorizzato'); return; }
+      const ecgN = Math.ceil((c.types['ECG'] || 0) / (ecgEv[ev.date] || 1));
+      const v = cntVoce(ev, d, ecgN);
       if (v.miss || d.tariffe[v.k] == null) { warn.add('Manca la tariffa «' + (v.miss || vocLabel(v.k)) + '»: turno non valorizzato'); return; }
-      const b = brk[v.k] || (brk[v.k] = { n: 0, imp: d.tariffe[v.k] });
+      const b = brk[v.k] || (brk[v.k] = { n: 0, imp: d.tariffe[v.k], inf: 0, infEx: 0 });
       b.n++; centsT += cents(d.tariffe[v.k]);
+      (c.vn = c.vn || []).push(vocLabel(v.k) + (v.lim ? ' · ' + ecgN + ' ECG su ' + v.lim : '') + (v.inferred ? ' (tipo dedotto dal n. di ECG)' : ''));
+      if (v.inferred) b.inf++;
+      if (v.lim) {
+        c.ecgIncl = (c.ecgIncl || 0) + ecgN;
+        if (ecgN > v.lim) { const dt = new Date(ev.date + 'T00:00:00'); warn.add('Il ' + pad2(dt.getDate()) + '/' + pad2(dt.getMonth() + 1) + ' gli ECG (' + ecgN + ') superano il limite di ' + v.lim + ' del turno'); }
+      }
+    });
+    // medici solo turni: giorno con esami e nessun evento in calendario -> turno dedotto dagli esami
+    const hasCons = CNT_CONS.some(k => d.tariffe[k] != null);
+    const turnOnly = !hasCons && CNT_TURNI.some(k => d.tariffe[k] != null);
+    if (turnOnly) Object.keys(cells).sort().forEach(date => {
+      const c = cells[date]; if (!c.tot || c.evs.length) return;
+      const v = cntInferVoce(d, c, date); if (!v) return;
+      ok++; c.ok = true;
+      if (d.tariffe[v.k] == null) { warn.add('Manca la tariffa «' + vocLabel(v.k) + '»: turno non valorizzato'); return; }
+      const lim = /^turno_ecg_/.test(v.k) ? +v.k.slice(10) : 0, ecgN = c.types['ECG'] || 0;
+      const b = brk[v.k] || (brk[v.k] = { n: 0, imp: d.tariffe[v.k], inf: 0, infEx: 0 });
+      b.n++; b.infEx++; centsT += cents(d.tariffe[v.k]);
+      (c.vn = c.vn || []).push(vocLabel(v.k) + (lim ? ' · ' + ecgN + ' ECG su ' + lim : '') + ' (dedotto dagli esami)');
+      if (lim) {
+        c.ecgIncl = ecgN;
+        if (ecgN > lim) { const dt = new Date(date + 'T00:00:00'); warn.add('Il ' + pad2(dt.getDate()) + '/' + pad2(dt.getMonth() + 1) + ' gli ECG (' + ecgN + ') superano il limite di ' + lim + ' del turno'); }
+      }
     });
     // esami per tipologia (holter inclusi nel turno completo non vengono pagati a parte)
     const nTc = brk.turno_completo ? brk.turno_completo.n : 0;
-    const incl = { 'HOLTER CARDIACO': nTc * (d.tcHc || 0), 'HOLTER PRESSORIO': nTc * (d.tcHp || 0) };
+    const incl = { 'HOLTER CARDIACO': nTc * (d.tcHc || 0), 'HOLTER PRESSORIO': nTc * (d.tcHp || 0),
+      'ECG': Object.values(cells).reduce((a, c) => a + Math.min(c.ecgIncl || 0, (c.types['ECG'] || 0)), 0) };
     const typeRows = Object.entries(types).sort((a, b) => b[1] - a[1]).map(([t, n]) => {
       const voce = CNT_TIPO_VOCE[t] || null;
       const prezzo = voce && d.tariffe[voce] != null ? d.tariffe[voce] : null;
@@ -2089,8 +2141,9 @@ function cntCompute() {
       return { t, n, prezzo, inc, pay, c: prezzo != null ? cents(prezzo) * pay : 0 };
     });
     const centsE = typeRows.reduce((a, r) => a + r.c, 0);
+    if (hasCons) T.anyCons = true;
     T.esami += esami; T.turni += ok; T.centsT += centsT; T.centsE += centsE;
-    return { d, cells, esami, inCal, ok, senzaEsami, centsT, centsE, brk, warn: [...warn], typeRows };
+    return { d, cells, esami, inCal, ok, senzaEsami, centsT, centsE, brk, warn: [...warn], typeRows, hasCons, turnOnly };
   });
   return { rows, unmatched, inactive, T };
 }
@@ -2100,42 +2153,48 @@ function cntApplyFilter() {
   const q = nameKey(cnt.q || '');
   document.querySelectorAll('#cnt-body .c-doc').forEach(e => { e.hidden = !!q && !e.dataset.n.includes(q); });
 }
-function cntDocBlock(x, hasShifts, ym) {
-  const total = x.centsT + x.centsE;
+function cntDocBlock(x, hasShifts) {
+  const showT = hasShifts || x.turnOnly, total = x.centsT + x.centsE;
   let h = '<details class="c-doc" open data-n="' + escHtml(nameKey(x.d.nome)) + '"><summary><span class="n">' + escHtml(x.d.nome) + '</span>'
     + '<span class="m"><b>' + x.esami.toLocaleString('it-IT') + '</b> esami</span>'
-    + '<span class="m"><b>' + (hasShifts ? x.ok : '–') + '</b> turni</span>'
+    + '<span class="m"><b>' + (showT ? x.ok : '–') + '</b> turni</span>'
     + '<span class="t">' + fmtEuro(total / 100) + '</span></summary><div class="c-dbody">';
-  // esami per tipologia
-  h += '<table class="c-tb"><thead><tr><th>Tipologia esame</th><th>Esami</th><th>Prezzo unitario</th><th>Importo</th></tr></thead><tbody>';
-  if (!x.typeRows.length) h += '<tr><td colspan="4" class="mut">Nessun esame refertato nel mese</td></tr>';
+  // esami per tipologia: con prezzi solo per chi fa consuntivo
+  h += '<table class="c-tb"><thead><tr><th>' + (x.hasCons ? 'Tipologia esame' : 'Esami refertati') + '</th><th>Esami</th>' + (x.hasCons ? '<th>Prezzo unitario</th><th>Importo</th>' : '') + '</tr></thead><tbody>';
+  if (!x.typeRows.length) h += '<tr><td colspan="' + (x.hasCons ? 4 : 2) + '" class="mut">Nessun esame refertato nel mese</td></tr>';
   x.typeRows.forEach(r => {
-    h += '<tr><td>' + escHtml(r.t) + '</td><td><b>' + r.n + '</b>' + (r.inc ? '<small>' + r.inc + ' inclusi nel turno completo → ' + r.pay + ' a pagamento</small>' : '') + '</td>'
-      + '<td>' + (r.prezzo != null ? fmtEuro(r.prezzo) : '<span class="mut">non a consuntivo</span>') + '</td>'
-      + '<td>' + (r.prezzo != null ? fmtEuro(r.c / 100) : '<span class="mut">—</span>') + '</td></tr>';
+    h += '<tr><td>' + escHtml(r.t) + '</td><td><b>' + r.n + '</b>' + (x.hasCons && r.inc ? '<small>' + r.inc + ' inclusi nei turni → ' + r.pay + ' a pagamento</small>' : '') + '</td>'
+      + (x.hasCons ? '<td>' + (r.prezzo != null ? fmtEuro(r.prezzo) : '<span class="mut">non a consuntivo</span>') + '</td>'
+      + '<td>' + (r.prezzo != null ? fmtEuro(r.c / 100) : '<span class="mut">—</span>') + '</td>' : '') + '</tr>';
   });
-  h += '</tbody><tfoot><tr><td>Totale esami</td><td>' + x.esami + '</td><td></td><td>' + fmtEuro(x.centsE / 100) + '</td></tr></tfoot></table>';
+  h += '</tbody><tfoot><tr><td>Totale esami</td><td>' + x.esami + '</td>' + (x.hasCons ? '<td></td><td>' + fmtEuro(x.centsE / 100) + '</td>' : '') + '</tr></tfoot></table>';
   // turni
   h += '<table class="c-tb"><thead><tr><th>Tipo di turno</th><th>Turni conteggiati</th><th>Tariffa turno</th><th>Importo</th></tr></thead><tbody>';
-  if (!hasShifts) h += '<tr><td colspan="4" class="mut">Turni non disponibili (calendario non letto)</td></tr>';
+  const br = Object.entries(x.brk);
+  if (!showT) h += '<tr><td colspan="4" class="mut">Turni non disponibili (calendario non letto)</td></tr>';
   else {
-    const br = Object.entries(x.brk);
-    if (!br.length) h += '<tr><td colspan="4" class="mut">Nessun turno conteggiato' + (x.inCal ? '' : ' (nessun turno in calendario)') + '</td></tr>';
-    br.forEach(([k, b]) => { h += '<tr><td>' + escHtml(vocLabel(k)) + '</td><td><b>' + b.n + '</b></td><td>' + fmtEuro(b.imp) + '</td><td>' + fmtEuro(b.n * b.imp) + '</td></tr>'; });
+    if (!br.length) h += '<tr><td colspan="4" class="mut">Nessun turno conteggiato' + (x.inCal || x.turnOnly ? '' : ' (nessun turno in calendario)') + '</td></tr>';
+    br.forEach(([k, b]) => {
+      const notes = [];
+      if (b.inf) notes.push(b.inf + ' dedotti dal numero di ECG del giorno (oltre 75 → turno da 100)');
+      if (b.infEx) notes.push(b.infEx + ' dedotti dagli esami del giorno (nessun turno in calendario)');
+      h += '<tr><td>' + escHtml(vocLabel(k)) + '</td><td><b>' + b.n + '</b>' + notes.map(t => '<small>' + t + '</small>').join('') + '</td><td>' + fmtEuro(b.imp) + '</td><td>' + fmtEuro(b.n * b.imp) + '</td></tr>';
+    });
     if (x.senzaEsami) h += '<tr class="mut"><td colspan="4">○ ' + x.senzaEsami + (x.senzaEsami === 1 ? ' turno in calendario senza esami: non conteggiato' : ' turni in calendario senza esami: non conteggiati') + '</td></tr>';
   }
-  h += '</tbody><tfoot><tr><td>Totale turni</td><td>' + (hasShifts ? x.ok : '–') + '</td><td></td><td>' + (hasShifts ? fmtEuro(x.centsT / 100) : '–') + '</td></tr></tfoot></table>';
+  h += '</tbody><tfoot><tr><td>Totale turni</td><td>' + (showT ? x.ok : '–') + '</td><td></td><td>' + (showT ? fmtEuro(x.centsT / 100) : '–') + '</td></tr></tfoot></table>';
   x.warn.forEach(w => { h += '<div class="c-w">⚠ ' + escHtml(w) + '</div>'; });
-  h += '<div class="c-grand"><span>Turni ' + fmtEuro(x.centsT / 100) + ' + Esami a consuntivo ' + fmtEuro(x.centsE / 100) + '</span><b>Totale ' + fmtEuro(total / 100) + '</b></div>';
+  h += '<div class="c-grand"><span>' + (x.hasCons ? 'Turni ' + fmtEuro(x.centsT / 100) + ' + Esami a consuntivo ' + fmtEuro(x.centsE / 100) : 'Esami refertati ' + x.esami + ' · Turni conteggiati ' + (showT ? x.ok : '–')) + '</span><b>Totale ' + fmtEuro(total / 100) + '</b></div>';
   // dettaglio giorni
   const days = Object.keys(x.cells).filter(k => x.cells[k].tot || x.cells[k].evs.length).sort();
   if (days.length) {
     h += '<details class="c-days"><summary>Dettaglio per giorno (' + days.length + ')</summary><table class="c-tb"><thead><tr><th>Giorno</th><th>Esami</th><th>Turno</th></tr></thead><tbody>';
     days.forEach(k => {
       const c = x.cells[k], dt = new Date(k + 'T00:00:00');
+      const t = c.evs.length ? escHtml(c.evs.join(' + ')) + (c.ok && c.vn ? ' → ' + escHtml(c.vn.join(' + ')) : '') + (c.ok ? ' <span class="okk">✓ conteggiato</span>' : ' <span class="noo">○ nessun esame</span>')
+        : c.ok ? escHtml((c.vn || []).join(' + ')) + ' <span class="okk">✓ conteggiato</span>' : '<span class="mut">nessun turno</span>';
       h += '<tr><td>' + GG[dt.getDay()] + ' ' + pad2(dt.getDate()) + '/' + pad2(dt.getMonth() + 1) + '</td><td>'
-        + (c.tot ? '<b>' + c.tot + '</b> — ' + Object.entries(c.types).map(([t, v]) => escHtml(t) + ' ' + v).join(' · ') : '<span class="mut">—</span>') + '</td><td>'
-        + (c.evs.length ? escHtml(c.evs.join(' + ')) + (c.ok ? ' <span class="okk">✓ conteggiato</span>' : ' <span class="noo">○ nessun esame</span>') : '<span class="mut">nessun turno in calendario</span>') + '</td></tr>';
+        + (c.tot ? '<b>' + c.tot + '</b> — ' + Object.entries(c.types).map(([tp, v]) => escHtml(tp) + ' ' + v).join(' · ') : '<span class="mut">—</span>') + '</td><td>' + t + '</td></tr>';
     });
     h += '</tbody></table></details>';
   }
@@ -2168,11 +2227,11 @@ function cntRender() {
     + '<div class="c-btns"><button class="r-btn ghost" data-cnt="expand">Espandi tutti</button><button class="r-btn ghost" data-cnt="collapse">Comprimi tutti</button>'
     + '<button class="r-btn ghost" data-cnt="del">🗑 Elimina e ricarica</button></div></div>';
   if (cnt.shiftsLoading) h += '<div class="c-warn c-info">⏳ Lettura dei turni dal calendario…</div>';
-  else if (cnt.shiftsErr) h += '<div class="c-warn">Turni non disponibili (' + escHtml(cnt.shiftsErr) + ') — sono mostrati solo gli esami. <button class="r-btn ghost" data-cnt="shifts">↻ Riprova</button></div>';
+  else if (cnt.shiftsErr) h += '<div class="c-warn">Turni non disponibili (' + escHtml(cnt.shiftsErr) + ') — per i medici con soli turni li deduco dagli esami, per gli altri sono mostrati solo gli esami. <button class="r-btn ghost" data-cnt="shifts">↻ Riprova</button></div>';
   h += '<div class="c-chips"><div class="c-chip"><b>' + T.esami.toLocaleString('it-IT') + '</b><span>esami dei medici attivi</span></div>'
-    + '<div class="c-chip"><b>' + (hasShifts ? T.turni : '–') + '</b><span>turni conteggiati</span></div>'
-    + '<div class="c-chip"><b>' + (hasShifts ? fmtEuro(T.centsT / 100) : '–') + '</b><span>compenso turni</span></div>'
-    + '<div class="c-chip"><b>' + fmtEuro(T.centsE / 100) + '</b><span>compenso esami a consuntivo</span></div>'
+    + '<div class="c-chip"><b>' + T.turni + '</b><span>turni conteggiati</span></div>'
+    + '<div class="c-chip"><b>' + fmtEuro(T.centsT / 100) + '</b><span>compenso turni</span></div>'
+    + (T.anyCons ? '<div class="c-chip"><b>' + fmtEuro(T.centsE / 100) + '</b><span>compenso esami a consuntivo</span></div>' : '')
     + '<div class="c-chip tot"><b>' + fmtEuro((T.centsT + T.centsE) / 100) + '</b><span>totale mese</span></div></div>';
   const withData = R.rows.filter(x => x.esami || x.inCal), without = R.rows.filter(x => !x.esami && !x.inCal);
   h += '<div class="c-docs">' + withData.map(x => cntDocBlock(x, hasShifts)).join('') + '</div>';

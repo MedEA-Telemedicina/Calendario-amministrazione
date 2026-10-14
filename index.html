@@ -1942,6 +1942,17 @@ function cntDate(v) {
   m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})/); if (m) return m[3] + '-' + pad2(m[2]) + '-' + pad2(m[1]);
   return null;
 }
+// fasce orarie dei turni: mattina 08:30-14:30, pomeriggio 14:30-20:30
+const CNT_H_INI = 8 * 60 + 30, CNT_H_SPLIT = 14 * 60 + 30, CNT_H_FINE = 20 * 60 + 30;
+// minuti dalla mezzanotte se la cella contiene anche l'ora (numero Excel con parte frazionaria, oppure testo "... hh:mm")
+function cntMinutes(v) {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') { const f = v - Math.floor(v); return f > 0 ? Math.round(f * 1440) % 1440 : null; }
+  const m = String(v).match(/[T\s](\d{1,2}):(\d{2})/);
+  return m ? (+m[1]) * 60 + (+m[2]) : null;
+}
+// fascia del turno: prima delle 14:30 = mattina, dalle 14:30 = pomeriggio (gli orari fuori dalle 8:30-20:30 vanno al turno più vicino)
+const cntSlot = min => (min < CNT_H_SPLIT ? 'mat' : 'pom');
 // verifica del mese + aggregazione (medico -> giorno -> tipologia -> n)
 function cntAnalyze(rows, ym) {
   if (!rows || rows.length < 2) throw new Error('Il file è vuoto.');
@@ -1961,7 +1972,7 @@ function cntAnalyze(rows, ym) {
     throw new Error('Mese non corretto: il file contiene esami di ' + det + ', ma hai selezionato ' + ymLabel(ym) + '. Controlla il file oppure cambia mese.');
   }
   // 2) aggregazione
-  const doctors = {}, ign = { rifiutati: 0, senzaMedico: 0, fuoriMese: 0, dataNonValida: 0 };
+  const doctors = {}, ecgOre = {}, ign = { rifiutati: 0, senzaMedico: 0, fuoriMese: 0, dataNonValida: 0 };
   let counted = 0;
   body.forEach(r => {
     if (normTxt(r[iS]).trim() !== 'refertato') { ign.rifiutati++; return; }
@@ -1973,8 +1984,15 @@ function cntAnalyze(rows, ym) {
     const t = String(r[iT] || '').replace(/\s+/g, ' ').trim().toUpperCase() || 'ALTRO';
     const a = doctors[med] || (doctors[med] = {}), b = a[d] || (a[d] = {});
     b[t] = (b[t] || 0) + 1; counted++;
+    // ECG per fascia oraria (solo se il file riporta anche l'ora di refertazione)
+    if (t === 'ECG') {
+      const mn = cntMinutes(r[iR]);
+      if (mn != null) { const o = ecgOre[med] || (ecgOre[med] = {}), z = o[d] || (o[d] = { mat: 0, pom: 0 }); z[cntSlot(mn)]++; }
+    }
   });
-  return { righe: body.length, counted, dati: { v: 1, doctors, ignorati: ign } };
+  const dati = { v: 1, doctors, ignorati: ign };
+  if (Object.keys(ecgOre).length) dati.ecgOre = ecgOre;
+  return { righe: body.length, counted, dati };
 }
 
 // ── associazione nome file ("Cognome Nome") -> medico in elenco ("COGNOME N.") ──
@@ -2074,7 +2092,9 @@ async function cntLoadShifts(my) {
     } while (pageToken);
     const out = cntShiftsFromItems(items, cnt.ym);
     if (my !== cnt.req) return;
-    cnt.shiftsDiag = { raw: items.length, titles: items.map(e => (e.summary || '(senza titolo)') + (e.start && (e.start.date || e.start.dateTime) ? '  [' + (e.start.date || e.start.dateTime).slice(0, 10) + ']' : '')) };
+    // solo le anomalie: eventi attivi il cui titolo non contiene alcun medico riconoscibile
+    cnt.shiftsDiag = { raw: items.length, titles: items.filter(e => e.status !== 'cancelled' && !cntParseShiftTitle(e.summary).length)
+      .map(e => (e.summary || '(senza titolo)') + (e.start && (e.start.date || e.start.dateTime) ? '  [' + (e.start.date || e.start.dateTime).slice(0, 10) + ']' : '')) };
     cnt.shifts = out;
   } catch (e) {
     if (my !== cnt.req) return;
@@ -2143,7 +2163,12 @@ const cents = x => Math.round(x * 100);
 
 function cntCompute() {
   const dati = cnt.rec.dati, matchers = doctors.map(cntMatcher);
-  const byDoc = new Map(), unmatched = [], inactive = [];
+  const byDoc = new Map(), unmatched = [], inactive = [], oreBy = new Map();
+  Object.entries(dati.ecgOre || {}).forEach(([name, days]) => {
+    const d = cntMatch(name, matchers); if (!d) return;
+    const e = oreBy.get(d.id) || oreBy.set(d.id, {}).get(d.id);
+    Object.entries(days).forEach(([day, z]) => { const a = e[day] || (e[day] = { mat: 0, pom: 0 }); a.mat += z.mat || 0; a.pom += z.pom || 0; });
+  });
   Object.entries(dati.doctors || {}).forEach(([name, days]) => {
     let n = 0; Object.values(days).forEach(t => Object.values(t).forEach(v => n += v));
     const d = cntMatch(name, matchers);
@@ -2173,8 +2198,11 @@ function cntCompute() {
     });
     // turni
     let inCal = 0, ok = 0, centsT = 0, senzaEsami = 0; const brk = {}, warn = new Set();
-    const evs = shiftsBy.get(d.id) || [], ecgEv = {};
-    evs.forEach(ev => { if (ev.kind === 'ecg') ecgEv[ev.date] = (ecgEv[ev.date] || 0) + 1; });
+    const evs = shiftsBy.get(d.id) || [], ecgEv = {}, stdDay = {}, ore = oreBy.get(d.id) || {};
+    evs.forEach(ev => {
+      if (ev.kind === 'ecg') ecgEv[ev.date] = (ecgEv[ev.date] || 0) + 1;
+      if (ev.kind === 'std') (stdDay[ev.date] = stdDay[ev.date] || []).push(ev.time || '');   // '' = turno completo senza fascia
+    });
     evs.forEach(ev => {
       inCal++;
       const c = cells[ev.date] || (cells[ev.date] = { tot: 0, types: {}, evs: [] });
@@ -2187,11 +2215,20 @@ function cntCompute() {
       if (v.miss || d.tariffe[v.k] == null) { warn.add('Manca la tariffa «' + (v.miss || vocLabel(v.k)) + '»: turno non valorizzato'); return; }
       const b = brk[v.k] || (brk[v.k] = { n: 0, imp: d.tariffe[v.k], inf: 0 });
       b.n++; centsT += cents(d.tariffe[v.k]);
-      (c.vn = c.vn || []).push(vocLabel(v.k) + (v.lim ? ' · ' + ecgN + ' ECG su ' + v.lim : '') + (v.inferred ? ' (tipo dedotto dal n. di ECG)' : ''));
+      // Se nello stesso giorno il medico fa anche un turno completo, gli ECG del giorno sono in buona parte del turno completo:
+      // superare il limite è normale e l'avviso non va mostrato. Fa eccezione il caso in cui le fasce siano chiaramente
+      // separate (es. ECG al mattino e completo al pomeriggio): allora si controllano solo gli ECG della fascia del turno ECG.
+      let ecgChk = ecgN, noWarn = false;
+      if (v.lim) {
+        const std = stdDay[ev.date], z = ore[ev.date];
+        if (std && !(ev.time && std.every(t => t && t !== ev.time))) noWarn = true;
+        else if (ev.time && z) ecgChk = z[ev.time] || 0;
+      }
+      (c.vn = c.vn || []).push(vocLabel(v.k) + (v.lim && !noWarn ? ' · ' + ecgChk + ' ECG su ' + v.lim : '') + (v.inferred ? ' (tipo dedotto dal n. di ECG)' : ''));
       if (v.inferred) b.inf++;
       if (v.lim) {
         c.ecgIncl = (c.ecgIncl || 0) + ecgN;
-        if (ecgN > v.lim) { const dt = new Date(ev.date + 'T00:00:00'); warn.add('Il ' + pad2(dt.getDate()) + '/' + pad2(dt.getMonth() + 1) + ' gli ECG (' + ecgN + ') superano il limite di ' + v.lim + ' del turno'); }
+        if (!noWarn && ecgChk > v.lim) { const dt = new Date(ev.date + 'T00:00:00'); warn.add('Il ' + pad2(dt.getDate()) + '/' + pad2(dt.getMonth() + 1) + (ev.time ? (ev.time === 'mat' ? ' (mattina)' : ' (pomeriggio)') : '') + ' gli ECG (' + ecgChk + ') superano il limite di ' + v.lim + ' del turno'); }
       }
     });
     const hasCons = CNT_CONS.some(k => d.tariffe[k] != null);
@@ -2301,12 +2338,12 @@ function cntRender() {
   else if (cnt.shiftsErr) h += '<div class="c-warn">Turni non disponibili (' + escHtml(cnt.shiftsErr) + ') — sono mostrati solo gli esami, senza turni né compensi. <button class="r-btn ghost" data-cnt="shifts">↻ Riprova</button></div>';
   if (cnt.shifts && cnt.shiftsDiag) {
     const nz = Object.entries(R.shiftNoOwner), D = cnt.shiftsDiag;
-    const bad = !cnt.shifts.length || nz.length;
-    h += '<details class="c-det"' + (bad ? ' open' : '') + '><summary>🔎 Diagnostica turni dal calendario' + (bad ? ' — ci sono anomalie' : '') + '</summary><div>'
+    const bad = !cnt.shifts.length || nz.length || D.titles.length;
+    if (bad) h += '<details class="c-det" open><summary>🔎 Diagnostica turni dal calendario — ci sono anomalie</summary><div>'
       + 'Eventi letti dal calendario «Medici in Turno»: <b>' + D.raw + '</b> · turni riconosciuti nel mese: <b>' + cnt.shifts.length + '</b>'
       + (nz.length ? '<br><br><b>Nomi nel calendario che non corrispondono a nessun medico attivo in elenco:</b><br>' + nz.map(([n, z]) => escHtml(n) + ' (' + z.n + ') — es. «' + escHtml(z.ex) + '»').join('<br>') : '')
       + (!D.raw ? '<br><br>Il calendario non ha restituito nessun evento per questo mese.' : '')
-      + '<br><br><b>Titoli letti dal calendario (primi 40):</b><br>' + D.titles.slice(0, 40).map(escHtml).join('<br>')
+      + (D.titles.length ? '<br><br><b>Titoli non riconosciuti (' + D.titles.length + '):</b><br>' + D.titles.slice(0, 40).map(escHtml).join('<br>') + (D.titles.length > 40 ? '<br>… e altri ' + (D.titles.length - 40) : '') : '')
       + '</div></details>';
   }
   h += '<div class="c-chips"><div class="c-chip"><b>' + T.esami.toLocaleString('it-IT') + '</b><span>esami dei medici attivi</span></div>'

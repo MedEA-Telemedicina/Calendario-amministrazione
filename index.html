@@ -395,6 +395,10 @@
   .okk { color: #1e7e34; font-weight: 700; } .noo { color: #d93025; font-weight: 700; }
   .c-w { background: #fff4e5; color: #8a4b00; border-radius: 10px; padding: 8px 12px; font-size: 12.5px; font-weight: 600; }
   .c-grand { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; background: #eaf2ff; border-radius: 12px; padding: 12px 16px; font-size: 13px; color: #0d3b8a; } .c-grand b { font-size: 16px; }
+  .c-sec { font-size: 12.5px; font-weight: 800; color: #3b4a5c; margin-top: 4px; }
+  .c-scroll { overflow-x: auto; margin-top: -8px; }
+  .c-tb.c-mx th:nth-child(2), .c-tb.c-mx td:nth-child(2) { text-align: left; white-space: nowrap; }
+  .c-tb.c-mx td, .c-tb.c-mx th { white-space: nowrap; }
   .c-days > summary { cursor: pointer; font-weight: 700; font-size: 13px; color: #3b4a5c; }
   .c-det { background: #fff; border-radius: 14px; box-shadow: var(--r-sh); padding: 12px 16px; margin-bottom: 12px; font-size: 13px; color: #3b4a5c; }
   .c-det summary { cursor: pointer; font-weight: 700; } .c-det > div { margin-top: 10px; line-height: 1.7; max-height: 260px; overflow: auto; }
@@ -2124,7 +2128,7 @@ function cntCompute() {
       const lim = /^turno_ecg_/.test(v.k) ? +v.k.slice(10) : 0, ecgN = c.types['ECG'] || 0;
       const b = brk[v.k] || (brk[v.k] = { n: 0, imp: d.tariffe[v.k], inf: 0, infEx: 0 });
       b.n++; b.infEx++; centsT += cents(d.tariffe[v.k]);
-      (c.vn = c.vn || []).push(vocLabel(v.k) + (lim ? ' · ' + ecgN + ' ECG su ' + lim : '') + ' (dedotto dagli esami)');
+      (c.vn = c.vn || []).push(vocLabel(v.k) + (lim ? ' · ' + ecgN + ' ECG su ' + lim : ''));
       if (lim) {
         c.ecgIncl = ecgN;
         if (ecgN > lim) { const dt = new Date(date + 'T00:00:00'); warn.add('Il ' + pad2(dt.getDate()) + '/' + pad2(dt.getMonth() + 1) + ' gli ECG (' + ecgN + ') superano il limite di ' + lim + ' del turno'); }
@@ -2159,8 +2163,23 @@ function cntDocBlock(x, hasShifts) {
     + '<span class="m"><b>' + x.esami.toLocaleString('it-IT') + '</b> esami</span>'
     + '<span class="m"><b>' + (showT ? x.ok : '–') + '</b> turni</span>'
     + '<span class="t">' + fmtEuro(total / 100) + '</span></summary><div class="c-dbody">';
+  // esami refertati per giorno e turno (una colonna per tipologia)
+  const days = Object.keys(x.cells).filter(k => x.cells[k].tot || x.cells[k].evs.length).sort(), tps = x.typeRows.map(r => r.t);
+  h += '<div class="c-sec">Esami refertati per giorno e turno</div><div class="c-scroll"><table class="c-tb c-mx"><thead><tr><th>Giorno</th><th>Turno</th>'
+    + tps.map(t => '<th>' + escHtml(t) + '</th>').join('') + '<th>Totale</th></tr></thead><tbody>';
+  if (!days.length) h += '<tr><td colspan="' + (3 + tps.length) + '" class="mut">Nessun esame né turno nel mese</td></tr>';
+  days.forEach(k => {
+    const c = x.cells[k], dt = new Date(k + 'T00:00:00'), evs = escHtml(c.evs.map(e => e.replace(/^0[12]\s+/, '')).join(' + '));
+    const lab = escHtml(c.vn ? c.vn.join(' + ') : (c.evs.map(e => e.replace(/^0[12]\s+/, '')).join(' + ') || 'Turno'));
+    const t = c.ok ? '<span class="okk" title="' + evs + '">✓ ' + lab + '</span>'
+      : c.evs.length ? '<span class="noo" title="' + evs + '">○ ' + evs + ' — nessun esame</span>' : '<span class="mut">—</span>';
+    h += '<tr><td>' + GG[dt.getDay()] + ' ' + pad2(dt.getDate()) + '/' + pad2(dt.getMonth() + 1) + '</td><td>' + t + '</td>'
+      + tps.map(tp => c.types[tp] ? '<td><b>' + c.types[tp] + '</b></td>' : '<td class="mut">–</td>').join('')
+      + '<td><b>' + (c.tot || '–') + '</b></td></tr>';
+  });
+  h += '</tbody><tfoot><tr><td colspan="2">Totale</td>' + x.typeRows.map(r => '<td>' + r.n + '</td>').join('') + '<td>' + x.esami + '</td></tr></tfoot></table></div>';
   // esami per tipologia: con prezzi solo per chi fa consuntivo
-  h += '<table class="c-tb"><thead><tr><th>' + (x.hasCons ? 'Tipologia esame' : 'Esami refertati') + '</th><th>Esami</th>' + (x.hasCons ? '<th>Prezzo unitario</th><th>Importo</th>' : '') + '</tr></thead><tbody>';
+  h += '<table class="c-tb"><thead><tr><th>' + 'Riepilogo per tipologia' + '</th><th>Esami</th>' + (x.hasCons ? '<th>Prezzo unitario</th><th>Importo</th>' : '') + '</tr></thead><tbody>';
   if (!x.typeRows.length) h += '<tr><td colspan="' + (x.hasCons ? 4 : 2) + '" class="mut">Nessun esame refertato nel mese</td></tr>';
   x.typeRows.forEach(r => {
     h += '<tr><td>' + escHtml(r.t) + '</td><td><b>' + r.n + '</b>' + (x.hasCons && r.inc ? '<small>' + r.inc + ' inclusi nei turni → ' + r.pay + ' a pagamento</small>' : '') + '</td>'
@@ -2177,7 +2196,6 @@ function cntDocBlock(x, hasShifts) {
     br.forEach(([k, b]) => {
       const notes = [];
       if (b.inf) notes.push(b.inf + ' dedotti dal numero di ECG del giorno (oltre 75 → turno da 100)');
-      if (b.infEx) notes.push(b.infEx + ' dedotti dagli esami del giorno (nessun turno in calendario)');
       h += '<tr><td>' + escHtml(vocLabel(k)) + '</td><td><b>' + b.n + '</b>' + notes.map(t => '<small>' + t + '</small>').join('') + '</td><td>' + fmtEuro(b.imp) + '</td><td>' + fmtEuro(b.n * b.imp) + '</td></tr>';
     });
     if (x.senzaEsami) h += '<tr class="mut"><td colspan="4">○ ' + x.senzaEsami + (x.senzaEsami === 1 ? ' turno in calendario senza esami: non conteggiato' : ' turni in calendario senza esami: non conteggiati') + '</td></tr>';
@@ -2185,19 +2203,6 @@ function cntDocBlock(x, hasShifts) {
   h += '</tbody><tfoot><tr><td>Totale turni</td><td>' + (showT ? x.ok : '–') + '</td><td></td><td>' + (showT ? fmtEuro(x.centsT / 100) : '–') + '</td></tr></tfoot></table>';
   x.warn.forEach(w => { h += '<div class="c-w">⚠ ' + escHtml(w) + '</div>'; });
   h += '<div class="c-grand"><span>' + (x.hasCons ? 'Turni ' + fmtEuro(x.centsT / 100) + ' + Esami a consuntivo ' + fmtEuro(x.centsE / 100) : 'Esami refertati ' + x.esami + ' · Turni conteggiati ' + (showT ? x.ok : '–')) + '</span><b>Totale ' + fmtEuro(total / 100) + '</b></div>';
-  // dettaglio giorni
-  const days = Object.keys(x.cells).filter(k => x.cells[k].tot || x.cells[k].evs.length).sort();
-  if (days.length) {
-    h += '<details class="c-days"><summary>Dettaglio per giorno (' + days.length + ')</summary><table class="c-tb"><thead><tr><th>Giorno</th><th>Esami</th><th>Turno</th></tr></thead><tbody>';
-    days.forEach(k => {
-      const c = x.cells[k], dt = new Date(k + 'T00:00:00');
-      const t = c.evs.length ? escHtml(c.evs.join(' + ')) + (c.ok && c.vn ? ' → ' + escHtml(c.vn.join(' + ')) : '') + (c.ok ? ' <span class="okk">✓ conteggiato</span>' : ' <span class="noo">○ nessun esame</span>')
-        : c.ok ? escHtml((c.vn || []).join(' + ')) + ' <span class="okk">✓ conteggiato</span>' : '<span class="mut">nessun turno</span>';
-      h += '<tr><td>' + GG[dt.getDay()] + ' ' + pad2(dt.getDate()) + '/' + pad2(dt.getMonth() + 1) + '</td><td>'
-        + (c.tot ? '<b>' + c.tot + '</b> — ' + Object.entries(c.types).map(([tp, v]) => escHtml(tp) + ' ' + v).join(' · ') : '<span class="mut">—</span>') + '</td><td>' + t + '</td></tr>';
-    });
-    h += '</tbody></table></details>';
-  }
   return h + '</div></details>';
 }
 function cntRender() {

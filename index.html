@@ -395,6 +395,7 @@
   .okk { color: #1e7e34; font-weight: 700; } .noo { color: #d93025; font-weight: 700; }
   .c-w { background: #fff4e5; color: #8a4b00; border-radius: 10px; padding: 8px 12px; font-size: 12.5px; font-weight: 600; }
   .c-grand { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; background: #eaf2ff; border-radius: 12px; padding: 12px 16px; font-size: 13px; color: #0d3b8a; } .c-grand b { font-size: 16px; }
+  .c-cal { background: #f4f7fb; border-radius: 10px; padding: 8px 12px; font-size: 12.5px; color: #3b4a5c; margin-bottom: -4px; }
   .c-sec { font-size: 12.5px; font-weight: 800; color: #3b4a5c; margin-top: 4px; }
   .c-scroll { overflow-x: auto; margin-top: -8px; }
   .c-tb.c-mx th:nth-child(2), .c-tb.c-mx td:nth-child(2) { text-align: left; white-space: nowrap; }
@@ -1996,30 +1997,44 @@ function cntMatch(csvName, matchers) {
   return best;
 }
 
-// ── turni dal calendario "Medici in Turno" ──
+// ── turni: stessi eventi e stesse categorie della sezione Turni (calendario "Medici in Turno") ──
+const CNT_MAT = ['MATTINA', 'MATTINO', 'AM', 'MORNING'], CNT_POM = ['POMERIGGIO', 'POMERIGIO', 'PM', 'AFTERNOON'];
+function cntShiftsFrom(list, ym) {
+  return list.filter(ev => ev.date && ev.date.slice(0, 7) === ym && !ev.isEcgOnly && ev.parsed && ev.parsed.doctorName).map(ev => {
+    const p = ev.parsed, t = String(p.turno || '').toUpperCase();
+    const time = CNT_MAT.includes(t) ? 'mat' : CNT_POM.includes(t) ? 'pom' : '';
+    const kind = ev.isHolter ? (p.holter16 ? 'h16' : 'holter') : ev.isEcg ? 'ecg' : time ? 'std' : 'altro';
+    return { date: ev.date, doctor: p.doctorName, kind, time, title: ev.summary || '' };
+  });
+}
 async function cntLoadShifts(my) {
   cnt.shiftsLoading = true; cnt.shiftsErr = ''; cnt.shifts = null;
   try {
-    if (typeof gapi === 'undefined' || !gapi.client || !gapi.client.getToken || !gapi.client.getToken())
-      throw new Error('Accesso a Google non attivo: i turni non sono leggibili.');
-    const [y, m] = cnt.ym.split('-').map(Number);
-    const tMin = new Date(y, m - 1, 1), tMax = new Date(y, m, 1), cal = CALENDARS[1];
-    let items = [], pageToken;
-    do {
-      const p = { calendarId: cal.id, timeMin: tMin.toISOString(), timeMax: tMax.toISOString(), singleEvents: true, orderBy: 'startTime', maxResults: 2500 };
-      if (pageToken) p.pageToken = pageToken;
-      const r = await gapi.client.request({ path: 'https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent(cal.id) + '/events', params: p });
-      items = items.concat(r.result.items || []); pageToken = r.result.nextPageToken;
-    } while (pageToken);
-    const out = [];
-    items.forEach(ev => {
-      if (!ev.start || !ev.start.date) return;
-      const s = (ev.summary || '').trim(); if (!s) return;
-      const hasEcg = /\bECG\b/i.test(s);
-      if (/^0[12]\s+/i.test(s)) { const p = parseEvent(s, false); if (p && p.doctorName) out.push({ date: ev.start.date, doctor: p.doctorName, kind: hasEcg ? 'ecg' : 'std', title: s }); }
-      else if (hasEcg) return;                       // ECG senza medico
-      else { const p = parseEvent(s, true); if (p.doctorName) out.push({ date: ev.start.date, doctor: p.doctorName, kind: p.holter16 ? 'h16' : 'holter', title: s }); }
-    });
+    const [y, m] = cnt.ym.split('-').map(Number), tMin = new Date(y, m - 1, 1), tMax = new Date(y, m, 1);
+    let out;
+    if (currentCalIndex === 1 && loadedMin && loadedMax && loadedMin <= tMin && loadedMax >= tMax && allEvents.length) {
+      out = cntShiftsFrom(allEvents, cnt.ym);          // gli stessi eventi già caricati nella sezione Turni
+    } else {
+      if (typeof gapi === 'undefined' || !gapi.client || !gapi.client.getToken || !gapi.client.getToken())
+        throw new Error('Accesso a Google non attivo: i turni non sono leggibili.');
+      const cal = CALENDARS[1];
+      let items = [], pageToken;
+      do {
+        const p = { calendarId: cal.id, timeMin: tMin.toISOString(), timeMax: tMax.toISOString(), singleEvents: true, orderBy: 'startTime', maxResults: 2500 };
+        if (pageToken) p.pageToken = pageToken;
+        const r = await gapi.client.request({ path: 'https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent(cal.id) + '/events', params: p });
+        items = items.concat(r.result.items || []); pageToken = r.result.nextPageToken;
+      } while (pageToken);
+      const rel = [];
+      items.forEach(ev => {                              // stessa classificazione di loadEvents()
+        if (!ev.start || !ev.start.date) return;
+        const s = (ev.summary || '').trim(), hasEcg = /\bECG\b/i.test(s);
+        if (/^0[12]\s+/i.test(s)) rel.push({ date: ev.start.date, summary: ev.summary, isHolter: false, isEcg: hasEcg, parsed: parseEvent(ev.summary || '', false) });
+        else if (hasEcg) rel.push({ date: ev.start.date, summary: ev.summary, isEcg: true, isEcgOnly: true, parsed: { doctorName: s.toUpperCase(), turno: 'ECG' } });
+        else if (s) rel.push({ date: ev.start.date, summary: ev.summary, isHolter: true, isEcg: false, parsed: parseEvent(ev.summary || '', true) });
+      });
+      out = cntShiftsFrom(rel, cnt.ym);
+    }
     if (my !== cnt.req) return;
     cnt.shifts = out;
   } catch (e) {
@@ -2027,11 +2042,31 @@ async function cntLoadShifts(my) {
     cnt.shiftsErr = e.result && e.result.error ? e.result.error.message : (e.message || String(e));
   } finally { if (my === cnt.req) cnt.shiftsLoading = false; }
 }
+// nome in calendario -> medico in elenco (anche "BERLONI" <-> "BERLONI M.", se non ambiguo)
+function cntOwner(k, ms) {
+  const c = k.split(' ').filter(Boolean);
+  const ex = ms.find(m => nameKey(m.d.nome) === k); if (ex) return ex.d;
+  const cand = ms.filter(m => m.sur.length && m.sur.every((w, i) => c[i] === w) && (
+    (m.ini.length && c.length === m.sur.length) || (!m.ini.length && c.length > m.sur.length && c.slice(m.sur.length).every(w => w.length === 1))));
+  return cand.length === 1 ? cand[0].d : null;
+}
+// conteggio come nella tabella della sezione Turni
+function cntCal(evs) {
+  const c = { tot: 0, mat: 0, pom: 0, dom: 0, ecg: 0, hol: 0, h16: 0, altro: 0 };
+  evs.forEach(ev => {
+    c.tot++; if (ev.kind === 'ecg') c.ecg++;
+    if (new Date(ev.date + 'T00:00:00').getDay() === 0) c.dom++;
+    else if (ev.time === 'mat') c.mat++; else if (ev.time === 'pom') c.pom++;
+    else if (ev.kind === 'ecg') { } else if (ev.kind === 'holter') c.hol++; else if (ev.kind === 'h16') c.h16++; else c.altro++;
+  });
+  return c;
+}
 // tipo di turno -> voce di tariffa. 75/100 = limite di ECG inviabili a turno.
 // Se il titolo dell'evento contiene 75 o 100 vale quello; se il medico ha una sola tariffa vale quella;
 // se ha entrambe, si deduce dal numero di ECG del giorno (oltre 75 -> turno da 100).
 function cntVoce(ev, d, ecgN) {
   if (new Date(ev.date + 'T00:00:00').getDay() === 0) return { k: 'turno_domenica' };
+  if (ev.kind === 'altro') return { unk: true };
   if (ev.kind === 'h16') return { k: 'turno_16hc' };
   if (ev.kind === 'holter') return { k: 'turno_holter' };
   if (ev.kind === 'ecg') {
@@ -2068,7 +2103,11 @@ function cntCompute() {
     });
   });
   const shiftsBy = new Map();
-  (cnt.shifts || []).forEach(ev => { const k = nameKey(ev.doctor); (shiftsBy.get(k) || shiftsBy.set(k, []).get(k)).push(ev); });
+  const own = {};
+  (cnt.shifts || []).forEach(ev => {
+    const k = nameKey(ev.doctor); if (!(k in own)) own[k] = cntOwner(k, matchers);
+    const o = own[k]; if (o) (shiftsBy.get(o.id) || shiftsBy.set(o.id, []).get(o.id)).push(ev);
+  });
   const T = { esami: 0, turni: 0, centsT: 0, centsE: 0, anyCons: false };
   const rows = doctors.filter(d => d.attivo).map(d => {
     const ex = byDoc.get(d.id) || {}, cells = {}, types = {}; let esami = 0;
@@ -2079,7 +2118,7 @@ function cntCompute() {
     });
     // turni
     let inCal = 0, ok = 0, centsT = 0, senzaEsami = 0; const brk = {}, warn = new Set();
-    const evs = shiftsBy.get(nameKey(d.nome)) || [], ecgEv = {};
+    const evs = shiftsBy.get(d.id) || [], ecgEv = {};
     evs.forEach(ev => { if (ev.kind === 'ecg') ecgEv[ev.date] = (ecgEv[ev.date] || 0) + 1; });
     evs.forEach(ev => {
       inCal++;
@@ -2089,6 +2128,7 @@ function cntCompute() {
       ok++; c.ok = true;
       const ecgN = Math.ceil((c.types['ECG'] || 0) / (ecgEv[ev.date] || 1));
       const v = cntVoce(ev, d, ecgN);
+      if (v.unk) { warn.add('Turno «non riconosciuto» in calendario (titolo senza Mattina/Pomeriggio): non valorizzato'); return; }
       if (v.miss || d.tariffe[v.k] == null) { warn.add('Manca la tariffa «' + (v.miss || vocLabel(v.k)) + '»: turno non valorizzato'); return; }
       const b = brk[v.k] || (brk[v.k] = { n: 0, imp: d.tariffe[v.k], inf: 0 });
       b.n++; centsT += cents(d.tariffe[v.k]);
@@ -2113,7 +2153,7 @@ function cntCompute() {
     const centsE = typeRows.reduce((a, r) => a + r.c, 0);
     if (hasCons) T.anyCons = true;
     T.esami += esami; T.turni += ok; T.centsT += centsT; T.centsE += centsE;
-    return { d, cells, esami, inCal, ok, senzaEsami, centsT, centsE, brk, warn: [...warn], typeRows, hasCons };
+    return { d, cells, esami, inCal, ok, senzaEsami, centsT, centsE, brk, warn: [...warn], typeRows, hasCons, cal: cntCal(evs) };
   });
   return { rows, unmatched, inactive, T };
 }
@@ -2154,6 +2194,8 @@ function cntDocBlock(x, hasShifts) {
   });
   h += '</tbody><tfoot><tr><td>Totale esami</td><td>' + x.esami + '</td>' + (x.hasCons ? '<td></td><td>' + fmtEuro(x.centsE / 100) + '</td>' : '') + '</tr></tfoot></table>';
   // turni
+  const calTxt = [['Mattina', x.cal.mat], ['Pomeriggio', x.cal.pom], ['Domenica', x.cal.dom], ['di cui ECG', x.cal.ecg], ['Holter (10hc/10hp)', x.cal.hol], ['Holter (16hc)', x.cal.h16], ['Non riconosciuto', x.cal.altro]].filter(p => p[1]).map(p => p[0] + ' ' + p[1]).join(' · ');
+  if (showT && x.cal.tot) h += '<div class="c-cal">Nella sezione Turni: <b>Tot. ' + x.cal.tot + '</b>' + (calTxt ? ' · ' + calTxt : '') + '</div>';
   h += '<table class="c-tb"><thead><tr><th>Tipo di turno</th><th>Turni conteggiati</th><th>Tariffa turno</th><th>Importo</th></tr></thead><tbody>';
   const br = Object.entries(x.brk);
   if (!showT) h += '<tr><td colspan="4" class="mut">Turni non disponibili (calendario non letto)</td></tr>';

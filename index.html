@@ -2074,6 +2074,7 @@ async function cntLoadShifts(my) {
     } while (pageToken);
     const out = cntShiftsFromItems(items, cnt.ym);
     if (my !== cnt.req) return;
+    cnt.shiftsDiag = { raw: items.length, titles: items.map(e => (e.summary || '(senza titolo)') + (e.start && (e.start.date || e.start.dateTime) ? '  [' + (e.start.date || e.start.dateTime).slice(0, 10) + ']' : '')) };
     cnt.shifts = out;
   } catch (e) {
     if (my !== cnt.req) return;
@@ -2140,11 +2141,13 @@ function cntCompute() {
       Object.entries(types).forEach(([t, v]) => a[t] = (a[t] || 0) + v);
     });
   });
-  const shiftsBy = new Map();
+  const shiftsBy = new Map(), shiftNoOwner = {};
   const own = {};
   (cnt.shifts || []).forEach(ev => {
     const k = nameKey(ev.doctor); if (!(k in own)) own[k] = cntOwner(k, matchers);
-    const o = own[k]; if (o) (shiftsBy.get(o.id) || shiftsBy.set(o.id, []).get(o.id)).push(ev);
+    const o = own[k];
+    if (o) (shiftsBy.get(o.id) || shiftsBy.set(o.id, []).get(o.id)).push(ev);
+    else { const z = shiftNoOwner[ev.doctor] || (shiftNoOwner[ev.doctor] = { n: 0, ex: ev.title }); z.n++; }
   });
   const T = { esami: 0, turni: 0, centsT: 0, centsE: 0, anyCons: false };
   const rows = doctors.filter(d => d.attivo).map(d => {
@@ -2193,7 +2196,7 @@ function cntCompute() {
     T.esami += esami; T.turni += ok; T.centsT += centsT; T.centsE += centsE;
     return { d, cells, esami, inCal, ok, senzaEsami, centsT, centsE, brk, warn: [...warn], typeRows, hasCons, cal: cntCal(evs) };
   });
-  return { rows, unmatched, inactive, T };
+  return { rows, unmatched, inactive, T, shiftNoOwner };
 }
 
 // ── rendering ──
@@ -2279,6 +2282,18 @@ function cntRender() {
     + '<button class="r-btn ghost" data-cnt="del">🗑 Elimina e ricarica</button></div></div>';
   if (cnt.shiftsLoading) h += '<div class="c-warn c-info">⏳ Lettura dei turni dal calendario…</div>';
   else if (cnt.shiftsErr) h += '<div class="c-warn">Turni non disponibili (' + escHtml(cnt.shiftsErr) + ') — sono mostrati solo gli esami, senza turni né compensi. <button class="r-btn ghost" data-cnt="shifts">↻ Riprova</button></div>';
+  if (cnt.shifts && cnt.shiftsDiag) {
+    const nz = Object.entries(R.shiftNoOwner), D = cnt.shiftsDiag;
+    const sinCal = R.rows.filter(x => x.esami && !x.inCal && !CNT_ESCLUSI.includes(nameKey(x.d.nome).split(' ')[0])).map(x => x.d.nome);
+    const bad = !cnt.shifts.length || nz.length || sinCal.length;
+    h += '<details class="c-det"' + (bad ? ' open' : '') + '><summary>🔎 Diagnostica turni dal calendario' + (bad ? ' — ci sono anomalie' : '') + '</summary><div>'
+      + 'Eventi letti dal calendario «Medici in Turno»: <b>' + D.raw + '</b> · turni riconosciuti nel mese: <b>' + cnt.shifts.length + '</b>'
+      + (nz.length ? '<br><br><b>Nomi nel calendario che non corrispondono a nessun medico attivo in elenco:</b><br>' + nz.map(([n, z]) => escHtml(n) + ' (' + z.n + ') — es. «' + escHtml(z.ex) + '»').join('<br>') : '')
+      + (sinCal.length ? '<br><br><b>Medici con esami ma nessun turno trovato nel calendario:</b> ' + sinCal.map(escHtml).join(' · ') : '')
+      + (!D.raw ? '<br><br>Il calendario non ha restituito nessun evento per questo mese.' : '')
+      + '<br><br><b>Titoli letti dal calendario (primi 40):</b><br>' + D.titles.slice(0, 40).map(escHtml).join('<br>')
+      + '</div></details>';
+  }
   h += '<div class="c-chips"><div class="c-chip"><b>' + T.esami.toLocaleString('it-IT') + '</b><span>esami dei medici attivi</span></div>'
     + '<div class="c-chip"><b>' + T.turni + '</b><span>turni conteggiati</span></div>'
     + '<div class="c-chip"><b>' + fmtEuro(T.centsT / 100) + '</b><span>compenso turni</span></div>'

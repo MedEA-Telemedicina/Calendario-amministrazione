@@ -2085,6 +2085,20 @@ async function cntLoadShifts(my) {
 function cntOwner(k, ms) {
   const c = k.split(' ').filter(Boolean);
   const ex = ms.find(m => nameKey(m.d.nome) === k); if (ex) return ex.d;
+  // calendario "COGNOME I." (anche cognomi composti) <-> elenco con nome per esteso "COGNOME NOME [SECONDO NOME]"
+  const sur = c.slice(), ini = [];
+  while (sur.length > 1 && sur[sur.length - 1].length === 1) ini.unshift(sur.pop());
+  if (ini.length) {
+    const cand = ms.filter(m => {
+      const f = nameKey(m.d.nome).split(' ').filter(Boolean);
+      if (f.length <= sur.length || !sur.every((w, i) => f[i] === w)) return false;
+      const rest = f.slice(sur.length);
+      return rest.length >= ini.length && ini.every((x, i) => rest[i][0] === x);
+    });
+    if (cand.length === 1) return cand[0].d;
+    if (cand.length > 1) return null;                  // ambiguo: stesso cognome e stessa iniziale
+  }
+  // elenco con iniziale puntata ("BERLONI M.") <-> calendario senza iniziale o viceversa
   const cand = ms.filter(m => m.sur.length && m.sur.every((w, i) => c[i] === w) && (
     (m.ini.length && c.length === m.sur.length) || (!m.ini.length && c.length > m.sur.length && c.slice(m.sur.length).every(w => w.length === 1))));
   return cand.length === 1 ? cand[0].d : null;

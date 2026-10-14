@@ -2050,24 +2050,6 @@ const vocLabel = k => (VOCI_ALL.find(v => v.k === k) || {}).l || k;
 const CNT_TIPO_VOCE = { 'ECG': 'ecg', 'HOLTER CARDIACO': 'hc', 'HOLTER PRESSORIO': 'hp', 'HOLTER CARDIACO 12D': 'holter_12der', 'SPIROMETRIA': 'spirometria', 'POLISONNOGRAFIA': 'polisonnografia' };
 const CNT_CONS = ['ecg', 'hc', 'hp', 'holter_12der', 'spirometria', 'polisonnografia'];
 const CNT_TURNI = ['turno_completo', 'turno_ecg_75', 'turno_ecg_100', 'turno_holter', 'turno_16hc', 'turno_domenica'];
-// medico "solo turni" con esami in un giorno senza evento in calendario: il turno si deduce dagli esami
-function cntInferVoce(d, c, date) {
-  if (new Date(date + 'T00:00:00').getDay() === 0) return { k: 'turno_domenica' };
-  const T = CNT_TURNI.filter(k => k !== 'turno_domenica' && d.tariffe[k] != null);
-  if (!T.length) return null;
-  const has = k => T.includes(k);
-  const ecg = c.types['ECG'] || 0, hc = c.types['HOLTER CARDIACO'] || 0;
-  const hol = hc + (c.types['HOLTER PRESSORIO'] || 0) + (c.types['HOLTER CARDIACO 12D'] || 0);
-  const ecgK = has('turno_ecg_75') && has('turno_ecg_100') ? (ecg > 75 ? 'turno_ecg_100' : 'turno_ecg_75') : has('turno_ecg_75') ? 'turno_ecg_75' : has('turno_ecg_100') ? 'turno_ecg_100' : null;
-  if (T.length === 1) return { k: T[0] };
-  if (!hol && ecgK) return { k: ecgK };
-  if (!ecg && hol) {
-    if (has('turno_16hc') && has('turno_holter')) return { k: hc >= 16 ? 'turno_16hc' : 'turno_holter' };
-    if (has('turno_holter')) return { k: 'turno_holter' };
-    if (has('turno_16hc')) return { k: 'turno_16hc' };
-  }
-  return { k: has('turno_completo') ? 'turno_completo' : T[0] };
-}
 const GG = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const cents = x => Math.round(x * 100);
 
@@ -2108,7 +2090,7 @@ function cntCompute() {
       const ecgN = Math.ceil((c.types['ECG'] || 0) / (ecgEv[ev.date] || 1));
       const v = cntVoce(ev, d, ecgN);
       if (v.miss || d.tariffe[v.k] == null) { warn.add('Manca la tariffa «' + (v.miss || vocLabel(v.k)) + '»: turno non valorizzato'); return; }
-      const b = brk[v.k] || (brk[v.k] = { n: 0, imp: d.tariffe[v.k], inf: 0, infEx: 0 });
+      const b = brk[v.k] || (brk[v.k] = { n: 0, imp: d.tariffe[v.k], inf: 0 });
       b.n++; centsT += cents(d.tariffe[v.k]);
       (c.vn = c.vn || []).push(vocLabel(v.k) + (v.lim ? ' · ' + ecgN + ' ECG su ' + v.lim : '') + (v.inferred ? ' (tipo dedotto dal n. di ECG)' : ''));
       if (v.inferred) b.inf++;
@@ -2117,23 +2099,7 @@ function cntCompute() {
         if (ecgN > v.lim) { const dt = new Date(ev.date + 'T00:00:00'); warn.add('Il ' + pad2(dt.getDate()) + '/' + pad2(dt.getMonth() + 1) + ' gli ECG (' + ecgN + ') superano il limite di ' + v.lim + ' del turno'); }
       }
     });
-    // medici solo turni: giorno con esami e nessun evento in calendario -> turno dedotto dagli esami
     const hasCons = CNT_CONS.some(k => d.tariffe[k] != null);
-    const turnOnly = !hasCons && CNT_TURNI.some(k => d.tariffe[k] != null);
-    if (turnOnly) Object.keys(cells).sort().forEach(date => {
-      const c = cells[date]; if (!c.tot || c.evs.length) return;
-      const v = cntInferVoce(d, c, date); if (!v) return;
-      ok++; c.ok = true;
-      if (d.tariffe[v.k] == null) { warn.add('Manca la tariffa «' + vocLabel(v.k) + '»: turno non valorizzato'); return; }
-      const lim = /^turno_ecg_/.test(v.k) ? +v.k.slice(10) : 0, ecgN = c.types['ECG'] || 0;
-      const b = brk[v.k] || (brk[v.k] = { n: 0, imp: d.tariffe[v.k], inf: 0, infEx: 0 });
-      b.n++; b.infEx++; centsT += cents(d.tariffe[v.k]);
-      (c.vn = c.vn || []).push(vocLabel(v.k) + (lim ? ' · ' + ecgN + ' ECG su ' + lim : ''));
-      if (lim) {
-        c.ecgIncl = ecgN;
-        if (ecgN > lim) { const dt = new Date(date + 'T00:00:00'); warn.add('Il ' + pad2(dt.getDate()) + '/' + pad2(dt.getMonth() + 1) + ' gli ECG (' + ecgN + ') superano il limite di ' + lim + ' del turno'); }
-      }
-    });
     // esami per tipologia (holter inclusi nel turno completo non vengono pagati a parte)
     const nTc = brk.turno_completo ? brk.turno_completo.n : 0;
     const incl = { 'HOLTER CARDIACO': nTc * (d.tcHc || 0), 'HOLTER PRESSORIO': nTc * (d.tcHp || 0),
@@ -2147,7 +2113,7 @@ function cntCompute() {
     const centsE = typeRows.reduce((a, r) => a + r.c, 0);
     if (hasCons) T.anyCons = true;
     T.esami += esami; T.turni += ok; T.centsT += centsT; T.centsE += centsE;
-    return { d, cells, esami, inCal, ok, senzaEsami, centsT, centsE, brk, warn: [...warn], typeRows, hasCons, turnOnly };
+    return { d, cells, esami, inCal, ok, senzaEsami, centsT, centsE, brk, warn: [...warn], typeRows, hasCons };
   });
   return { rows, unmatched, inactive, T };
 }
@@ -2158,7 +2124,7 @@ function cntApplyFilter() {
   document.querySelectorAll('#cnt-body .c-doc').forEach(e => { e.hidden = !!q && !e.dataset.n.includes(q); });
 }
 function cntDocBlock(x, hasShifts) {
-  const showT = hasShifts || x.turnOnly, total = x.centsT + x.centsE;
+  const showT = hasShifts, total = x.centsT + x.centsE;
   let h = '<details class="c-doc" open data-n="' + escHtml(nameKey(x.d.nome)) + '"><summary><span class="n">' + escHtml(x.d.nome) + '</span>'
     + '<span class="m"><b>' + x.esami.toLocaleString('it-IT') + '</b> esami</span>'
     + '<span class="m"><b>' + (showT ? x.ok : '–') + '</b> turni</span>'
@@ -2192,7 +2158,7 @@ function cntDocBlock(x, hasShifts) {
   const br = Object.entries(x.brk);
   if (!showT) h += '<tr><td colspan="4" class="mut">Turni non disponibili (calendario non letto)</td></tr>';
   else {
-    if (!br.length) h += '<tr><td colspan="4" class="mut">Nessun turno conteggiato' + (x.inCal || x.turnOnly ? '' : ' (nessun turno in calendario)') + '</td></tr>';
+    if (!br.length) h += '<tr><td colspan="4" class="mut">Nessun turno conteggiato' + (x.inCal ? '' : ' (nessun turno in calendario)') + '</td></tr>';
     br.forEach(([k, b]) => {
       const notes = [];
       if (b.inf) notes.push(b.inf + ' dedotti dal numero di ECG del giorno (oltre 75 → turno da 100)');
@@ -2232,7 +2198,7 @@ function cntRender() {
     + '<div class="c-btns"><button class="r-btn ghost" data-cnt="expand">Espandi tutti</button><button class="r-btn ghost" data-cnt="collapse">Comprimi tutti</button>'
     + '<button class="r-btn ghost" data-cnt="del">🗑 Elimina e ricarica</button></div></div>';
   if (cnt.shiftsLoading) h += '<div class="c-warn c-info">⏳ Lettura dei turni dal calendario…</div>';
-  else if (cnt.shiftsErr) h += '<div class="c-warn">Turni non disponibili (' + escHtml(cnt.shiftsErr) + ') — per i medici con soli turni li deduco dagli esami, per gli altri sono mostrati solo gli esami. <button class="r-btn ghost" data-cnt="shifts">↻ Riprova</button></div>';
+  else if (cnt.shiftsErr) h += '<div class="c-warn">Turni non disponibili (' + escHtml(cnt.shiftsErr) + ') — sono mostrati solo gli esami, senza turni né compensi. <button class="r-btn ghost" data-cnt="shifts">↻ Riprova</button></div>';
   h += '<div class="c-chips"><div class="c-chip"><b>' + T.esami.toLocaleString('it-IT') + '</b><span>esami dei medici attivi</span></div>'
     + '<div class="c-chip"><b>' + T.turni + '</b><span>turni conteggiati</span></div>'
     + '<div class="c-chip"><b>' + fmtEuro(T.centsT / 100) + '</b><span>compenso turni</span></div>'

@@ -2155,7 +2155,7 @@ function cntVoce(ev, d, ecgN) {
     const m = ev.title.match(/(^|\D)(75|100)(\D|$)/);
     if (m) { const k = 'turno_ecg_' + m[2]; return d.tariffe[k] != null ? { k, lim: +m[2] } : { miss: 'Turno ECG ' + m[2] }; }
     const a = d.tariffe.turno_ecg_75 != null, b = d.tariffe.turno_ecg_100 != null;
-    if (a && b) { const lim = ecgN > 75 ? 100 : 75; return { k: 'turno_ecg_' + lim, lim, inferred: true }; }
+    if (a && b) { const lim = (ecgN > 75 && ecgN <= 100) || ecgN > 150 ? 100 : 75; return { k: 'turno_ecg_' + lim, lim, inferred: true }; }
     if (a) return { k: 'turno_ecg_75', lim: 75 };
     if (b) return { k: 'turno_ecg_100', lim: 100 };
     return { miss: 'Turno ECG 75 / 100' };
@@ -2174,18 +2174,72 @@ const cents = x => Math.round(x * 100);
 // Per ogni medico, sul totale del mese: compenso dei turni ÷ somma pesata degli esami = valore di 1 unità di peso;
 // costo per referto = peso × valore dell'unità. Pesi: ECG 1 · holter cardiaco 3 · holter pressorio 2.
 // Gli esami pagati a consuntivo sono scorporati (restano fuori dal calcolo); gli altri tipi di esame non rientrano.
-const CNT_PESI = { 'ECG': 1, 'HOLTER CARDIACO': 3, 'HOLTER PRESSORIO': 2 };
-function cntConv(typeRows, centsT, nTurni) {
-  const tr = {}; typeRows.forEach(r => tr[r.t] = r);
-  const all = Object.keys(CNT_PESI).map(t => {
-    const r = tr[t], n = r ? r.n : 0;
-    return { t, w: CNT_PESI[t], n, cov: r ? (r.prezzo != null ? r.inc : r.n) : 0, cCons: r ? r.c : 0 };
-  });
+const CNT_PESI_DEF = { 'ECG': 1, 'HOLTER CARDIACO': 3, 'HOLTER PRESSORIO': 2, 'HOLTER CARDIACO 12D': 3 };
+const CNT_PESI = Object.assign({}, CNT_PESI_DEF);
+try { const sv = JSON.parse(localStorage.getItem('cnt_pesi_v2') || 'null'); if (sv) Object.keys(CNT_PESI_DEF).forEach(t => { if (sv[t] > 0) CNT_PESI[t] = +sv[t]; }); } catch (e) {}
+// nucleo del calcolo: all = [{ t, w, n, cov, cCons }]
+function cntConvCore(all, centsT, nTurni) {
   const units = all.reduce((a, r) => a + r.cov * r.w, 0);
   const unit = units && centsT ? centsT / units : 0;            // centesimi per 1 unità di peso
   all.forEach(r => { r.c = r.cov * r.w * unit; });
   const list = all.filter(r => r.n || r.cov);
   return { list, centsT, units, unit, covTot: list.reduce((a, r) => a + r.cov, 0), nTurni };
+}
+function cntConv(typeRows, centsT, nTurni) {
+  const tr = {}; typeRows.forEach(r => tr[r.t] = r);
+  return cntConvCore(Object.keys(CNT_PESI).map(t => {
+    const r = tr[t], n = r ? r.n : 0;
+    return { t, w: CNT_PESI[t], n, cov: r ? (r.prezzo != null ? r.inc : r.n) : 0, cCons: r ? r.c : 0 };
+  }), centsT, nTurni);
+}
+// ── convenienza per TIPOLOGIA DI TURNO ──
+// Gli esami di ogni giorno vengono attribuiti ai turni valorizzati di quel giorno: i turni ECG ricevono solo ECG,
+// i turni Holter / Holter 16 solo gli holter (ECG, pressorio, 12D), completo e domenica ricevono tutto.
+// Se in un giorno più turni possono ricevere lo stesso esame, la quota è divisa in parti uguali.
+const CNT_GRP = [
+  { g: 'holter',   l: 'Turno Holter',    ks: ['turno_holter'] },
+  { g: 'h16',      l: 'Turno Holter 16', ks: ['turno_16hc'] },
+  { g: 'completo', l: 'Turno completo',  ks: ['turno_completo'] },
+  { g: 'ecg',      l: 'Turno ECG',       ks: ['turno_ecg_75', 'turno_ecg_100'] },
+  { g: 'domenica', l: 'Turno domenica',  ks: ['turno_domenica'] }
+];
+const cntGrpOf = k => (CNT_GRP.find(x => x.ks.includes(k)) || {}).g;
+function cntAccepts(g, t) { return g === 'ecg' ? t === 'ECG' : (g === 'holter' || g === 'h16') ? t !== 'ECG' : true; }
+function cntConvByTurno(sv, cells, typeRows, tariffe) {
+  const ratio = {}; typeRows.forEach(r => { if (CNT_PESI[r.t] && r.n) ratio[r.t] = { cov: (r.prezzo != null ? r.inc : r.n) / r.n, cons: r.c / r.n }; });
+  const acc = {};
+  sv.forEach(s => { const g = cntGrpOf(s.k), a = acc[g] || (acc[g] = { turni: 0, centsT: 0, n: {} }); a.turni += s.m || 1; a.centsT += s.cents; });
+  const byDay = {}; sv.forEach(s => (byDay[s.date] = byDay[s.date] || []).push(s));
+  Object.entries(byDay).forEach(([day, shifts]) => {
+    const c = cells[day]; if (!c) return;
+    Object.keys(CNT_PESI).forEach(t => {
+      const n = c.types[t] || 0; if (!n) return;
+      let cand = shifts.filter(s => cntAccepts(cntGrpOf(s.k), t)); if (!cand.length) cand = shifts;
+      cand.forEach(s => { const a = acc[cntGrpOf(s.k)]; a.n[t] = (a.n[t] || 0) + n / cand.length; });
+    });
+  });
+  const out = {};
+  Object.entries(acc).forEach(([g, a]) => {
+    out[g] = cntConvCore(Object.keys(CNT_PESI).map(t => {
+      const n = a.n[t] || 0, r = ratio[t] || { cov: 0, cons: 0 };
+      return { t, w: CNT_PESI[t], n, cov: n * r.cov, cCons: n * r.cons };
+    }), a.centsT, a.turni);
+  });
+  return out;
+}
+function cntConvGrpTotals(rows) {
+  const out = {};
+  CNT_GRP.forEach(G => {
+    const m = {}; let centsT = 0, turni = 0, covTot = 0; const perDoc = [];
+    rows.forEach(x => {
+      const cv = x.convG && x.convG[G.g]; if (!cv || !cv.centsT) return;
+      centsT += cv.centsT; turni += cv.nTurni; covTot += cv.covTot;
+      cv.list.forEach(r => { const a = m[r.t] || (m[r.t] = { t: r.t, w: r.w, n: 0, cov: 0, c: 0, cCons: 0 }); a.n += r.n; a.cov += r.cov; a.c += r.c; a.cCons += r.cCons; });
+      perDoc.push({ nome: x.d.nome, turni: cv.nTurni, centsT: cv.centsT, unit: cv.unit, list: cv.list });
+    });
+    if (turni) out[G.g] = { g: G.g, l: G.l, centsT, turni, covTot, perDoc, list: Object.keys(CNT_PESI).map(t => m[t]).filter(Boolean) };
+  });
+  return out;
 }
 function cntConvTotals(rows) {
   const m = {}; let centsT = 0, covTot = 0, turni = 0; const perDoc = [];
@@ -2205,7 +2259,7 @@ function cntBenchSaving(list, bench) {
   return any ? { ref, cost, diff: ref - cost } : null;
 }
 const cntDiffTxt = d => d == null ? '<span class="mut">—</span>' : '<span class="' + (d >= 0 ? 'okk' : 'noo') + '">' + (d >= 0 ? 'risparmio ' : 'extra ') + fmtEuro(Math.abs(d) / 100) + '</span>';
-const cntShort = { 'ECG': 'ECG', 'HOLTER CARDIACO': 'Holter ECG', 'HOLTER PRESSORIO': 'Holter pressorio' };
+const cntShort = { 'ECG': 'ECG', 'HOLTER CARDIACO': 'Holter ECG', 'HOLTER PRESSORIO': 'Holter pressorio', 'HOLTER CARDIACO 12D': 'Holter 12D' };
 function cntConvTable(list, bench, tot) {
   const hasCons = list.some(r => r.cCons);
   let h = '<div style="overflow-x:auto">';
@@ -2225,10 +2279,39 @@ function cntConvTable(list, bench, tot) {
     + (hasCons ? '<td>' + fmtEuro(list.reduce((a, r) => a + r.cCons, 0) / 100) + '</td>' : '') + '</tr></tfoot></table></div>';
   return h;
 }
-function cntConvModalHtml(C, bench) {
-  let h = '<div class="r-usub" style="margin-bottom:10px">Per ogni medico, sul totale del mese: <b>compenso dei turni ÷ somma pesata degli esami</b> = valore di 1 unità di peso; il costo di un referto è il peso moltiplicato per quel valore. '
-    + 'Pesi: <b>ECG 1 · Holter ECG 3 · Holter pressorio 2</b>. Gli esami pagati a consuntivo sono scorporati; gli altri tipi di esame non rientrano nel calcolo. '
+function cntPesiTxt() { return Object.keys(CNT_PESI).map(t => escHtml(cntShort[t] || t) + ' ' + CNT_PESI[t]).join(' · '); }
+// matrice: una riga per tipologia di turno, una colonna per tipologia di esame (€ per referto)
+function cntGrpMatrix(G, bench, withDoc) {
+  const tps = Object.keys(CNT_PESI);
+  let h = '<div style="overflow-x:auto"><table class="c-tb"><thead><tr><th>' + (withDoc ? 'Medico' : 'Tipo di turno') + '</th><th>Turni</th><th>Compenso turni</th><th>Esami coperti</th>'
+    + tps.map(t => '<th>' + escHtml(cntShort[t]) + ' (€/referto)</th>').join('') + '<th>€ medio per referto</th><th>Turno vs consuntivo</th></tr></thead><tbody>';
+  let T = { turni: 0, centsT: 0, cov: 0 };
+  G.forEach(r => {
+    const bs = cntBenchSaving(r.list, bench), by = {}; r.list.forEach(x => by[x.t] = x);
+    T.turni += r.turni; T.centsT += r.centsT; T.cov += r.covTot;
+    h += '<tr><td>' + escHtml(r.l) + '</td><td>' + r.turni + '</td><td>' + fmtEuro(r.centsT / 100) + '</td><td>' + (+r.covTot.toFixed(1)).toLocaleString('it-IT') + '</td>'
+      + tps.map(t => { const x = by[t]; return '<td>' + (x && x.cov && x.c ? '<b>' + fmtEuro(x.c / x.cov / 100) + '</b><small style="color:#9aa5b1">' + (+x.cov.toFixed(1)).toLocaleString('it-IT') + ' es.</small>' : '<span class="mut">—</span>') + '</td>'; }).join('')
+      + '<td><b>' + (r.covTot ? fmtEuro(r.centsT / r.covTot / 100) : '—') + '</b></td><td>' + (bs ? cntDiffTxt(bs.diff) : '<span class="mut">—</span>') + '</td></tr>';
+  });
+  if (G.length > 1) h += '</tbody><tfoot><tr><td>Totale</td><td>' + T.turni + '</td><td>' + fmtEuro(T.centsT / 100) + '</td><td>' + (+T.cov.toFixed(1)).toLocaleString('it-IT') + '</td>' + tps.map(() => '<td></td>').join('') + '<td>' + (T.cov ? fmtEuro(T.centsT / T.cov / 100) : '—') + '</td><td></td></tr></tfoot></table></div>';
+  else h += '</tbody></table></div>';
+  return h;
+}
+function cntConvModalHtml(C, bench, GT) {
+  let h = '<div class="r-usub" style="margin-bottom:10px">Per ogni medico: <b>compenso dei turni ÷ somma pesata degli esami</b> = valore di 1 unità di peso; il costo di un referto è il peso moltiplicato per quel valore. '
+    + 'Pesi: <b>' + cntPesiTxt() + '</b>. Gli esami pagati a consuntivo sono scorporati; gli altri tipi di esame non rientrano nel calcolo. '
     + 'Il «consuntivo medio» è la media delle tariffe a consuntivo dei medici in elenco, usata solo come termine di paragone.</div>'
+    + '<details class="c-det" style="margin-bottom:12px"><summary>⚙ Modifica i pesi delle tipologie</summary><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">'
+    + Object.keys(CNT_PESI).map(t => '<label style="font-size:12px;font-weight:700;color:#3b4a5c">' + escHtml(cntShort[t] || t) + '<br><input type="number" class="r-input cw-in" data-t="' + escHtml(t) + '" min="0.1" step="0.1" value="' + CNT_PESI[t] + '" style="width:90px"></label>').join('')
+    + '<button class="r-btn primary" type="button" data-pesi="save">Applica</button><button class="r-btn ghost" type="button" data-pesi="reset">Ripristina</button></div></details>'
+    + (GT && Object.keys(GT).length ? '<div class="c-sec">Per tipologia di turno — costo per referto</div><div class="r-usub" style="margin:4px 0 6px">Gli esami di ogni giorno sono attribuiti ai turni di quel giorno (turno ECG → solo ECG; Holter / Holter 16 → solo holter; completo e domenica → tutti); se più turni possono riceverli la quota è divisa in parti uguali.</div>'
+      + cntGrpMatrix(CNT_GRP.map(G => GT[G.g]).filter(Boolean), bench, false)
+      + CNT_GRP.filter(G => GT[G.g]).map(G => '<details class="c-det" style="margin-top:10px"><summary><b>' + escHtml(G.l) + '</b> · ' + GT[G.g].turni + ' turni · ' + fmtEuro(GT[G.g].centsT / 100) + '</summary><div>'
+        + '<div class="c-sec" style="margin-top:6px">Complessivo</div>' + cntConvTable(GT[G.g].list, bench, { centsT: GT[G.g].centsT, unit: 0, units: 0 })
+        + '<div class="c-sec" style="margin-top:12px">Per medico</div>'
+        + cntGrpMatrix(GT[G.g].perDoc.sort((a, b) => b.centsT - a.centsT).map(d => ({ l: d.nome, turni: d.turni, centsT: d.centsT, covTot: d.list.reduce((a, r) => a + r.cov, 0), list: d.list })), bench, true)
+        + '</div></details>').join('')
+      + '<div style="height:14px"></div>' : '')
     + '<div class="c-sec">Complessivo (' + C.turni + ' turni · ' + fmtEuro(C.centsT / 100) + ')</div>' + cntConvTable(C.list, bench, C)
     + '<div class="c-sec" style="margin-top:16px">Per medico — costo per referto</div><div style="overflow-x:auto"><table class="c-tb"><thead><tr><th>Medico</th><th>Turni</th><th>Compenso turni</th><th>1 unità di peso</th>'
     + Object.keys(CNT_PESI).map(t => '<th>' + escHtml(cntShort[t]) + '</th>').join('') + '<th>Turno vs consuntivo</th></tr></thead><tbody>'
@@ -2282,7 +2365,7 @@ function cntCompute() {
       Object.entries(tp).forEach(([t, v]) => types[t] = (types[t] || 0) + v);
     });
     // turni
-    let inCal = 0, ok = 0, centsT = 0, senzaEsami = 0; const brk = {}, warn = new Set();
+    let inCal = 0, ok = 0, centsT = 0, senzaEsami = 0; const brk = {}, warn = new Set(), sv = [];
     const evs = shiftsBy.get(d.id) || [], ecgEv = {}, stdDay = {}, ore = oreBy.get(d.id) || {};
     evs.forEach(ev => {
       if (ev.kind === 'ecg') ecgEv[ev.date] = (ecgEv[ev.date] || 0) + 1;
@@ -2298,8 +2381,7 @@ function cntCompute() {
       const v = cntVoce(ev, d, ecgN);
       if (v.unk) { warn.add('Turno «non riconosciuto» in calendario (titolo senza tipo riconoscibile): non valorizzato'); return; }
       if (v.miss || d.tariffe[v.k] == null) { warn.add('Manca la tariffa «' + (v.miss || vocLabel(v.k)) + '»: turno non valorizzato'); return; }
-      const b = brk[v.k] || (brk[v.k] = { n: 0, imp: d.tariffe[v.k], inf: 0 });
-      b.n++; centsT += cents(d.tariffe[v.k]);
+      const b = brk[v.k] || (brk[v.k] = { n: 0, imp: d.tariffe[v.k], inf: 0, dbl: 0 });
       // Se nello stesso giorno il medico fa anche un turno completo, gli ECG del giorno sono in buona parte del turno completo:
       // superare il limite è normale e l'avviso non va mostrato. Fa eccezione il caso in cui le fasce siano chiaramente
       // separate (es. ECG al mattino e completo al pomeriggio): allora si controllano solo gli ECG della fascia del turno ECG.
@@ -2309,11 +2391,15 @@ function cntCompute() {
         if (std && !(ev.time && std.every(t => t && t !== ev.time))) noWarn = true;
         else if (ev.time && z) ecgChk = z[ev.time] || 0;
       }
-      (c.vn = c.vn || []).push(vocLabel(v.k) + (v.lim && !noWarn ? ' · ' + ecgChk + ' ECG su ' + v.lim : '') + (v.inferred ? ' (tipo dedotto dal n. di ECG)' : ''));
+      // turno ECG moltiplicato: ogni limite superato vale un turno in più (oltre 100 fino a 200 = 2 turni, fino a 300 = 3 ...)
+      const mult = v.lim && !noWarn && ecgChk > v.lim ? Math.ceil(ecgChk / v.lim) : 1;
+      b.n += mult; centsT += cents(d.tariffe[v.k]) * mult; ok += mult - 1; if (mult > 1) b.dbl++;
+      sv.push({ date: ev.date, k: v.k, cents: cents(d.tariffe[v.k]) * mult, m: mult });
+      (c.vn = c.vn || []).push(vocLabel(v.k) + (v.lim && !noWarn ? ' · ' + ecgChk + ' ECG su ' + v.lim + (mult > 1 ? ' → ' + mult + ' turni (' + mult + '×)' : '') : '') + (v.inferred ? ' (tipo dedotto dal n. di ECG)' : ''));
       if (v.inferred) b.inf++;
       if (v.lim) {
         c.ecgIncl = (c.ecgIncl || 0) + ecgN;
-        if (!noWarn && ecgChk > v.lim) { const dt = new Date(ev.date + 'T00:00:00'); warn.add('Il ' + pad2(dt.getDate()) + '/' + pad2(dt.getMonth() + 1) + (ev.time ? (ev.time === 'mat' ? ' (mattina)' : ' (pomeriggio)') : '') + ' gli ECG (' + ecgChk + ') superano il limite di ' + v.lim + ' del turno'); }
+        if (!noWarn && mult >= 3) { const dt = new Date(ev.date + 'T00:00:00'); warn.add('Il ' + pad2(dt.getDate()) + '/' + pad2(dt.getMonth() + 1) + (ev.time ? (ev.time === 'mat' ? ' (mattina)' : ' (pomeriggio)') : '') + ' gli ECG (' + ecgChk + ') superano il doppio del limite (' + v.lim + ' per turno): valorizzati ' + mult + ' turni, verificare'); }
       }
     });
     const hasCons = CNT_CONS.some(k => d.tariffe[k] != null);
@@ -2328,13 +2414,13 @@ function cntCompute() {
       return { t, n, prezzo, inc, pay, c: prezzo != null ? cents(prezzo) * pay : 0 };
     });
     const centsE = typeRows.reduce((a, r) => a + r.c, 0);
-    const conv = cntConv(typeRows, centsT, ok);
+    const conv = cntConv(typeRows, centsT, ok), convG = cntConvByTurno(sv, cells, typeRows, d.tariffe);
     if (hasCons) T.anyCons = true;
     T.esami += esami; T.turni += ok; T.centsT += centsT; T.centsE += centsE;
-    return { d, cells, esami, inCal, ok, senzaEsami, centsT, centsE, brk, warn: [...warn], typeRows, hasCons, cal: cntCal(evs), conv };
+    return { d, cells, esami, inCal, ok, senzaEsami, centsT, centsE, brk, warn: [...warn], typeRows, hasCons, cal: cntCal(evs), conv, convG };
   });
-  const convTot = cntConvTotals(rows);
-  return { rows, unmatched, inactive, T, shiftNoOwner, bench, convTot };
+  const convTot = cntConvTotals(rows), convGrp = cntConvGrpTotals(rows);
+  return { rows, unmatched, inactive, T, shiftNoOwner, bench, convTot, convGrp };
 }
 
 // ── rendering ──
@@ -2385,7 +2471,8 @@ function cntDocBlock(x, hasShifts, bench) {
     if (!br.length) h += '<tr><td colspan="4" class="mut">Nessun turno conteggiato' + (x.inCal ? '' : ' (nessun turno in calendario)') + '</td></tr>';
     br.forEach(([k, b]) => {
       const notes = [];
-      if (b.inf) notes.push(b.inf + ' dedotti dal numero di ECG del giorno (oltre 75 → turno da 100)');
+      if (b.inf) notes.push(b.inf + ' dedotti dal numero di ECG del giorno (76-100 → turno da 100; 101-150 → 75 doppiato; oltre 150 → 100 moltiplicato)');
+      if (b.dbl) notes.push('di cui ' + b.dbl + ' turni ECG doppiati o triplicati (contati più volte)');
       h += '<tr><td>' + escHtml(vocLabel(k)) + '</td><td><b>' + b.n + '</b>' + notes.map(t => '<small>' + t + '</small>').join('') + '</td><td>' + fmtEuro(b.imp) + '</td><td>' + fmtEuro(b.n * b.imp) + '</td></tr>';
     });
     if (x.senzaEsami) h += '<tr class="mut"><td colspan="4">○ ' + x.senzaEsami + (x.senzaEsami === 1 ? ' turno in calendario senza esami: non conteggiato' : ' turni in calendario senza esami: non conteggiati') + '</td></tr>';
@@ -2393,6 +2480,10 @@ function cntDocBlock(x, hasShifts, bench) {
   h += '</tbody><tfoot><tr><td>Totale turni</td><td>' + (showT ? x.ok : '–') + '</td><td></td><td>' + (showT ? fmtEuro(x.centsT / 100) : '–') + '</td></tr></tfoot></table>';
   }
   if (showT && x.conv.units && x.centsT) h += '<div class="c-sec" style="margin-top:14px">Convenienza del turno: costo per referto</div>' + cntConvTable(x.conv.list, x.bench || {}, x.conv);
+  if (showT && x.convG) {
+    const gl = CNT_GRP.filter(G => x.convG[G.g] && x.convG[G.g].centsT).map(G => ({ l: G.l, turni: x.convG[G.g].nTurni, centsT: x.convG[G.g].centsT, covTot: x.convG[G.g].covTot, list: x.convG[G.g].list }));
+    if (gl.length) h += '<div class="c-sec" style="margin-top:14px">Convenienza per tipologia di turno</div>' + cntGrpMatrix(gl, x.bench || {}, false);
+  }
   x.warn.forEach(w => { h += '<div class="c-w">⚠ ' + escHtml(w) + '</div>'; });
   h += '<div class="c-grand"><span>' + (!showTurniTb ? (x.hasCons ? 'Esami a consuntivo ' + fmtEuro(x.centsE / 100) : 'Esami refertati ' + x.esami) : x.hasCons ? 'Turni ' + fmtEuro(x.centsT / 100) + ' + Esami a consuntivo ' + fmtEuro(x.centsE / 100) : 'Esami refertati ' + x.esami + ' · Turni conteggiati ' + (showT ? x.ok : '–')) + '</span><b>Totale ' + fmtEuro(total / 100) + '</b></div>';
   return h + '</div></details>';
@@ -2441,7 +2532,7 @@ function cntRender() {
     + (T.anyCons ? '<div class="c-chip"><b>' + fmtEuro(T.centsE / 100) + '</b><span>compenso esami a consuntivo</span></div>' : '')
     + '<div class="c-chip tot"><b>' + fmtEuro((T.centsT + T.centsE) / 100) + '</b><span>totale mese</span></div></div>';
   if (hasShifts && R.convTot.list.length) {
-    cnt.convHtml = cntConvModalHtml(R.convTot, R.bench);
+    cnt.convHtml = cntConvModalHtml(R.convTot, R.bench, R.convGrp);
     h += '<div style="margin:12px 0"><button class="r-btn primary" data-cnt="conv">📊 Convenienza dei turni</button></div>';
   } else cnt.convHtml = '';
   const withData = R.rows.filter(x => x.esami || x.inCal), without = R.rows.filter(x => !x.esami && !x.inCal);
@@ -2641,6 +2732,13 @@ async function maybeImportLegacy() {
       else if (a === 'expand' || a === 'collapse') document.querySelectorAll('#cnt-body .c-doc').forEach(e => { e.open = a === 'expand'; });
       else if (a === 'conv') { byId('conv-body').innerHTML = cnt.convHtml || ''; openModal('conv-modal'); }
       else if (a === 'shifts') { const my = ++cnt.req; cnt.shiftsLoading = true; cntRender(); cntLoadShifts(my).then(() => { if (my === cnt.req) cntRender(); }); }
+    });
+    byId('conv-modal').addEventListener('click', e => {
+      const b = e.target.closest('[data-pesi]'); if (!b) return;
+      if (b.dataset.pesi === 'reset') Object.assign(CNT_PESI, CNT_PESI_DEF);
+      else document.querySelectorAll('#conv-body .cw-in').forEach(i => { const v = parseFloat(String(i.value).replace(',', '.')); if (v > 0) CNT_PESI[i.dataset.t] = v; });
+      try { localStorage.setItem('cnt_pesi_v2', JSON.stringify(CNT_PESI)); } catch (er) {}
+      cntRender(); byId('conv-body').innerHTML = cnt.convHtml || '';
     });
     byId('cnt-search').addEventListener('input', e => { cnt.q = e.target.value; cntApplyFilter(); });
     root.addEventListener('change', e => { if (e.target.id === 'cnt-file' && e.target.files[0]) { const f = e.target.files[0]; e.target.value = ''; cntUpload(f); } });

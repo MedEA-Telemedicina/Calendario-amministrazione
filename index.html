@@ -817,6 +817,15 @@
     </div>
   </div>
 
+  <!-- ═══ MODALE CONVENIENZA TURNI ═══ -->
+  <div class="r-modal-bg" id="conv-modal">
+    <div class="r-modal" style="max-width:920px" role="dialog" aria-modal="true" aria-labelledby="conv-title">
+      <div class="r-modal-h"><h3 id="conv-title">📊 Convenienza dei turni</h3><button class="r-x" type="button" data-close="conv" aria-label="Chiudi">✕</button></div>
+      <div class="r-modal-b" id="conv-body"></div>
+      <div class="r-modal-f"><button class="r-btn ghost" type="button" data-close="conv">Chiudi</button></div>
+    </div>
+  </div>
+
   <!-- ═══ MODALE UTENTE (admin) ═══ -->
   <div class="r-modal-bg" id="user-modal">
     <div class="r-modal" style="max-width:440px" role="dialog" aria-modal="true" aria-labelledby="u-title">
@@ -2162,50 +2171,32 @@ const GG = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const cents = x => Math.round(x * 100);
 
 // ── convenienza dei turni ──
-// Stima del costo per referto: il costo di ogni turno (al netto degli esami pagati a consuntivo) viene ripartito in parti uguali
-// tra gli esami che quel tipo di turno copre, refertati nello stesso giorno:
-// turno ECG -> ECG · turno holter -> holter cardiaco/pressorio · turno 16hc -> holter cardiaco · completo/domenica -> tutti.
-const CNT_COPERTURA = { turno_ecg_75: ['ECG'], turno_ecg_100: ['ECG'], turno_holter: ['HOLTER CARDIACO', 'HOLTER PRESSORIO'], turno_16hc: ['HOLTER CARDIACO'] };
-// peso di un esame nella ripartizione del costo del turno: valore impostato dall'utente > prezzo medio a consuntivo > valori di ripiego
-const CNT_PESO_DEF = { 'HOLTER CARDIACO': 3, 'HOLTER PRESSORIO': 1.5, 'ECG': 1 };
-let CNT_PESI = {}; try { CNT_PESI = JSON.parse(localStorage.getItem('cnt_pesi')) || {}; } catch (e) {}
-function cntPeso(t, bench) {
-  const u = CNT_PESI[t]; if (u > 0) return u;
-  if (bench && bench[t] > 0) return bench[t];
-  return CNT_PESO_DEF[t] || 1;
-}
-function cntConv(cells, dayShifts, typeRows, centsT, bench) {
-  const days = [...new Set(dayShifts.map(x => x.date))], okN = {}, trMap = {};
-  typeRows.forEach(r => trMap[r.t] = r);
-  days.forEach(day => Object.entries(cells[day].types).forEach(([t, n]) => okN[t] = (okN[t] || 0) + n));
-  // esami coperti dai turni per tipologia: se la tipologia è a consuntivo, solo quelli «inclusi» nel turno (gli altri si pagano a parte)
-  const cov = {}, f = {};
-  Object.keys(okN).forEach(t => { const r = trMap[t]; cov[t] = r && r.prezzo != null ? Math.min(r.inc, okN[t]) : okN[t]; f[t] = okN[t] ? cov[t] / okN[t] : 0; });
-  const alloc = {}; let unalloc = 0;
-  dayShifts.forEach(sh => {
-    const types = cells[sh.date].types, lim = CNT_COPERTURA[sh.k];
-    const pick = (useF, onlyCov) => Object.entries(types).filter(([t]) => !onlyCov || !lim || lim.includes(t)).map(([t, n]) => [t, n * (useF ? f[t] : 1) * cntPeso(t, bench)]);
-    let ws = pick(true, true), tot = ws.reduce((a, w) => a + w[1], 0);
-    if (!tot) { ws = pick(true, false); tot = ws.reduce((a, w) => a + w[1], 0); }   // il turno non ha esami del suo tipo: ripartito su tutti
-    if (!tot) { unalloc += sh.c; return; }
-    ws.forEach(([t, w]) => { alloc[t] = (alloc[t] || 0) + sh.c * w / tot; });
+// Per ogni medico, sul totale del mese: compenso dei turni ÷ somma pesata degli esami = valore di 1 unità di peso;
+// costo per referto = peso × valore dell'unità. Pesi: ECG 1 · holter cardiaco 3 · holter pressorio 2.
+// Gli esami pagati a consuntivo sono scorporati (restano fuori dal calcolo); gli altri tipi di esame non rientrano.
+const CNT_PESI = { 'ECG': 1, 'HOLTER CARDIACO': 3, 'HOLTER PRESSORIO': 2 };
+function cntConv(typeRows, centsT, nTurni) {
+  const tr = {}; typeRows.forEach(r => tr[r.t] = r);
+  const all = Object.keys(CNT_PESI).map(t => {
+    const r = tr[t], n = r ? r.n : 0;
+    return { t, w: CNT_PESI[t], n, cov: r ? (r.prezzo != null ? r.inc : r.n) : 0, cCons: r ? r.c : 0 };
   });
-  const list = Object.keys(okN).map(t => {
-    const r = trMap[t], extra = r && r.prezzo != null ? okN[t] - cov[t] : 0;
-    return { t, n: okN[t], cov: cov[t], c: alloc[t] || 0, extra, cCons: r && r.prezzo != null ? Math.round(extra * cents(r.prezzo)) : 0 };
-  }).sort((a, b) => b.n - a.n);
-  return { list, unalloc, centsT, covTot: list.reduce((a, r) => a + r.cov, 0), nTurni: days.length };
+  const units = all.reduce((a, r) => a + r.cov * r.w, 0);
+  const unit = units && centsT ? centsT / units : 0;            // centesimi per 1 unità di peso
+  all.forEach(r => { r.c = r.cov * r.w * unit; });
+  const list = all.filter(r => r.n || r.cov);
+  return { list, centsT, units, unit, covTot: list.reduce((a, r) => a + r.cov, 0), nTurni };
 }
-function cntConvTotals(rows, bench) {
-  const m = {}; let centsT = 0, covTot = 0, turni = 0, unalloc = 0;
-  const perDoc = [];
+function cntConvTotals(rows) {
+  const m = {}; let centsT = 0, covTot = 0, turni = 0; const perDoc = [];
   rows.forEach(x => {
-    if (!x.conv.nTurni) return;
-    const cv = x.conv; centsT += cv.centsT; covTot += cv.covTot; turni += x.ok; unalloc += cv.unalloc;
-    cv.list.forEach(r => { const a = m[r.t] || (m[r.t] = { t: r.t, n: 0, cov: 0, c: 0, cCons: 0 }); a.n += r.n; a.cov += r.cov; a.c += r.c; a.cCons += r.cCons; });
-    perDoc.push({ nome: x.d.nome, turni: x.ok, centsT: cv.centsT, cov: cv.covTot, bm: cntBenchSaving(cv.list, bench) });
+    const cv = x.conv; if (!cv.units || !cv.centsT) return;
+    centsT += cv.centsT; covTot += cv.covTot; turni += x.ok;
+    cv.list.forEach(r => { const a = m[r.t] || (m[r.t] = { t: r.t, w: r.w, n: 0, cov: 0, c: 0, cCons: 0 }); a.n += r.n; a.cov += r.cov; a.c += r.c; a.cCons += r.cCons; });
+    perDoc.push({ nome: x.d.nome, turni: x.ok, centsT: cv.centsT, unit: cv.unit, list: cv.list });
   });
-  return { list: Object.values(m).sort((a, b) => b.n - a.n), centsT, covTot, turni, unalloc, perDoc };
+  const list = Object.keys(CNT_PESI).map(t => m[t]).filter(Boolean);
+  return { list, centsT, covTot, turni, perDoc };
 }
 // risparmio rispetto al prezzo medio a consuntivo: (esami coperti × prezzo medio) − costo turno attribuito
 function cntBenchSaving(list, bench) {
@@ -2213,24 +2204,39 @@ function cntBenchSaving(list, bench) {
   list.forEach(r => { if (bench[r.t] != null && r.cov) { any = true; ref += r.cov * bench[r.t] * 100; cost += r.c; } });
   return any ? { ref, cost, diff: ref - cost } : null;
 }
+const cntDiffTxt = d => d == null ? '<span class="mut">—</span>' : '<span class="' + (d >= 0 ? 'okk' : 'noo') + '">' + (d >= 0 ? 'risparmio ' : 'extra ') + fmtEuro(Math.abs(d) / 100) + '</span>';
+const cntShort = { 'ECG': 'ECG', 'HOLTER CARDIACO': 'Holter ECG', 'HOLTER PRESSORIO': 'Holter pressorio' };
 function cntConvTable(list, bench, tot) {
   const hasCons = list.some(r => r.cCons);
-  let h = '<table class="c-tb"><thead><tr><th>Tipologia</th><th>Esami nei turni</th><th>Coperti dal turno</th><th>Costo turno attribuito</th><th>€ per referto (turno)</th>'
+  let h = '<div style="overflow-x:auto">';
+  if (tot.unit) h += '<div class="r-usub" style="margin:4px 0 8px">Compenso turni <b>' + fmtEuro(tot.centsT / 100) + '</b> ÷ <b>' + tot.units.toLocaleString('it-IT') + '</b> unità di peso = <b>' + fmtEuro(tot.unit / 100) + '</b> per unità</div>';
+  h += '<table class="c-tb"><thead><tr><th>Tipologia</th><th>Peso</th><th>Esami refertati</th><th>Coperti dal turno</th><th>€ per referto</th><th>Costo attribuito</th>'
     + '<th>Consuntivo medio (riferimento)</th><th>Turno vs consuntivo</th>' + (hasCons ? '<th>A consuntivo (scorporato)</th>' : '') + '</tr></thead><tbody>';
   list.forEach(r => {
     const bm = bench[r.t], d = bm != null && r.cov ? r.cov * bm * 100 - r.c : null;
-    h += '<tr><td>' + escHtml(r.t) + '</td><td>' + r.n + '</td><td>' + r.cov + '</td><td>' + (r.c ? fmtEuro(r.c / 100) : '<span class="mut">—</span>') + '</td>'
-      + '<td><b>' + (r.cov && r.c ? fmtEuro(r.c / r.cov / 100) : '<span class="mut">—</span>') + '</b></td>'
-      + '<td>' + (bm != null ? fmtEuro(bm) : '<span class="mut">—</span>') + '</td>'
-      + '<td>' + (d == null ? '<span class="mut">—</span>' : '<span class="' + (d >= 0 ? 'okk' : 'noo') + '">' + (d >= 0 ? 'risparmio ' : 'extra ') + fmtEuro(Math.abs(d) / 100) + '</span>') + '</td>'
+    h += '<tr><td>' + escHtml(cntShort[r.t] || r.t) + '</td><td>' + r.w + '</td><td>' + r.n.toLocaleString('it-IT') + '</td><td>' + r.cov.toLocaleString('it-IT') + '</td>'
+      + '<td><b>' + (r.cov && r.c ? fmtEuro(r.c / r.cov / 100) : '<span class="mut">—</span>') + '</b></td><td>' + (r.c ? fmtEuro(r.c / 100) : '<span class="mut">—</span>') + '</td>'
+      + '<td>' + (bm != null ? fmtEuro(bm) : '<span class="mut">—</span>') + '</td><td>' + cntDiffTxt(d) + '</td>'
       + (hasCons ? '<td>' + (r.cCons ? fmtEuro(r.cCons / 100) : '<span class="mut">—</span>') + '</td>' : '') + '</tr>';
   });
-  const cov = tot.covTot, bs = cntBenchSaving(list, bench);
-  h += '</tbody><tfoot><tr><td>Totale</td><td>' + list.reduce((a, r) => a + r.n, 0) + '</td><td>' + cov + '</td><td>' + fmtEuro(tot.centsT / 100) + '</td>'
-    + '<td>' + (cov ? fmtEuro(tot.centsT / cov / 100) : '—') + '</td><td></td>'
-    + '<td>' + (bs ? '<span class="' + (bs.diff >= 0 ? 'okk' : 'noo') + '">' + (bs.diff >= 0 ? 'risparmio ' : 'extra ') + fmtEuro(Math.abs(bs.diff) / 100) + '</span>' : '') + '</td>'
-    + (hasCons ? '<td>' + fmtEuro(list.reduce((a, r) => a + r.cCons, 0) / 100) + '</td>' : '') + '</tr></tfoot></table>';
-  if (tot.unalloc) h += '<div class="c-w" style="margin-top:8px">Costo di turni senza esami attribuibili: ' + fmtEuro(tot.unalloc / 100) + ' (incluso nel totale).</div>';
+  const cov = list.reduce((a, r) => a + r.cov, 0), bs = cntBenchSaving(list, bench);
+  h += '</tbody><tfoot><tr><td>Totale</td><td></td><td>' + list.reduce((a, r) => a + r.n, 0).toLocaleString('it-IT') + '</td><td>' + cov.toLocaleString('it-IT') + '</td>'
+    + '<td>' + (cov ? fmtEuro(tot.centsT / cov / 100) : '—') + '</td><td>' + fmtEuro(tot.centsT / 100) + '</td><td></td><td>' + (bs ? cntDiffTxt(bs.diff) : '') + '</td>'
+    + (hasCons ? '<td>' + fmtEuro(list.reduce((a, r) => a + r.cCons, 0) / 100) + '</td>' : '') + '</tr></tfoot></table></div>';
+  return h;
+}
+function cntConvModalHtml(C, bench) {
+  let h = '<div class="r-usub" style="margin-bottom:10px">Per ogni medico, sul totale del mese: <b>compenso dei turni ÷ somma pesata degli esami</b> = valore di 1 unità di peso; il costo di un referto è il peso moltiplicato per quel valore. '
+    + 'Pesi: <b>ECG 1 · Holter ECG 3 · Holter pressorio 2</b>. Gli esami pagati a consuntivo sono scorporati; gli altri tipi di esame non rientrano nel calcolo. '
+    + 'Il «consuntivo medio» è la media delle tariffe a consuntivo dei medici in elenco, usata solo come termine di paragone.</div>'
+    + '<div class="c-sec">Complessivo (' + C.turni + ' turni · ' + fmtEuro(C.centsT / 100) + ')</div>' + cntConvTable(C.list, bench, C)
+    + '<div class="c-sec" style="margin-top:16px">Per medico — costo per referto</div><div style="overflow-x:auto"><table class="c-tb"><thead><tr><th>Medico</th><th>Turni</th><th>Compenso turni</th><th>1 unità di peso</th>'
+    + Object.keys(CNT_PESI).map(t => '<th>' + escHtml(cntShort[t]) + '</th>').join('') + '<th>Turno vs consuntivo</th></tr></thead><tbody>'
+    + C.perDoc.sort((a, b) => b.centsT - a.centsT).map(r => {
+      const bs = cntBenchSaving(r.list, bench);
+      return '<tr><td>' + escHtml(r.nome) + '</td><td>' + r.turni + '</td><td>' + fmtEuro(r.centsT / 100) + '</td><td>' + fmtEuro(r.unit / 100) + '</td>'
+        + Object.keys(CNT_PESI).map(t => '<td><b>' + fmtEuro(r.unit * CNT_PESI[t] / 100) + '</b></td>').join('') + '<td>' + (bs ? cntDiffTxt(bs.diff) : '<span class="mut">—</span>') + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
   return h;
 }
 
@@ -2276,7 +2282,7 @@ function cntCompute() {
       Object.entries(tp).forEach(([t, v]) => types[t] = (types[t] || 0) + v);
     });
     // turni
-    let inCal = 0, ok = 0, centsT = 0, senzaEsami = 0; const brk = {}, warn = new Set(), dayShifts = [];
+    let inCal = 0, ok = 0, centsT = 0, senzaEsami = 0; const brk = {}, warn = new Set();
     const evs = shiftsBy.get(d.id) || [], ecgEv = {}, stdDay = {}, ore = oreBy.get(d.id) || {};
     evs.forEach(ev => {
       if (ev.kind === 'ecg') ecgEv[ev.date] = (ecgEv[ev.date] || 0) + 1;
@@ -2294,7 +2300,6 @@ function cntCompute() {
       if (v.miss || d.tariffe[v.k] == null) { warn.add('Manca la tariffa «' + (v.miss || vocLabel(v.k)) + '»: turno non valorizzato'); return; }
       const b = brk[v.k] || (brk[v.k] = { n: 0, imp: d.tariffe[v.k], inf: 0 });
       b.n++; centsT += cents(d.tariffe[v.k]);
-      dayShifts.push({ date: ev.date, k: v.k, c: cents(d.tariffe[v.k]) });
       // Se nello stesso giorno il medico fa anche un turno completo, gli ECG del giorno sono in buona parte del turno completo:
       // superare il limite è normale e l'avviso non va mostrato. Fa eccezione il caso in cui le fasce siano chiaramente
       // separate (es. ECG al mattino e completo al pomeriggio): allora si controllano solo gli ECG della fascia del turno ECG.
@@ -2323,12 +2328,12 @@ function cntCompute() {
       return { t, n, prezzo, inc, pay, c: prezzo != null ? cents(prezzo) * pay : 0 };
     });
     const centsE = typeRows.reduce((a, r) => a + r.c, 0);
-    const conv = cntConv(cells, dayShifts, typeRows, centsT, bench);
+    const conv = cntConv(typeRows, centsT, ok);
     if (hasCons) T.anyCons = true;
     T.esami += esami; T.turni += ok; T.centsT += centsT; T.centsE += centsE;
     return { d, cells, esami, inCal, ok, senzaEsami, centsT, centsE, brk, warn: [...warn], typeRows, hasCons, cal: cntCal(evs), conv };
   });
-  const convTot = cntConvTotals(rows, bench);
+  const convTot = cntConvTotals(rows);
   return { rows, unmatched, inactive, T, shiftNoOwner, bench, convTot };
 }
 
@@ -2387,7 +2392,7 @@ function cntDocBlock(x, hasShifts, bench) {
   }
   h += '</tbody><tfoot><tr><td>Totale turni</td><td>' + (showT ? x.ok : '–') + '</td><td></td><td>' + (showT ? fmtEuro(x.centsT / 100) : '–') + '</td></tr></tfoot></table>';
   }
-  if (showT && x.conv.nTurni && x.centsT) h += '<div class="c-sec" style="margin-top:14px">Convenienza del turno: costo per referto</div>' + cntConvTable(x.conv.list, x.bench || {}, x.conv);
+  if (showT && x.conv.units && x.centsT) h += '<div class="c-sec" style="margin-top:14px">Convenienza del turno: costo per referto</div>' + cntConvTable(x.conv.list, x.bench || {}, x.conv);
   x.warn.forEach(w => { h += '<div class="c-w">⚠ ' + escHtml(w) + '</div>'; });
   h += '<div class="c-grand"><span>' + (!showTurniTb ? (x.hasCons ? 'Esami a consuntivo ' + fmtEuro(x.centsE / 100) : 'Esami refertati ' + x.esami) : x.hasCons ? 'Turni ' + fmtEuro(x.centsT / 100) + ' + Esami a consuntivo ' + fmtEuro(x.centsE / 100) : 'Esami refertati ' + x.esami + ' · Turni conteggiati ' + (showT ? x.ok : '–')) + '</span><b>Totale ' + fmtEuro(total / 100) + '</b></div>';
   return h + '</div></details>';
@@ -2435,22 +2440,10 @@ function cntRender() {
     + '<div class="c-chip"><b>' + fmtEuro(T.centsT / 100) + '</b><span>compenso turni</span></div>'
     + (T.anyCons ? '<div class="c-chip"><b>' + fmtEuro(T.centsE / 100) + '</b><span>compenso esami a consuntivo</span></div>' : '')
     + '<div class="c-chip tot"><b>' + fmtEuro((T.centsT + T.centsE) / 100) + '</b><span>totale mese</span></div></div>';
-  if (hasShifts && R.convTot.turni) {
-    const C = R.convTot;
-    h += '<details class="c-det" open><summary>📊 Convenienza dei turni — costo per referto (' + C.turni + ' turni · ' + fmtEuro(C.centsT / 100) + ')</summary><div style="max-height:none">'
-      + 'Costo dei turni al netto di quanto pagato a consuntivo, ripartito sugli esami coperti dal turno. È una stima: il costo di ogni turno è diviso tra gli esami che quel tipo di turno copre '
-      + '(turno ECG → ECG · holter → holter cardiaco e pressorio · 16hc → holter cardiaco · completo e domenica → tutti gli esami del giorno), '
-      + 'in proporzione al <b>peso</b> di ogni esame. Il «consuntivo medio» è la media delle tariffe a consuntivo dei medici in elenco, usata come termine di paragone.'
-      + '<div class="c-sec" style="margin-top:12px">Peso di ogni esame <small class="mut">(modificabile; di base il prezzo medio a consuntivo, altrimenti HC 3 · HP 1,5 · ECG 1)</small></div>'
-      + '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:6px">' + C.list.map(r => '<label style="display:flex;gap:6px;align-items:center;font-weight:600">' + escHtml(r.t)
-        + '<input type="number" min="0.1" step="0.1" data-peso="' + escHtml(r.t) + '" value="' + +cntPeso(r.t, R.bench).toFixed(2) + '" style="width:72px;padding:4px 6px;border:1px solid #dbe3ee;border-radius:8px"></label>').join('')
-      + '<button class="r-btn ghost" data-cnt="pesireset">Ripristina pesi</button></div>'
-      + cntConvTable(C.list, R.bench, C)
-      + '<div class="c-sec" style="margin-top:14px">Per medico</div><table class="c-tb"><thead><tr><th>Medico</th><th>Turni</th><th>Costo turni</th><th>Esami coperti</th><th>€ per referto</th><th>Turno vs consuntivo</th></tr></thead><tbody>'
-      + C.perDoc.sort((a, b) => b.centsT - a.centsT).map(r => '<tr><td>' + escHtml(r.nome) + '</td><td>' + r.turni + '</td><td>' + fmtEuro(r.centsT / 100) + '</td><td>' + r.cov + '</td>'
-        + '<td><b>' + (r.cov ? fmtEuro(r.centsT / r.cov / 100) : '—') + '</b></td><td>' + (r.bm ? '<span class="' + (r.bm.diff >= 0 ? 'okk' : 'noo') + '">' + (r.bm.diff >= 0 ? 'risparmio ' : 'extra ') + fmtEuro(Math.abs(r.bm.diff) / 100) + '</span>' : '<span class="mut">—</span>') + '</td></tr>').join('')
-      + '</tbody></table></div></details>';
-  }
+  if (hasShifts && R.convTot.list.length) {
+    cnt.convHtml = cntConvModalHtml(R.convTot, R.bench);
+    h += '<div style="margin:12px 0"><button class="r-btn primary" data-cnt="conv">📊 Convenienza dei turni</button></div>';
+  } else cnt.convHtml = '';
   const withData = R.rows.filter(x => x.esami || x.inCal), without = R.rows.filter(x => !x.esami && !x.inCal);
   h += '<div class="c-docs">' + withData.map(x => cntDocBlock(x, hasShifts, R.bench)).join('') + '</div>';
   if (without.length) h += '<details class="c-det"><summary>Medici attivi senza esami né turni nel mese (' + without.length + ')</summary><div>' + without.map(x => escHtml(x.d.nome)).join(' · ') + '</div></details>';
@@ -2646,14 +2639,10 @@ async function maybeImportLegacy() {
       if (a === 'prev') cntGo(-1); else if (a === 'next') cntGo(1);
       else if (a === 'del') cntDelete(); else if (a === 'reload') cntLoad();
       else if (a === 'expand' || a === 'collapse') document.querySelectorAll('#cnt-body .c-doc').forEach(e => { e.open = a === 'expand'; });
-      else if (a === 'pesireset') { CNT_PESI = {}; try { localStorage.removeItem('cnt_pesi'); } catch (e) {} cntRender(); }
+      else if (a === 'conv') { byId('conv-body').innerHTML = cnt.convHtml || ''; openModal('conv-modal'); }
       else if (a === 'shifts') { const my = ++cnt.req; cnt.shiftsLoading = true; cntRender(); cntLoadShifts(my).then(() => { if (my === cnt.req) cntRender(); }); }
     });
     byId('cnt-search').addEventListener('input', e => { cnt.q = e.target.value; cntApplyFilter(); });
-    root.addEventListener('change', e => {
-      const t = e.target.dataset && e.target.dataset.peso;
-      if (t) { const v = parseFloat(String(e.target.value).replace(',', '.')); if (v > 0) CNT_PESI[t] = v; else delete CNT_PESI[t]; try { localStorage.setItem('cnt_pesi', JSON.stringify(CNT_PESI)); } catch (x) {} cntRender(); }
-    });
     root.addEventListener('change', e => { if (e.target.id === 'cnt-file' && e.target.files[0]) { const f = e.target.files[0]; e.target.value = ''; cntUpload(f); } });
     root.addEventListener('dragover', e => { const d = e.target.closest('.c-drop'); if (d) { e.preventDefault(); d.classList.add('over'); } });
     root.addEventListener('dragleave', e => { const d = e.target.closest('.c-drop'); if (d) d.classList.remove('over'); });
@@ -2709,10 +2698,10 @@ async function maybeImportLegacy() {
   // chiusura modali: pulsanti ✕/Annulla, click sullo sfondo, tasto Esc
   document.addEventListener('click', e => {
     const c = e.target.closest('[data-close]');
-    if (c) { c.dataset.close === 'doc' ? closeDoctorModal() : closeUserModal(); return; }
+    if (c) { c.dataset.close === 'doc' ? closeDoctorModal() : c.dataset.close === 'conv' ? closeModal('conv-modal') : closeUserModal(); return; }
     if (e.target.classList && e.target.classList.contains('r-modal-bg')) closeModal(e.target.id);
   });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDoctorModal(); closeUserModal(); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDoctorModal(); closeUserModal(); closeModal('conv-modal'); } });
 })();
 
 // ─── UI HELPERS ───────────────────────────────────────────────

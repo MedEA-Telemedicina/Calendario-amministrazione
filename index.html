@@ -1962,6 +1962,8 @@ function cntMinutes(v) {
 }
 // fascia del turno: prima delle 14:30 = mattina, dalle 14:30 = pomeriggio (gli orari fuori dalle 8:30-20:30 vanno al turno più vicino)
 const cntSlot = min => (min < CNT_H_SPLIT ? 'mat' : 'pom');
+// tipologie di esame da ignorare del tutto (non contano né come esami né come giorno con esami per il turno)
+const cntIgnorato = t => /(^|[^A-Z])HIGO([^A-Z]|$)/.test(String(t).toUpperCase()) || String(t).toUpperCase().includes('SATURIMETRIA NOTTURNA');
 // verifica del mese + aggregazione (medico -> giorno -> tipologia -> n)
 function cntAnalyze(rows, ym) {
   if (!rows || rows.length < 2) throw new Error('Il file è vuoto.');
@@ -1981,7 +1983,7 @@ function cntAnalyze(rows, ym) {
     throw new Error('Mese non corretto: il file contiene esami di ' + det + ', ma hai selezionato ' + ymLabel(ym) + '. Controlla il file oppure cambia mese.');
   }
   // 2) aggregazione
-  const doctors = {}, ecgOre = {}, ign = { rifiutati: 0, senzaMedico: 0, fuoriMese: 0, dataNonValida: 0 };
+  const doctors = {}, ecgOre = {}, ign = { rifiutati: 0, senzaMedico: 0, fuoriMese: 0, dataNonValida: 0, tipiIgnorati: 0 };
   let counted = 0;
   body.forEach(r => {
     if (normTxt(r[iS]).trim() !== 'refertato') { ign.rifiutati++; return; }
@@ -1991,6 +1993,7 @@ function cntAnalyze(rows, ym) {
     if (!d) { ign.dataNonValida++; return; }
     if (d.slice(0, 7) !== ym) { ign.fuoriMese++; return; }
     const t = String(r[iT] || '').replace(/\s+/g, ' ').trim().toUpperCase() || 'ALTRO';
+    if (cntIgnorato(t)) { ign.tipiIgnorati++; return; }
     const a = doctors[med] || (doctors[med] = {}), b = a[d] || (a[d] = {});
     b[t] = (b[t] || 0) + 1; counted++;
     // ECG per fascia oraria (solo se il file riporta anche l'ora di refertazione)
@@ -2356,14 +2359,15 @@ function cntCompute() {
     Object.entries(days).forEach(([day, z]) => { const a = e[day] || (e[day] = { mat: 0, pom: 0 }); a.mat += z.mat || 0; a.pom += z.pom || 0; });
   });
   Object.entries(dati.doctors || {}).forEach(([name, days]) => {
-    let n = 0; Object.values(days).forEach(t => Object.values(t).forEach(v => n += v));
+    let n = 0; Object.values(days).forEach(t => Object.entries(t).forEach(([k, v]) => { if (!cntIgnorato(k)) n += v; }));
     const d = cntMatch(name, matchers);
     if (!d) { unmatched.push({ name, n }); return; }
     if (!d.attivo) { inactive.push({ name, n, doc: d.nome }); return; }
     const e = byDoc.get(d.id) || byDoc.set(d.id, {}).get(d.id);
     Object.entries(days).forEach(([day, types]) => {
+      const ent = Object.entries(types).filter(([t]) => !cntIgnorato(t)); if (!ent.length) return;
       const a = e[day] || (e[day] = {});
-      Object.entries(types).forEach(([t, v]) => a[t] = (a[t] || 0) + v);
+      ent.forEach(([t, v]) => a[t] = (a[t] || 0) + v);
     });
   });
   const shiftsBy = new Map(), shiftNoOwner = {};
@@ -2566,6 +2570,7 @@ function cntRender() {
   if (ign.rifiutati) ignTxt.push(ign.rifiutati + ' esami rifiutati/non refertati');
   if (ign.senzaMedico) ignTxt.push(ign.senzaMedico + ' refertati senza medico');
   if (ign.fuoriMese) ignTxt.push(ign.fuoriMese + ' refertati in un altro mese (non conteggiati qui)');
+  if (ign.tipiIgnorati) ignTxt.push(ign.tipiIgnorati + ' esami di tipologie ignorate (HIGO, saturimetria notturna)');
   if (ign.dataNonValida) ignTxt.push(ign.dataNonValida + ' senza data di refertazione valida');
   if (ignTxt.length) h += '<details class="c-det"><summary>Righe escluse dal conteggio</summary><div>' + ignTxt.map(escHtml).join('<br>') + '</div></details>';
   const un = R.unmatched.filter(x => x.n > 0).sort((a, b) => b.n - a.n);

@@ -2259,23 +2259,25 @@ function cntBenchSaving(list, bench) {
   return any ? { ref, cost, diff: ref - cost } : null;
 }
 const cntDiffTxt = d => d == null ? '<span class="mut">—</span>' : '<span class="' + (d >= 0 ? 'okk' : 'noo') + '">' + (d >= 0 ? 'risparmio ' : 'extra ') + fmtEuro(Math.abs(d) / 100) + '</span>';
+const cntDiffEx = d => d == null ? '<span class="mut">—</span>' : '<span class="' + (d >= 0 ? 'okk' : 'noo') + '">' + (d >= 0 ? 'risparmio ' : 'extra ') + fmtEuro(Math.abs(d)) + ' / esame</span>';
+const cntSavEx = (bench, t, costEur) => bench[t] != null && costEur != null ? bench[t] - costEur : null;
 const cntShort = { 'ECG': 'ECG', 'HOLTER CARDIACO': 'Holter ECG', 'HOLTER PRESSORIO': 'Holter pressorio', 'HOLTER CARDIACO 12D': 'Holter 12D' };
 function cntConvTable(list, bench, tot) {
   const hasCons = list.some(r => r.cCons);
   let h = '<div style="overflow-x:auto">';
   if (tot.unit) h += '<div class="r-usub" style="margin:4px 0 8px">Compenso turni <b>' + fmtEuro(tot.centsT / 100) + '</b> ÷ <b>' + tot.units.toLocaleString('it-IT') + '</b> unità di peso = <b>' + fmtEuro(tot.unit / 100) + '</b> per unità</div>';
   h += '<table class="c-tb"><thead><tr><th>Tipologia</th><th>Peso</th><th>Esami refertati</th><th>Coperti dal turno</th><th>€ per referto</th><th>Costo attribuito</th>'
-    + '<th>Consuntivo medio (riferimento)</th><th>Turno vs consuntivo</th>' + (hasCons ? '<th>A consuntivo (scorporato)</th>' : '') + '</tr></thead><tbody>';
+    + '<th>Consuntivo medio (riferimento)</th><th>Risparmio per esame</th>' + (hasCons ? '<th>A consuntivo (scorporato)</th>' : '') + '</tr></thead><tbody>';
   list.forEach(r => {
-    const bm = bench[r.t], d = bm != null && r.cov ? r.cov * bm * 100 - r.c : null;
+    const bm = bench[r.t], d = bm != null && r.cov && r.c ? bm - r.c / r.cov / 100 : null;
     h += '<tr><td>' + escHtml(cntShort[r.t] || r.t) + '</td><td>' + r.w + '</td><td>' + r.n.toLocaleString('it-IT') + '</td><td>' + r.cov.toLocaleString('it-IT') + '</td>'
       + '<td><b>' + (r.cov && r.c ? fmtEuro(r.c / r.cov / 100) : '<span class="mut">—</span>') + '</b></td><td>' + (r.c ? fmtEuro(r.c / 100) : '<span class="mut">—</span>') + '</td>'
-      + '<td>' + (bm != null ? fmtEuro(bm) : '<span class="mut">—</span>') + '</td><td>' + cntDiffTxt(d) + '</td>'
+      + '<td>' + (bm != null ? fmtEuro(bm) : '<span class="mut">—</span>') + '</td><td>' + cntDiffEx(d) + '</td>'
       + (hasCons ? '<td>' + (r.cCons ? fmtEuro(r.cCons / 100) : '<span class="mut">—</span>') + '</td>' : '') + '</tr>';
   });
   const cov = list.reduce((a, r) => a + r.cov, 0), bs = cntBenchSaving(list, bench);
   h += '</tbody><tfoot><tr><td>Totale</td><td></td><td>' + list.reduce((a, r) => a + r.n, 0).toLocaleString('it-IT') + '</td><td>' + cov.toLocaleString('it-IT') + '</td>'
-    + '<td>' + (cov ? fmtEuro(tot.centsT / cov / 100) : '—') + '</td><td>' + fmtEuro(tot.centsT / 100) + '</td><td></td><td>' + (bs ? cntDiffTxt(bs.diff) : '') + '</td>'
+    + '<td></td><td>' + fmtEuro(tot.centsT / 100) + '</td><td></td><td></td>'
     + (hasCons ? '<td>' + fmtEuro(list.reduce((a, r) => a + r.cCons, 0) / 100) + '</td>' : '') + '</tr></tfoot></table></div>';
   return h;
 }
@@ -2283,19 +2285,18 @@ function cntPesiTxt() { return Object.keys(CNT_PESI).map(t => escHtml(cntShort[t
 // matrice: una riga per tipologia di turno, una colonna per tipologia di esame (€ per referto)
 function cntGrpMatrix(G, bench, withDoc) {
   const tps = Object.keys(CNT_PESI);
-  let h = '<div style="overflow-x:auto"><table class="c-tb"><thead><tr><th>' + (withDoc ? 'Medico' : 'Tipo di turno') + '</th><th>Turni</th><th>Compenso turni</th><th>Esami coperti</th>'
-    + tps.map(t => '<th>' + escHtml(cntShort[t]) + ' (€/referto)</th>').join('') + '<th>€ medio per referto</th><th>Turno vs consuntivo</th></tr></thead><tbody>';
-  let T = { turni: 0, centsT: 0, cov: 0 };
+  let h = '<div style=\"overflow-x:auto\"><table class=\"c-tb\"><thead><tr><th>' + (withDoc ? 'Medico' : 'Tipo di turno') + '</th><th>Turni</th><th>Compenso turni</th>'
+    + tps.map(t => '<th>' + escHtml(cntShort[t]) + '<br><span style=\"font-weight:500\">€ per referto · risparmio per esame</span></th>').join('') + '</tr></thead><tbody>';
   G.forEach(r => {
-    const bs = cntBenchSaving(r.list, bench), by = {}; r.list.forEach(x => by[x.t] = x);
-    T.turni += r.turni; T.centsT += r.centsT; T.cov += r.covTot;
-    h += '<tr><td>' + escHtml(r.l) + '</td><td>' + r.turni + '</td><td>' + fmtEuro(r.centsT / 100) + '</td><td>' + (+r.covTot.toFixed(1)).toLocaleString('it-IT') + '</td>'
-      + tps.map(t => { const x = by[t]; return '<td>' + (x && x.cov && x.c ? '<b>' + fmtEuro(x.c / x.cov / 100) + '</b><small style="color:#9aa5b1">' + (+x.cov.toFixed(1)).toLocaleString('it-IT') + ' es.</small>' : '<span class="mut">—</span>') + '</td>'; }).join('')
-      + '<td><b>' + (r.covTot ? fmtEuro(r.centsT / r.covTot / 100) : '—') + '</b></td><td>' + (bs ? cntDiffTxt(bs.diff) : '<span class="mut">—</span>') + '</td></tr>';
+    const by = {}; r.list.forEach(x => by[x.t] = x);
+    h += '<tr><td>' + escHtml(r.l) + '</td><td>' + r.turni + '</td><td>' + fmtEuro(r.centsT / 100) + '</td>'
+      + tps.map(t => {
+        const x = by[t]; if (!x || !x.cov || !x.c) return '<td><span class=\"mut\">—</span></td>';
+        const cost = x.c / x.cov / 100;
+        return '<td><b>' + fmtEuro(cost) + '</b><small style=\"color:#9aa5b1\">' + (+x.cov.toFixed(1)).toLocaleString('it-IT') + ' esami</small><small style=\"display:block\">' + cntDiffEx(cntSavEx(bench, t, cost)) + '</small></td>';
+      }).join('') + '</tr>';
   });
-  if (G.length > 1) h += '</tbody><tfoot><tr><td>Totale</td><td>' + T.turni + '</td><td>' + fmtEuro(T.centsT / 100) + '</td><td>' + (+T.cov.toFixed(1)).toLocaleString('it-IT') + '</td>' + tps.map(() => '<td></td>').join('') + '<td>' + (T.cov ? fmtEuro(T.centsT / T.cov / 100) : '—') + '</td><td></td></tr></tfoot></table></div>';
-  else h += '</tbody></table></div>';
-  return h;
+  return h + '</tbody></table></div>';
 }
 function cntConvModalHtml(C, bench, GT) {
   let h = '<div class="r-usub" style="margin-bottom:10px">Per ogni medico: <b>compenso dei turni ÷ somma pesata degli esami</b> = valore di 1 unità di peso; il costo di un referto è il peso moltiplicato per quel valore. '
@@ -2314,11 +2315,10 @@ function cntConvModalHtml(C, bench, GT) {
       + '<div style="height:14px"></div>' : '')
     + '<div class="c-sec">Complessivo (' + C.turni + ' turni · ' + fmtEuro(C.centsT / 100) + ')</div>' + cntConvTable(C.list, bench, C)
     + '<div class="c-sec" style="margin-top:16px">Per medico — costo per referto</div><div style="overflow-x:auto"><table class="c-tb"><thead><tr><th>Medico</th><th>Turni</th><th>Compenso turni</th><th>1 unità di peso</th>'
-    + Object.keys(CNT_PESI).map(t => '<th>' + escHtml(cntShort[t]) + '</th>').join('') + '<th>Turno vs consuntivo</th></tr></thead><tbody>'
+    + Object.keys(CNT_PESI).map(t => '<th>' + escHtml(cntShort[t]) + '<br><span style="font-weight:500">€ per referto · risparmio per esame</span></th>').join('') + '</tr></thead><tbody>'
     + C.perDoc.sort((a, b) => b.centsT - a.centsT).map(r => {
-      const bs = cntBenchSaving(r.list, bench);
       return '<tr><td>' + escHtml(r.nome) + '</td><td>' + r.turni + '</td><td>' + fmtEuro(r.centsT / 100) + '</td><td>' + fmtEuro(r.unit / 100) + '</td>'
-        + Object.keys(CNT_PESI).map(t => '<td><b>' + fmtEuro(r.unit * CNT_PESI[t] / 100) + '</b></td>').join('') + '<td>' + (bs ? cntDiffTxt(bs.diff) : '<span class="mut">—</span>') + '</td></tr>';
+        + Object.keys(CNT_PESI).map(t => { const cost = r.unit * CNT_PESI[t] / 100; return '<td><b>' + fmtEuro(cost) + '</b><small style="display:block">' + cntDiffEx(cntSavEx(bench, t, cost)) + '</small></td>'; }).join('') + '</tr>';
     }).join('') + '</tbody></table></div>';
   return h;
 }

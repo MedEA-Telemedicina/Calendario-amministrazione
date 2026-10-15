@@ -822,7 +822,7 @@
     <div class="r-modal" style="max-width:920px" role="dialog" aria-modal="true" aria-labelledby="conv-title">
       <div class="r-modal-h"><h3 id="conv-title">📊 Convenienza dei turni</h3><button class="r-x" type="button" data-close="conv" aria-label="Chiudi">✕</button></div>
       <div class="r-modal-b" id="conv-body"></div>
-      <div class="r-modal-f"><button class="r-btn ghost" type="button" data-close="conv">Chiudi</button></div>
+      <div class="r-modal-f"><button class="r-btn primary" type="button" id="conv-xlsx">⬇ Esporta Excel</button><button class="r-btn ghost" type="button" data-close="conv">Chiudi</button></div>
     </div>
   </div>
 
@@ -2298,6 +2298,30 @@ function cntGrpMatrix(G, bench, withDoc) {
   });
   return h + '</tbody></table></div>';
 }
+function cntConvExport() {
+  const D = cnt.convData; if (!D) { toast('Nessun dato da esportare', 'err'); return; }
+  const R = D.R, bench = R.bench, tps = Object.keys(CNT_PESI), r2 = x => Math.round(x * 100) / 100;
+  const cellsOf = list => { const by = {}; list.forEach(x => by[x.t] = x); const o = [];
+    tps.forEach(t => { const x = by[t], ok = x && x.cov && x.c, cost = ok ? x.c / x.cov / 100 : null;
+      o.push(x ? r2(x.cov) : '', ok ? r2(cost) : '', bench[t] != null ? r2(bench[t]) : '', ok && bench[t] != null ? r2(bench[t] - cost) : ''); });
+    return o; };
+  const hdr = tps.flatMap(t => [cntShort[t] + ' – esami coperti', cntShort[t] + ' – € per referto', cntShort[t] + ' – consuntivo medio (€)', cntShort[t] + ' – risparmio per esame (€)']);
+  const wb = XLSX.utils.book_new();
+  const add = (name, aoa, first) => { const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = aoa[0].map((h, i) => ({ wch: i < (first || 1) ? 26 : 16 })); XLSX.utils.book_append_sheet(wb, ws, name); };
+  const gl = CNT_GRP.filter(G => R.convGrp[G.g]);
+  add('Per tipo di turno', [['Tipo di turno', 'Turni', 'Compenso turni (€)', ...hdr], ...gl.map(G => { const g = R.convGrp[G.g]; return [G.l, g.turni, r2(g.centsT / 100), ...cellsOf(g.list)]; })], 1);
+  const dd = []; gl.forEach(G => R.convGrp[G.g].perDoc.slice().sort((a, b) => b.centsT - a.centsT).forEach(d => dd.push([G.l, d.nome, d.turni, r2(d.centsT / 100), ...cellsOf(d.list)])));
+  add('Per medico e tipo di turno', [['Tipo di turno', 'Medico', 'Turni', 'Compenso turni (€)', ...hdr], ...dd], 2);
+  const C = R.convTot;
+  add('Complessivo', [['Tipologia', 'Peso', 'Esami refertati', 'Coperti dal turno', '€ per referto', 'Costo attribuito (€)', 'Consuntivo medio (€)', 'Risparmio per esame (€)', 'A consuntivo, scorporato (€)'],
+    ...C.list.map(r => { const ok = r.cov && r.c, cost = ok ? r.c / r.cov / 100 : null, bm = bench[r.t];
+      return [cntShort[r.t] || r.t, r.w, r.n, r2(r.cov), ok ? r2(cost) : '', r2(r.c / 100), bm != null ? r2(bm) : '', ok && bm != null ? r2(bm - cost) : '', r.cCons ? r2(r.cCons / 100) : '']; })], 1);
+  add('Per medico', [['Medico', 'Turni', 'Compenso turni (€)', '1 unità di peso (€)', ...tps.flatMap(t => [cntShort[t] + ' – € per referto', cntShort[t] + ' – risparmio per esame (€)'])],
+    ...C.perDoc.slice().sort((a, b) => b.centsT - a.centsT).map(r => [r.nome, r.turni, r2(r.centsT / 100), r2(r.unit / 100), ...tps.flatMap(t => { const c = r.unit * CNT_PESI[t] / 100; return [r2(c), bench[t] != null ? r2(bench[t] - c) : '']; })])], 1);
+  add('Pesi usati', [['Tipologia', 'Peso'], ...tps.map(t => [cntShort[t] || t, CNT_PESI[t]])], 1);
+  XLSX.writeFile(wb, 'convenienza_turni_' + D.ym + '.xlsx');
+  toast('Excel scaricato', 'ok');
+}
 function cntConvModalHtml(C, bench, GT) {
   let h = '<div class="r-usub" style="margin-bottom:10px">Per ogni medico: <b>compenso dei turni ÷ somma pesata degli esami</b> = valore di 1 unità di peso; il costo di un referto è il peso moltiplicato per quel valore. '
     + 'Pesi: <b>' + cntPesiTxt() + '</b>. Gli esami pagati a consuntivo sono scorporati; gli altri tipi di esame non rientrano nel calcolo. '
@@ -2532,7 +2556,7 @@ function cntRender() {
     + (T.anyCons ? '<div class="c-chip"><b>' + fmtEuro(T.centsE / 100) + '</b><span>compenso esami a consuntivo</span></div>' : '')
     + '<div class="c-chip tot"><b>' + fmtEuro((T.centsT + T.centsE) / 100) + '</b><span>totale mese</span></div></div>';
   if (hasShifts && R.convTot.list.length) {
-    cnt.convHtml = cntConvModalHtml(R.convTot, R.bench, R.convGrp);
+    cnt.convHtml = cntConvModalHtml(R.convTot, R.bench, R.convGrp); cnt.convData = { R, ym: cnt.ym };
     h += '<div style="margin:12px 0"><button class="r-btn primary" data-cnt="conv">📊 Convenienza dei turni</button></div>';
   } else cnt.convHtml = '';
   const withData = R.rows.filter(x => x.esami || x.inCal), without = R.rows.filter(x => !x.esami && !x.inCal);
@@ -2733,6 +2757,7 @@ async function maybeImportLegacy() {
       else if (a === 'conv') { byId('conv-body').innerHTML = cnt.convHtml || ''; openModal('conv-modal'); }
       else if (a === 'shifts') { const my = ++cnt.req; cnt.shiftsLoading = true; cntRender(); cntLoadShifts(my).then(() => { if (my === cnt.req) cntRender(); }); }
     });
+    byId('conv-xlsx').addEventListener('click', cntConvExport);
     byId('conv-modal').addEventListener('click', e => {
       const b = e.target.closest('[data-pesi]'); if (!b) return;
       if (b.dataset.pesi === 'reset') Object.assign(CNT_PESI, CNT_PESI_DEF);

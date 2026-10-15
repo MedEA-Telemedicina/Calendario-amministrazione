@@ -388,7 +388,6 @@
   .c-tb th { text-align: left; font-size: 11.5px; color: #7b8794; font-weight: 700; padding: 6px 10px; border-bottom: 2px solid #e3e8ef; }
   .c-tb td { padding: 7px 10px; border-bottom: 1px solid #f0f3f7; vertical-align: top; }
   .c-tb th:not(:first-child), .c-tb td:not(:first-child) { text-align: right; }
-  .c-tb td small.okk, .c-tb td small.mut { color: inherit; font-size: 10.5px; font-weight: 600; } .c-tb td small.okk { color: #1e7e34; } .c-tb td small.mut { color: #9aa5b1; }
   .c-tb td small { display: block; color: #c25e00; font-size: 11px; font-weight: 600; }
   .c-tb tfoot td { font-weight: 800; border-top: 2px solid #dbe3ee; border-bottom: none; background: #f8fafc; }
   .c-tb .mut, .mut { color: #9aa5b1; font-weight: 500; }
@@ -815,6 +814,15 @@
         <button class="r-btn ghost" type="button" data-close="doc">Annulla</button>
         <button class="r-btn primary" id="m-save" type="button">💾 Salva medico</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ═══ MODALE CONVENIENZA TURNI ═══ -->
+  <div class="r-modal-bg" id="conv-modal">
+    <div class="r-modal" style="max-width:920px" role="dialog" aria-modal="true" aria-labelledby="conv-title">
+      <div class="r-modal-h"><h3 id="conv-title">📊 Convenienza dei turni</h3><button class="r-x" type="button" data-close="conv" aria-label="Chiudi">✕</button></div>
+      <div class="r-modal-b" id="conv-body"></div>
+      <div class="r-modal-f"><button class="r-btn ghost" type="button" data-close="conv">Chiudi</button></div>
     </div>
   </div>
 
@@ -1943,6 +1951,17 @@ function cntDate(v) {
   m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})/); if (m) return m[3] + '-' + pad2(m[2]) + '-' + pad2(m[1]);
   return null;
 }
+// fasce orarie dei turni: mattina 08:30-14:30, pomeriggio 14:30-20:30
+const CNT_H_INI = 8 * 60 + 30, CNT_H_SPLIT = 14 * 60 + 30, CNT_H_FINE = 20 * 60 + 30;
+// minuti dalla mezzanotte se la cella contiene anche l'ora (numero Excel con parte frazionaria, oppure testo "... hh:mm")
+function cntMinutes(v) {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') { const f = v - Math.floor(v); return f > 0 ? Math.round(f * 1440) % 1440 : null; }
+  const m = String(v).match(/[T\s](\d{1,2}):(\d{2})/);
+  return m ? (+m[1]) * 60 + (+m[2]) : null;
+}
+// fascia del turno: prima delle 14:30 = mattina, dalle 14:30 = pomeriggio (gli orari fuori dalle 8:30-20:30 vanno al turno più vicino)
+const cntSlot = min => (min < CNT_H_SPLIT ? 'mat' : 'pom');
 // verifica del mese + aggregazione (medico -> giorno -> tipologia -> n)
 function cntAnalyze(rows, ym) {
   if (!rows || rows.length < 2) throw new Error('Il file è vuoto.');
@@ -1962,7 +1981,7 @@ function cntAnalyze(rows, ym) {
     throw new Error('Mese non corretto: il file contiene esami di ' + det + ', ma hai selezionato ' + ymLabel(ym) + '. Controlla il file oppure cambia mese.');
   }
   // 2) aggregazione
-  const doctors = {}, ign = { rifiutati: 0, senzaMedico: 0, fuoriMese: 0, dataNonValida: 0 };
+  const doctors = {}, ecgOre = {}, ign = { rifiutati: 0, senzaMedico: 0, fuoriMese: 0, dataNonValida: 0 };
   let counted = 0;
   body.forEach(r => {
     if (normTxt(r[iS]).trim() !== 'refertato') { ign.rifiutati++; return; }
@@ -1974,8 +1993,15 @@ function cntAnalyze(rows, ym) {
     const t = String(r[iT] || '').replace(/\s+/g, ' ').trim().toUpperCase() || 'ALTRO';
     const a = doctors[med] || (doctors[med] = {}), b = a[d] || (a[d] = {});
     b[t] = (b[t] || 0) + 1; counted++;
+    // ECG per fascia oraria (solo se il file riporta anche l'ora di refertazione)
+    if (t === 'ECG') {
+      const mn = cntMinutes(r[iR]);
+      if (mn != null) { const o = ecgOre[med] || (ecgOre[med] = {}), z = o[d] || (o[d] = { mat: 0, pom: 0 }); z[cntSlot(mn)]++; }
+    }
   });
-  return { righe: body.length, counted, dati: { v: 1, doctors, ignorati: ign } };
+  const dati = { v: 1, doctors, ignorati: ign };
+  if (Object.keys(ecgOre).length) dati.ecgOre = ecgOre;
+  return { righe: body.length, counted, dati };
 }
 
 // ── associazione nome file ("Cognome Nome") -> medico in elenco ("COGNOME N.") ──
@@ -2000,43 +2026,84 @@ function cntMatch(csvName, matchers) {
 
 // ── turni: stessi eventi e stesse categorie della sezione Turni (calendario "Medici in Turno") ──
 const CNT_MAT = ['MATTINA', 'MATTINO', 'AM', 'MORNING'], CNT_POM = ['POMERIGGIO', 'POMERIGIO', 'PM', 'AFTERNOON'];
-function cntShiftsFrom(list, ym) {
-  return list.filter(ev => ev.date && ev.date.slice(0, 7) === ym && !ev.isEcgOnly && ev.parsed && ev.parsed.doctorName).map(ev => {
-    const p = ev.parsed, t = String(p.turno || '').toUpperCase();
-    const time = CNT_MAT.includes(t) ? 'mat' : CNT_POM.includes(t) ? 'pom' : '';
-    const kind = ev.isHolter ? (p.holter16 ? 'h16' : 'holter') : ev.isEcg ? 'ecg' : time ? 'std' : 'altro';
-    return { date: ev.date, doctor: p.doctorName, kind, time, title: ev.summary || '' };
+// Parser dedicato ai titoli del calendario "Medici in Turno" nel formato "COGNOME I. <tipo turno>"
+// (es. "ANGELLOTTI A. ECG", "Angellotti A. completo", "Rossi M. holter 16"). Accetta anche il vecchio
+// formato "01 COGNOME MATTINA". Restituisce una voce per ogni medico citato nel titolo.
+// medici esclusi sempre dal conteggio turni (pagati solo a consuntivo)
+const CNT_ESCLUSI = ['gregori'];
+function cntParseShiftTitle(title) {
+  const raw = String(title || '').trim();
+  if (!raw) return [];
+  const hadPrefix = /^\s*0[12]\s+/.test(raw);           // prefisso 01/02 = turno completo (se non c'è altro tipo)
+  let u = raw.toUpperCase().replace(/^\s*0[12]\s+/, '');
+  // tipo di turno (priorità: holter 16 > holter > ecg > completo > mattina/pomeriggio)
+  const isH = /\bHOLTER\b/.test(u);
+  const h16 = (isH && /\b16\b|16\s*H\.?C/.test(u)) || /\b16\s*H\.?C\b/.test(u) || /\bH\s*16\b/.test(u);
+  let kind, time = '';
+  if (h16) kind = 'h16';
+  else if (isH) kind = 'holter';
+  else if (/\bECG\b/.test(u)) kind = 'ecg';
+  else if (/\bCOMPLET[OA]\b/.test(u)) kind = 'std';
+  else kind = hadPrefix ? 'std' : 'holter';            // "01 BINI R. MATTINA" = completo; solo "TORLONE F." = holter
+  if (/\b(MATTINA|MATTINO|AM|MORNING)\b/.test(u)) time = 'mat';
+  else if (/\b(POMERIGGIO|POMERIGIO|PM|AFTERNOON)\b/.test(u)) time = 'pom';
+  // più medici nello stesso titolo: "ROSSI M. / BIANCHI L. ECG"
+  return u.split(/[\/,+&;]/).map(part => {
+    const name = part
+      .replace(/\([^)]*\)/g, ' ')                       // il testo tra parentesi indica il tipo, non fa parte del nome
+      .replace(/[()\[\]\-–—:|]/g, ' ')
+      .replace(/\b\d+\s*H\.?[CP]\b/g, ' ')
+      .replace(/\bH\s*16\b/g, ' ')
+      .replace(/\b(HOLTER|ECG|COMPLET[OA]|TURNO|MATTINA|MATTINO|POMERIGGIO|POMERIGIO|MORNING|AFTERNOON|AM|PM)\b/g, ' ')
+      .replace(/\b(10|16|75|100)\b/g, ' ')
+      .replace(/\s+/g, ' ').trim();
+    return name && /[A-Z]{2}/.test(name) ? { doctor: name, kind, time, title: raw } : null;
+  }).filter(Boolean);
+}
+// giorni coperti da un evento del calendar (all-day anche su più giorni, oppure con orario)
+function cntEventDays(ev) {
+  if (!ev.start) return [];
+  if (ev.start.date) {
+    const out = [], end = ev.end && ev.end.date ? ev.end.date : null;
+    let d = new Date(ev.start.date + 'T00:00:00'); const e = end ? new Date(end + 'T00:00:00') : null;
+    if (!e || e <= d) return [ev.start.date];
+    for (let i = 0; i < 62 && d < e; i++) { out.push(toISODate(d)); d = addDays(d, 1); }
+    return out;
+  }
+  return ev.start.dateTime ? [ev.start.dateTime.slice(0, 10)] : [];
+}
+function cntShiftsFromItems(items, ym) {
+  const out = [];
+  items.forEach(ev => {
+    if (ev.status === 'cancelled') return;
+    const people = cntParseShiftTitle(ev.summary).filter(p => !CNT_ESCLUSI.includes(nameKey(p.doctor).split(' ')[0]));
+    if (!people.length) return;
+    cntEventDays(ev).forEach(day => {
+      if (day.slice(0, 7) !== ym) return;
+      people.forEach(p => out.push({ date: day, doctor: p.doctor, kind: p.kind, time: p.time, title: p.title }));
+    });
   });
+  return out;
 }
 async function cntLoadShifts(my) {
   cnt.shiftsLoading = true; cnt.shiftsErr = ''; cnt.shifts = null;
   try {
     const [y, m] = cnt.ym.split('-').map(Number), tMin = new Date(y, m - 1, 1), tMax = new Date(y, m, 1);
-    let out;
-    if (currentCalIndex === 1 && loadedMin && loadedMax && loadedMin <= tMin && loadedMax >= tMax && allEvents.length) {
-      out = cntShiftsFrom(allEvents, cnt.ym);          // gli stessi eventi già caricati nella sezione Turni
-    } else {
-      if (typeof gapi === 'undefined' || !gapi.client || !gapi.client.getToken || !gapi.client.getToken())
-        throw new Error('Accesso a Google non attivo: i turni non sono leggibili.');
-      const cal = CALENDARS[1];
-      let items = [], pageToken;
-      do {
-        const p = { calendarId: cal.id, timeMin: tMin.toISOString(), timeMax: tMax.toISOString(), singleEvents: true, orderBy: 'startTime', maxResults: 2500 };
-        if (pageToken) p.pageToken = pageToken;
-        const r = await gapi.client.request({ path: 'https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent(cal.id) + '/events', params: p });
-        items = items.concat(r.result.items || []); pageToken = r.result.nextPageToken;
-      } while (pageToken);
-      const rel = [];
-      items.forEach(ev => {                              // stessa classificazione di loadEvents()
-        if (!ev.start || !ev.start.date) return;
-        const s = (ev.summary || '').trim(), hasEcg = /\bECG\b/i.test(s);
-        if (/^0[12]\s+/i.test(s)) rel.push({ date: ev.start.date, summary: ev.summary, isHolter: false, isEcg: hasEcg, parsed: parseEvent(ev.summary || '', false) });
-        else if (hasEcg) rel.push({ date: ev.start.date, summary: ev.summary, isEcg: true, isEcgOnly: true, parsed: { doctorName: s.toUpperCase(), turno: 'ECG' } });
-        else if (s) rel.push({ date: ev.start.date, summary: ev.summary, isHolter: true, isEcg: false, parsed: parseEvent(ev.summary || '', true) });
-      });
-      out = cntShiftsFrom(rel, cnt.ym);
-    }
+    if (typeof gapi === 'undefined' || !gapi.client || !gapi.client.getToken || !gapi.client.getToken())
+      throw new Error('Accesso a Google non attivo: i turni non sono leggibili.');
+    const cal = CALENDARS[1];                          // calendario "Medici in Turno"
+    let items = [], pageToken;
+    do {
+      const p = { calendarId: cal.id, timeMin: tMin.toISOString(), timeMax: tMax.toISOString(), singleEvents: true, orderBy: 'startTime', maxResults: 2500 };
+      if (pageToken) p.pageToken = pageToken;
+      const r = await gapi.client.request({ path: 'https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent(cal.id) + '/events', params: p });
+      items = items.concat(r.result.items || []); pageToken = r.result.nextPageToken;
+    } while (pageToken);
+    const out = cntShiftsFromItems(items, cnt.ym);
     if (my !== cnt.req) return;
+    // solo le anomalie: eventi attivi il cui titolo non contiene alcun medico riconoscibile
+    cnt.shiftsDiag = { raw: items.length, titles: items.filter(e => e.status !== 'cancelled' && !cntParseShiftTitle(e.summary).length)
+      .map(e => (e.summary || '(senza titolo)') + (e.start && (e.start.date || e.start.dateTime) ? '  [' + (e.start.date || e.start.dateTime).slice(0, 10) + ']' : '')) };
     cnt.shifts = out;
   } catch (e) {
     if (my !== cnt.req) return;
@@ -2047,18 +2114,32 @@ async function cntLoadShifts(my) {
 function cntOwner(k, ms) {
   const c = k.split(' ').filter(Boolean);
   const ex = ms.find(m => nameKey(m.d.nome) === k); if (ex) return ex.d;
+  // calendario "COGNOME I." (anche cognomi composti) <-> elenco con nome per esteso "COGNOME NOME [SECONDO NOME]"
+  const sur = c.slice(), ini = [];
+  while (sur.length > 1 && sur[sur.length - 1].length === 1) ini.unshift(sur.pop());
+  if (ini.length) {
+    const cand = ms.filter(m => {
+      const f = nameKey(m.d.nome).split(' ').filter(Boolean);
+      if (f.length <= sur.length || !sur.every((w, i) => f[i] === w)) return false;
+      const rest = f.slice(sur.length);
+      return rest.length >= ini.length && ini.every((x, i) => rest[i][0] === x);
+    });
+    if (cand.length === 1) return cand[0].d;
+    if (cand.length > 1) return null;                  // ambiguo: stesso cognome e stessa iniziale
+  }
+  // elenco con iniziale puntata ("BERLONI M.") <-> calendario senza iniziale o viceversa
   const cand = ms.filter(m => m.sur.length && m.sur.every((w, i) => c[i] === w) && (
     (m.ini.length && c.length === m.sur.length) || (!m.ini.length && c.length > m.sur.length && c.slice(m.sur.length).every(w => w.length === 1))));
   return cand.length === 1 ? cand[0].d : null;
 }
 // conteggio come nella tabella della sezione Turni
 function cntCal(evs) {
-  const c = { tot: 0, mat: 0, pom: 0, dom: 0, ecg: 0, hol: 0, h16: 0, altro: 0 };
+  const c = { tot: 0, mat: 0, pom: 0, dom: 0, ecg: 0, hol: 0, h16: 0, comp: 0, altro: 0 };
   evs.forEach(ev => {
     c.tot++; if (ev.kind === 'ecg') c.ecg++;
     if (new Date(ev.date + 'T00:00:00').getDay() === 0) c.dom++;
     else if (ev.time === 'mat') c.mat++; else if (ev.time === 'pom') c.pom++;
-    else if (ev.kind === 'ecg') { } else if (ev.kind === 'holter') c.hol++; else if (ev.kind === 'h16') c.h16++; else c.altro++;
+    else if (ev.kind === 'ecg') { } else if (ev.kind === 'holter') c.hol++; else if (ev.kind === 'h16') c.h16++; else if (ev.kind === 'std') c.comp++; else c.altro++;
   });
   return c;
 }
@@ -2089,9 +2170,84 @@ const CNT_TURNI = ['turno_completo', 'turno_ecg_75', 'turno_ecg_100', 'turno_hol
 const GG = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const cents = x => Math.round(x * 100);
 
+// ── convenienza dei turni ──
+// Per ogni medico, sul totale del mese: compenso dei turni ÷ somma pesata degli esami = valore di 1 unità di peso;
+// costo per referto = peso × valore dell'unità. Pesi: ECG 1 · holter cardiaco 3 · holter pressorio 2.
+// Gli esami pagati a consuntivo sono scorporati (restano fuori dal calcolo); gli altri tipi di esame non rientrano.
+const CNT_PESI = { 'ECG': 1, 'HOLTER CARDIACO': 3, 'HOLTER PRESSORIO': 2 };
+function cntConv(typeRows, centsT, nTurni) {
+  const tr = {}; typeRows.forEach(r => tr[r.t] = r);
+  const all = Object.keys(CNT_PESI).map(t => {
+    const r = tr[t], n = r ? r.n : 0;
+    return { t, w: CNT_PESI[t], n, cov: r ? (r.prezzo != null ? r.inc : r.n) : 0, cCons: r ? r.c : 0 };
+  });
+  const units = all.reduce((a, r) => a + r.cov * r.w, 0);
+  const unit = units && centsT ? centsT / units : 0;            // centesimi per 1 unità di peso
+  all.forEach(r => { r.c = r.cov * r.w * unit; });
+  const list = all.filter(r => r.n || r.cov);
+  return { list, centsT, units, unit, covTot: list.reduce((a, r) => a + r.cov, 0), nTurni };
+}
+function cntConvTotals(rows) {
+  const m = {}; let centsT = 0, covTot = 0, turni = 0; const perDoc = [];
+  rows.forEach(x => {
+    const cv = x.conv; if (!cv.units || !cv.centsT) return;
+    centsT += cv.centsT; covTot += cv.covTot; turni += x.ok;
+    cv.list.forEach(r => { const a = m[r.t] || (m[r.t] = { t: r.t, w: r.w, n: 0, cov: 0, c: 0, cCons: 0 }); a.n += r.n; a.cov += r.cov; a.c += r.c; a.cCons += r.cCons; });
+    perDoc.push({ nome: x.d.nome, turni: x.ok, centsT: cv.centsT, unit: cv.unit, list: cv.list });
+  });
+  const list = Object.keys(CNT_PESI).map(t => m[t]).filter(Boolean);
+  return { list, centsT, covTot, turni, perDoc };
+}
+// risparmio rispetto al prezzo medio a consuntivo: (esami coperti × prezzo medio) − costo turno attribuito
+function cntBenchSaving(list, bench) {
+  let ref = 0, cost = 0, any = false;
+  list.forEach(r => { if (bench[r.t] != null && r.cov) { any = true; ref += r.cov * bench[r.t] * 100; cost += r.c; } });
+  return any ? { ref, cost, diff: ref - cost } : null;
+}
+const cntDiffTxt = d => d == null ? '<span class="mut">—</span>' : '<span class="' + (d >= 0 ? 'okk' : 'noo') + '">' + (d >= 0 ? 'risparmio ' : 'extra ') + fmtEuro(Math.abs(d) / 100) + '</span>';
+const cntShort = { 'ECG': 'ECG', 'HOLTER CARDIACO': 'Holter ECG', 'HOLTER PRESSORIO': 'Holter pressorio' };
+function cntConvTable(list, bench, tot) {
+  const hasCons = list.some(r => r.cCons);
+  let h = '<div style="overflow-x:auto">';
+  if (tot.unit) h += '<div class="r-usub" style="margin:4px 0 8px">Compenso turni <b>' + fmtEuro(tot.centsT / 100) + '</b> ÷ <b>' + tot.units.toLocaleString('it-IT') + '</b> unità di peso = <b>' + fmtEuro(tot.unit / 100) + '</b> per unità</div>';
+  h += '<table class="c-tb"><thead><tr><th>Tipologia</th><th>Peso</th><th>Esami refertati</th><th>Coperti dal turno</th><th>€ per referto</th><th>Costo attribuito</th>'
+    + '<th>Consuntivo medio (riferimento)</th><th>Turno vs consuntivo</th>' + (hasCons ? '<th>A consuntivo (scorporato)</th>' : '') + '</tr></thead><tbody>';
+  list.forEach(r => {
+    const bm = bench[r.t], d = bm != null && r.cov ? r.cov * bm * 100 - r.c : null;
+    h += '<tr><td>' + escHtml(cntShort[r.t] || r.t) + '</td><td>' + r.w + '</td><td>' + r.n.toLocaleString('it-IT') + '</td><td>' + r.cov.toLocaleString('it-IT') + '</td>'
+      + '<td><b>' + (r.cov && r.c ? fmtEuro(r.c / r.cov / 100) : '<span class="mut">—</span>') + '</b></td><td>' + (r.c ? fmtEuro(r.c / 100) : '<span class="mut">—</span>') + '</td>'
+      + '<td>' + (bm != null ? fmtEuro(bm) : '<span class="mut">—</span>') + '</td><td>' + cntDiffTxt(d) + '</td>'
+      + (hasCons ? '<td>' + (r.cCons ? fmtEuro(r.cCons / 100) : '<span class="mut">—</span>') + '</td>' : '') + '</tr>';
+  });
+  const cov = list.reduce((a, r) => a + r.cov, 0), bs = cntBenchSaving(list, bench);
+  h += '</tbody><tfoot><tr><td>Totale</td><td></td><td>' + list.reduce((a, r) => a + r.n, 0).toLocaleString('it-IT') + '</td><td>' + cov.toLocaleString('it-IT') + '</td>'
+    + '<td>' + (cov ? fmtEuro(tot.centsT / cov / 100) : '—') + '</td><td>' + fmtEuro(tot.centsT / 100) + '</td><td></td><td>' + (bs ? cntDiffTxt(bs.diff) : '') + '</td>'
+    + (hasCons ? '<td>' + fmtEuro(list.reduce((a, r) => a + r.cCons, 0) / 100) + '</td>' : '') + '</tr></tfoot></table></div>';
+  return h;
+}
+function cntConvModalHtml(C, bench) {
+  let h = '<div class="r-usub" style="margin-bottom:10px">Per ogni medico, sul totale del mese: <b>compenso dei turni ÷ somma pesata degli esami</b> = valore di 1 unità di peso; il costo di un referto è il peso moltiplicato per quel valore. '
+    + 'Pesi: <b>ECG 1 · Holter ECG 3 · Holter pressorio 2</b>. Gli esami pagati a consuntivo sono scorporati; gli altri tipi di esame non rientrano nel calcolo. '
+    + 'Il «consuntivo medio» è la media delle tariffe a consuntivo dei medici in elenco, usata solo come termine di paragone.</div>'
+    + '<div class="c-sec">Complessivo (' + C.turni + ' turni · ' + fmtEuro(C.centsT / 100) + ')</div>' + cntConvTable(C.list, bench, C)
+    + '<div class="c-sec" style="margin-top:16px">Per medico — costo per referto</div><div style="overflow-x:auto"><table class="c-tb"><thead><tr><th>Medico</th><th>Turni</th><th>Compenso turni</th><th>1 unità di peso</th>'
+    + Object.keys(CNT_PESI).map(t => '<th>' + escHtml(cntShort[t]) + '</th>').join('') + '<th>Turno vs consuntivo</th></tr></thead><tbody>'
+    + C.perDoc.sort((a, b) => b.centsT - a.centsT).map(r => {
+      const bs = cntBenchSaving(r.list, bench);
+      return '<tr><td>' + escHtml(r.nome) + '</td><td>' + r.turni + '</td><td>' + fmtEuro(r.centsT / 100) + '</td><td>' + fmtEuro(r.unit / 100) + '</td>'
+        + Object.keys(CNT_PESI).map(t => '<td><b>' + fmtEuro(r.unit * CNT_PESI[t] / 100) + '</b></td>').join('') + '<td>' + (bs ? cntDiffTxt(bs.diff) : '<span class="mut">—</span>') + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
+  return h;
+}
+
 function cntCompute() {
   const dati = cnt.rec.dati, matchers = doctors.map(cntMatcher);
-  const byDoc = new Map(), unmatched = [], inactive = [];
+  const byDoc = new Map(), unmatched = [], inactive = [], oreBy = new Map();
+  Object.entries(dati.ecgOre || {}).forEach(([name, days]) => {
+    const d = cntMatch(name, matchers); if (!d) return;
+    const e = oreBy.get(d.id) || oreBy.set(d.id, {}).get(d.id);
+    Object.entries(days).forEach(([day, z]) => { const a = e[day] || (e[day] = { mat: 0, pom: 0 }); a.mat += z.mat || 0; a.pom += z.pom || 0; });
+  });
   Object.entries(dati.doctors || {}).forEach(([name, days]) => {
     let n = 0; Object.values(days).forEach(t => Object.values(t).forEach(v => n += v));
     const d = cntMatch(name, matchers);
@@ -2103,11 +2259,19 @@ function cntCompute() {
       Object.entries(types).forEach(([t, v]) => a[t] = (a[t] || 0) + v);
     });
   });
-  const shiftsBy = new Map();
+  const shiftsBy = new Map(), shiftNoOwner = {};
   const own = {};
   (cnt.shifts || []).forEach(ev => {
     const k = nameKey(ev.doctor); if (!(k in own)) own[k] = cntOwner(k, matchers);
-    const o = own[k]; if (o) (shiftsBy.get(o.id) || shiftsBy.set(o.id, []).get(o.id)).push(ev);
+    const o = own[k];
+    if (o) (shiftsBy.get(o.id) || shiftsBy.set(o.id, []).get(o.id)).push(ev);
+    else { const z = shiftNoOwner[ev.doctor] || (shiftNoOwner[ev.doctor] = { n: 0, ex: ev.title }); z.n++; }
+  });
+  // prezzo medio a consuntivo per tipologia (riferimento: media delle tariffe dei medici attivi che l'hanno)
+  const bench = {};
+  Object.entries(CNT_TIPO_VOCE).forEach(([t, voce]) => {
+    const v = doctors.filter(d => d.attivo && d.tariffe[voce] != null).map(d => d.tariffe[voce]);
+    if (v.length) bench[t] = v.reduce((a, b) => a + b, 0) / v.length;
   });
   const T = { esami: 0, turni: 0, centsT: 0, centsE: 0, anyCons: false };
   const rows = doctors.filter(d => d.attivo).map(d => {
@@ -2119,8 +2283,11 @@ function cntCompute() {
     });
     // turni
     let inCal = 0, ok = 0, centsT = 0, senzaEsami = 0; const brk = {}, warn = new Set();
-    const evs = shiftsBy.get(d.id) || [], ecgEv = {};
-    evs.forEach(ev => { if (ev.kind === 'ecg') ecgEv[ev.date] = (ecgEv[ev.date] || 0) + 1; });
+    const evs = shiftsBy.get(d.id) || [], ecgEv = {}, stdDay = {}, ore = oreBy.get(d.id) || {};
+    evs.forEach(ev => {
+      if (ev.kind === 'ecg') ecgEv[ev.date] = (ecgEv[ev.date] || 0) + 1;
+      if (ev.kind === 'std') (stdDay[ev.date] = stdDay[ev.date] || []).push(ev.time || '');   // '' = turno completo senza fascia
+    });
     evs.forEach(ev => {
       inCal++;
       const c = cells[ev.date] || (cells[ev.date] = { tot: 0, types: {}, evs: [] });
@@ -2129,15 +2296,24 @@ function cntCompute() {
       ok++; c.ok = true;
       const ecgN = Math.ceil((c.types['ECG'] || 0) / (ecgEv[ev.date] || 1));
       const v = cntVoce(ev, d, ecgN);
-      if (v.unk) { warn.add('Turno «non riconosciuto» in calendario (titolo senza Mattina/Pomeriggio): non valorizzato'); return; }
+      if (v.unk) { warn.add('Turno «non riconosciuto» in calendario (titolo senza tipo riconoscibile): non valorizzato'); return; }
       if (v.miss || d.tariffe[v.k] == null) { warn.add('Manca la tariffa «' + (v.miss || vocLabel(v.k)) + '»: turno non valorizzato'); return; }
       const b = brk[v.k] || (brk[v.k] = { n: 0, imp: d.tariffe[v.k], inf: 0 });
       b.n++; centsT += cents(d.tariffe[v.k]);
-      (c.vn = c.vn || []).push(vocLabel(v.k) + (v.lim ? ' · ' + ecgN + ' ECG su ' + v.lim : '') + (v.inferred ? ' (tipo dedotto dal n. di ECG)' : ''));
+      // Se nello stesso giorno il medico fa anche un turno completo, gli ECG del giorno sono in buona parte del turno completo:
+      // superare il limite è normale e l'avviso non va mostrato. Fa eccezione il caso in cui le fasce siano chiaramente
+      // separate (es. ECG al mattino e completo al pomeriggio): allora si controllano solo gli ECG della fascia del turno ECG.
+      let ecgChk = ecgN, noWarn = false;
+      if (v.lim) {
+        const std = stdDay[ev.date], z = ore[ev.date];
+        if (std && !(ev.time && std.every(t => t && t !== ev.time))) noWarn = true;
+        else if (ev.time && z) ecgChk = z[ev.time] || 0;
+      }
+      (c.vn = c.vn || []).push(vocLabel(v.k) + (v.lim && !noWarn ? ' · ' + ecgChk + ' ECG su ' + v.lim : '') + (v.inferred ? ' (tipo dedotto dal n. di ECG)' : ''));
       if (v.inferred) b.inf++;
       if (v.lim) {
         c.ecgIncl = (c.ecgIncl || 0) + ecgN;
-        if (ecgN > v.lim) { const dt = new Date(ev.date + 'T00:00:00'); warn.add('Il ' + pad2(dt.getDate()) + '/' + pad2(dt.getMonth() + 1) + ' gli ECG (' + ecgN + ') superano il limite di ' + v.lim + ' del turno'); }
+        if (!noWarn && ecgChk > v.lim) { const dt = new Date(ev.date + 'T00:00:00'); warn.add('Il ' + pad2(dt.getDate()) + '/' + pad2(dt.getMonth() + 1) + (ev.time ? (ev.time === 'mat' ? ' (mattina)' : ' (pomeriggio)') : '') + ' gli ECG (' + ecgChk + ') superano il limite di ' + v.lim + ' del turno'); }
       }
     });
     const hasCons = CNT_CONS.some(k => d.tariffe[k] != null);
@@ -2152,16 +2328,13 @@ function cntCompute() {
       return { t, n, prezzo, inc, pay, c: prezzo != null ? cents(prezzo) * pay : 0 };
     });
     const centsE = typeRows.reduce((a, r) => a + r.c, 0);
+    const conv = cntConv(typeRows, centsT, ok);
     if (hasCons) T.anyCons = true;
     T.esami += esami; T.turni += ok; T.centsT += centsT; T.centsE += centsE;
-    return { d, cells, esami, inCal, ok, senzaEsami, centsT, centsE, brk, warn: [...warn], typeRows, hasCons, cal: cntCal(evs) };
+    return { d, cells, esami, inCal, ok, senzaEsami, centsT, centsE, brk, warn: [...warn], typeRows, hasCons, cal: cntCal(evs), conv };
   });
-  const avg = {};
-  ['ecg', 'hc', 'hp'].forEach(v => {
-    const a = doctors.filter(d => d.attivo && d.tariffe[v] != null).map(d => d.tariffe[v]);
-    avg[v] = a.length ? a.reduce((s, n) => s + n, 0) / a.length : null;
-  });
-  return { rows, unmatched, inactive, T, avg };
+  const convTot = cntConvTotals(rows);
+  return { rows, unmatched, inactive, T, shiftNoOwner, bench, convTot };
 }
 
 // ── rendering ──
@@ -2169,32 +2342,8 @@ function cntApplyFilter() {
   const q = nameKey(cnt.q || '');
   document.querySelectorAll('#cnt-body .c-doc').forEach(e => { e.hidden = !!q && !e.dataset.n.includes(q); });
 }
-const CNT_PESI = [['ECG', 'ECG', 1, 'ecg'], ['HOLTER CARDIACO', 'Holter ECG', 3, 'hc'], ['HOLTER PRESSORIO', 'Holter pressorio', 2, 'hp']];
-// costo per referto del turno, confrontato con il consuntivo:
-// medico a consuntivo -> prezzo effettivo del medico; altrimenti media dei medici a consuntivo (solo come riferimento)
-function cntConvenienza(x, avg) {
-  const rows = CNT_PESI.map(([t, l, w, v]) => ({ r: x.typeRows.find(r => r.t === t), l, w, v })).filter(o => o.r);
-  const units = rows.reduce((a, o) => a + o.r.inc * o.w, 0);
-  if (!units || !x.centsT) return '';
-  const perUnit = x.centsT / 100 / units;
-  let tEsami = 0, tCop = 0, tCosto = 0, tRis = 0, tScorp = 0;
-  let h = '<div class="c-sec">Convenienza del turno: costo per referto</div><div class="c-cal">Compenso turni <b>' + fmtEuro(x.centsT / 100) + '</b> ÷ ' + units + ' unità di peso = <b>' + fmtEuro(perUnit) + '</b> per unità</div>'
-    + '<div class="c-scroll"><table class="c-tb"><thead><tr><th>Tipologia</th><th>Peso</th><th>Esami refertati</th><th>Coperti dal turno</th><th>€ per referto</th><th>Costo attribuito</th><th>Consuntivo (riferimento)</th><th>Turno vs consuntivo</th><th>A consuntivo (scorporato)</th></tr></thead><tbody>';
-  rows.forEach(o => {
-    const r = o.r, own = x.d.tariffe[o.v], eff = own != null, ref = eff ? own : avg[o.v];
-    const cop = r.inc, perRef = cop ? perUnit * o.w : null, costo = cop ? cop * perRef : 0;
-    let vs = '—';
-    if (cop && ref != null) { const d = ref * cop - costo; vs = d >= 0 ? 'risparmio ' + fmtEuro(d) : 'maggior costo ' + fmtEuro(-d); tRis += d; }
-    const scorp = eff ? r.pay * own : null;
-    tEsami += r.n; tCop += cop; tCosto += costo; if (scorp != null) tScorp += scorp;
-    h += '<tr><td>' + escHtml(o.l) + '</td><td>' + o.w + '</td><td>' + r.n + '</td><td>' + cop + '</td><td>' + (cop ? fmtEuro(perRef) : '—') + '</td><td>' + (cop ? fmtEuro(costo) : '—') + '</td>'
-      + '<td>' + (ref != null ? fmtEuro(ref) + '<small class="' + (eff ? 'okk' : 'mut') + '">' + (eff ? 'effettivo' : 'media dei medici a consuntivo') + '</small>' : '<span class="mut">—</span>') + '</td>'
-      + '<td>' + vs + '</td><td>' + (scorp != null && r.pay ? fmtEuro(scorp) : '—') + '</td></tr>';
-  });
-  h += '</tbody><tfoot><tr><td>Totale</td><td></td><td>' + tEsami + '</td><td>' + tCop + '</td><td>' + fmtEuro(perUnit) + '</td><td>' + fmtEuro(tCosto) + '</td><td></td><td>' + (tRis >= 0 ? 'risparmio ' + fmtEuro(tRis) : 'maggior costo ' + fmtEuro(-tRis)) + '</td><td>' + fmtEuro(tScorp) + '</td></tr></tfoot></table></div>';
-  return h;
-}
-function cntDocBlock(x, hasShifts, avg) {
+function cntDocBlock(x, hasShifts, bench) {
+  x.bench = bench;
   const showT = hasShifts, total = x.centsT + x.centsE;
   let h = '<details class="c-doc" open data-n="' + escHtml(nameKey(x.d.nome)) + '"><summary><span class="n">' + escHtml(x.d.nome) + '</span>'
     + '<span class="m"><b>' + x.esami.toLocaleString('it-IT') + '</b> esami</span>'
@@ -2225,8 +2374,10 @@ function cntDocBlock(x, hasShifts, avg) {
   });
   h += '</tbody><tfoot><tr><td>Totale esami</td><td>' + x.esami + '</td>' + (x.hasCons ? '<td></td><td>' + fmtEuro(x.centsE / 100) + '</td>' : '') + '</tr></tfoot></table>';
   // turni
-  const calTxt = [['Mattina', x.cal.mat], ['Pomeriggio', x.cal.pom], ['Domenica', x.cal.dom], ['di cui ECG', x.cal.ecg], ['Holter (10hc/10hp)', x.cal.hol], ['Holter (16hc)', x.cal.h16], ['Non riconosciuto', x.cal.altro]].filter(p => p[1]).map(p => p[0] + ' ' + p[1]).join(' · ');
+  const calTxt = [['Completo', x.cal.comp], ['Mattina', x.cal.mat], ['Pomeriggio', x.cal.pom], ['Domenica', x.cal.dom], ['di cui ECG', x.cal.ecg], ['Holter (10hc/10hp)', x.cal.hol], ['Holter (16hc)', x.cal.h16], ['Non riconosciuto', x.cal.altro]].filter(p => p[1]).map(p => p[0] + ' ' + p[1]).join(' · ');
   if (showT && x.cal.tot) h += '<div class="c-cal">Nella sezione Turni: <b>Tot. ' + x.cal.tot + '</b>' + (calTxt ? ' · ' + calTxt : '') + '</div>';
+  const showTurniTb = !showT || x.inCal > 0;           // chi non fa turni: nessuna tabella turni
+  if (showTurniTb) {
   h += '<table class="c-tb"><thead><tr><th>Tipo di turno</th><th>Turni conteggiati</th><th>Tariffa turno</th><th>Importo</th></tr></thead><tbody>';
   const br = Object.entries(x.brk);
   if (!showT) h += '<tr><td colspan="4" class="mut">Turni non disponibili (calendario non letto)</td></tr>';
@@ -2240,9 +2391,10 @@ function cntDocBlock(x, hasShifts, avg) {
     if (x.senzaEsami) h += '<tr class="mut"><td colspan="4">○ ' + x.senzaEsami + (x.senzaEsami === 1 ? ' turno in calendario senza esami: non conteggiato' : ' turni in calendario senza esami: non conteggiati') + '</td></tr>';
   }
   h += '</tbody><tfoot><tr><td>Totale turni</td><td>' + (showT ? x.ok : '–') + '</td><td></td><td>' + (showT ? fmtEuro(x.centsT / 100) : '–') + '</td></tr></tfoot></table>';
-  if (showT) h += cntConvenienza(x, avg);
+  }
+  if (showT && x.conv.units && x.centsT) h += '<div class="c-sec" style="margin-top:14px">Convenienza del turno: costo per referto</div>' + cntConvTable(x.conv.list, x.bench || {}, x.conv);
   x.warn.forEach(w => { h += '<div class="c-w">⚠ ' + escHtml(w) + '</div>'; });
-  h += '<div class="c-grand"><span>' + (x.hasCons ? 'Turni ' + fmtEuro(x.centsT / 100) + ' + Esami a consuntivo ' + fmtEuro(x.centsE / 100) : 'Esami refertati ' + x.esami + ' · Turni conteggiati ' + (showT ? x.ok : '–')) + '</span><b>Totale ' + fmtEuro(total / 100) + '</b></div>';
+  h += '<div class="c-grand"><span>' + (!showTurniTb ? (x.hasCons ? 'Esami a consuntivo ' + fmtEuro(x.centsE / 100) : 'Esami refertati ' + x.esami) : x.hasCons ? 'Turni ' + fmtEuro(x.centsT / 100) + ' + Esami a consuntivo ' + fmtEuro(x.centsE / 100) : 'Esami refertati ' + x.esami + ' · Turni conteggiati ' + (showT ? x.ok : '–')) + '</span><b>Totale ' + fmtEuro(total / 100) + '</b></div>';
   return h + '</div></details>';
 }
 function cntRender() {
@@ -2273,13 +2425,27 @@ function cntRender() {
     + '<button class="r-btn ghost" data-cnt="del">🗑 Elimina e ricarica</button></div></div>';
   if (cnt.shiftsLoading) h += '<div class="c-warn c-info">⏳ Lettura dei turni dal calendario…</div>';
   else if (cnt.shiftsErr) h += '<div class="c-warn">Turni non disponibili (' + escHtml(cnt.shiftsErr) + ') — sono mostrati solo gli esami, senza turni né compensi. <button class="r-btn ghost" data-cnt="shifts">↻ Riprova</button></div>';
+  if (cnt.shifts && cnt.shiftsDiag) {
+    const nz = Object.entries(R.shiftNoOwner), D = cnt.shiftsDiag;
+    const bad = !cnt.shifts.length || nz.length || D.titles.length;
+    if (bad) h += '<details class="c-det" open><summary>🔎 Diagnostica turni dal calendario — ci sono anomalie</summary><div>'
+      + 'Eventi letti dal calendario «Medici in Turno»: <b>' + D.raw + '</b> · turni riconosciuti nel mese: <b>' + cnt.shifts.length + '</b>'
+      + (nz.length ? '<br><br><b>Nomi nel calendario che non corrispondono a nessun medico attivo in elenco:</b><br>' + nz.map(([n, z]) => escHtml(n) + ' (' + z.n + ') — es. «' + escHtml(z.ex) + '»').join('<br>') : '')
+      + (!D.raw ? '<br><br>Il calendario non ha restituito nessun evento per questo mese.' : '')
+      + (D.titles.length ? '<br><br><b>Titoli non riconosciuti (' + D.titles.length + '):</b><br>' + D.titles.slice(0, 40).map(escHtml).join('<br>') + (D.titles.length > 40 ? '<br>… e altri ' + (D.titles.length - 40) : '') : '')
+      + '</div></details>';
+  }
   h += '<div class="c-chips"><div class="c-chip"><b>' + T.esami.toLocaleString('it-IT') + '</b><span>esami dei medici attivi</span></div>'
     + '<div class="c-chip"><b>' + T.turni + '</b><span>turni conteggiati</span></div>'
     + '<div class="c-chip"><b>' + fmtEuro(T.centsT / 100) + '</b><span>compenso turni</span></div>'
     + (T.anyCons ? '<div class="c-chip"><b>' + fmtEuro(T.centsE / 100) + '</b><span>compenso esami a consuntivo</span></div>' : '')
     + '<div class="c-chip tot"><b>' + fmtEuro((T.centsT + T.centsE) / 100) + '</b><span>totale mese</span></div></div>';
+  if (hasShifts && R.convTot.list.length) {
+    cnt.convHtml = cntConvModalHtml(R.convTot, R.bench);
+    h += '<div style="margin:12px 0"><button class="r-btn primary" data-cnt="conv">📊 Convenienza dei turni</button></div>';
+  } else cnt.convHtml = '';
   const withData = R.rows.filter(x => x.esami || x.inCal), without = R.rows.filter(x => !x.esami && !x.inCal);
-  h += '<div class="c-docs">' + withData.map(x => cntDocBlock(x, hasShifts, R.avg)).join('') + '</div>';
+  h += '<div class="c-docs">' + withData.map(x => cntDocBlock(x, hasShifts, R.bench)).join('') + '</div>';
   if (without.length) h += '<details class="c-det"><summary>Medici attivi senza esami né turni nel mese (' + without.length + ')</summary><div>' + without.map(x => escHtml(x.d.nome)).join(' · ') + '</div></details>';
   const ignTxt = [];
   if (ign.rifiutati) ignTxt.push(ign.rifiutati + ' esami rifiutati/non refertati');
@@ -2473,6 +2639,7 @@ async function maybeImportLegacy() {
       if (a === 'prev') cntGo(-1); else if (a === 'next') cntGo(1);
       else if (a === 'del') cntDelete(); else if (a === 'reload') cntLoad();
       else if (a === 'expand' || a === 'collapse') document.querySelectorAll('#cnt-body .c-doc').forEach(e => { e.open = a === 'expand'; });
+      else if (a === 'conv') { byId('conv-body').innerHTML = cnt.convHtml || ''; openModal('conv-modal'); }
       else if (a === 'shifts') { const my = ++cnt.req; cnt.shiftsLoading = true; cntRender(); cntLoadShifts(my).then(() => { if (my === cnt.req) cntRender(); }); }
     });
     byId('cnt-search').addEventListener('input', e => { cnt.q = e.target.value; cntApplyFilter(); });
@@ -2531,10 +2698,10 @@ async function maybeImportLegacy() {
   // chiusura modali: pulsanti ✕/Annulla, click sullo sfondo, tasto Esc
   document.addEventListener('click', e => {
     const c = e.target.closest('[data-close]');
-    if (c) { c.dataset.close === 'doc' ? closeDoctorModal() : closeUserModal(); return; }
+    if (c) { c.dataset.close === 'doc' ? closeDoctorModal() : c.dataset.close === 'conv' ? closeModal('conv-modal') : closeUserModal(); return; }
     if (e.target.classList && e.target.classList.contains('r-modal-bg')) closeModal(e.target.id);
   });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDoctorModal(); closeUserModal(); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDoctorModal(); closeUserModal(); closeModal('conv-modal'); } });
 })();
 
 // ─── UI HELPERS ───────────────────────────────────────────────

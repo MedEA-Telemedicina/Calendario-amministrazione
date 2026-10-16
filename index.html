@@ -380,6 +380,7 @@
   .c-doc > summary::before { content: '▸'; color: #9aa5b1; transition: transform .15s; }
   .c-doc[open] > summary::before { transform: rotate(90deg); }
   .c-doc > summary:hover { background: #f8fafc; }
+  .c-off { display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; background:#eef0f3; color:#5b6672; font-size:11px; font-weight:700; vertical-align:middle; }
   .c-doc .n { font-size: 15px; font-weight: 800; color: #1f2933; flex: 1; }
   .c-doc .m { font-size: 12.5px; color: #5b6b7f; } .c-doc .m b { color: #1f2933; font-size: 14px; }
   .c-doc .t { font-size: 15px; font-weight: 800; color: #1a73e8; min-width: 110px; text-align: right; }
@@ -2175,11 +2176,11 @@ const cents = x => Math.round(x * 100);
 
 // ── convenienza dei turni ──
 // Per ogni medico, sul totale del mese: compenso dei turni ÷ somma pesata degli esami = valore di 1 unità di peso;
-// costo per referto = peso × valore dell'unità. Pesi: ECG 1 · holter cardiaco 3 · holter pressorio 2.
+// costo per referto = peso × valore dell'unità. Pesi di default: ECG 1 · holter cardiaco 2,81 · holter 12D 2,81 · holter pressorio 1,63.
 // Gli esami pagati a consuntivo sono scorporati (restano fuori dal calcolo); gli altri tipi di esame non rientrano.
-const CNT_PESI_DEF = { 'ECG': 1, 'HOLTER CARDIACO': 3, 'HOLTER PRESSORIO': 2, 'HOLTER CARDIACO 12D': 3 };
+const CNT_PESI_DEF = { 'ECG': 1, 'HOLTER CARDIACO': 2.81, 'HOLTER PRESSORIO': 1.63, 'HOLTER CARDIACO 12D': 2.81 };
 const CNT_PESI = Object.assign({}, CNT_PESI_DEF);
-try { const sv = JSON.parse(localStorage.getItem('cnt_pesi_v2') || 'null'); if (sv) Object.keys(CNT_PESI_DEF).forEach(t => { if (sv[t] > 0) CNT_PESI[t] = +sv[t]; }); } catch (e) {}
+try { const sv = JSON.parse(localStorage.getItem('cnt_pesi_v3') || 'null'); if (sv) Object.keys(CNT_PESI_DEF).forEach(t => { if (sv[t] > 0) CNT_PESI[t] = +sv[t]; }); } catch (e) {}
 // nucleo del calcolo: all = [{ t, w, n, cov, cCons }]
 function cntConvCore(all, centsT, nTurni) {
   const units = all.reduce((a, r) => a + r.cov * r.w, 0);
@@ -2206,6 +2207,11 @@ const CNT_GRP = [
   { g: 'ecg',      l: 'Turno ECG',       ks: ['turno_ecg_75', 'turno_ecg_100'] },
   { g: 'domenica', l: 'Turno domenica',  ks: ['turno_domenica'] }
 ];
+// Nei turni Holter la ripartizione del compenso è fissa e non dipende dai pesi generali:
+// turno Holter 10 hc + 10 hp da 200 € = 14 € per hc e 6 € per hp (rapporto 7 : 3, l'holter 12D vale come hc);
+// turno Holter 16 hc da 200 € = 12,50 € per hc (200 ÷ 16).
+const CNT_PESI_HOLTER = { 'ECG': 0, 'HOLTER CARDIACO': 7, 'HOLTER CARDIACO 12D': 7, 'HOLTER PRESSORIO': 3 };
+const CNT_PESI_GRP = { holter: CNT_PESI_HOLTER, h16: CNT_PESI_HOLTER };
 const cntGrpOf = k => (CNT_GRP.find(x => x.ks.includes(k)) || {}).g;
 function cntAccepts(g, t) { return g === 'ecg' ? t === 'ECG' : (g === 'holter' || g === 'h16') ? t !== 'ECG' : true; }
 function cntConvByTurno(sv, cells, typeRows, tariffe) {
@@ -2225,7 +2231,7 @@ function cntConvByTurno(sv, cells, typeRows, tariffe) {
   Object.entries(acc).forEach(([g, a]) => {
     out[g] = cntConvCore(Object.keys(CNT_PESI).map(t => {
       const n = a.n[t] || 0, r = ratio[t] || { cov: 0, cons: 0 };
-      return { t, w: CNT_PESI[t], n, cov: n * r.cov, cCons: n * r.cons };
+      return { t, w: (CNT_PESI_GRP[g] || CNT_PESI)[t], n, cov: n * r.cov, cCons: n * r.cons };
     }), a.centsT, a.turni);
   });
   return out;
@@ -2330,7 +2336,7 @@ function cntConvModalHtml(C, bench, GT) {
     + 'Pesi: <b>' + cntPesiTxt() + '</b>. Gli esami pagati a consuntivo sono scorporati; gli altri tipi di esame non rientrano nel calcolo. '
     + 'Il «consuntivo medio» è la media delle tariffe a consuntivo dei medici in elenco, usata solo come termine di paragone.</div>'
     + '<details class="c-det" style="margin-bottom:12px"><summary>⚙ Modifica i pesi delle tipologie</summary><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">'
-    + Object.keys(CNT_PESI).map(t => '<label style="font-size:12px;font-weight:700;color:#3b4a5c">' + escHtml(cntShort[t] || t) + '<br><input type="number" class="r-input cw-in" data-t="' + escHtml(t) + '" min="0.1" step="0.1" value="' + CNT_PESI[t] + '" style="width:90px"></label>').join('')
+    + Object.keys(CNT_PESI).map(t => '<label style="font-size:12px;font-weight:700;color:#3b4a5c">' + escHtml(cntShort[t] || t) + '<br><input type="number" class="r-input cw-in" data-t="' + escHtml(t) + '" min="0.01" step="0.01" value="' + CNT_PESI[t] + '" style="width:90px"></label>').join('')
     + '<button class="r-btn primary" type="button" data-pesi="save">Applica</button><button class="r-btn ghost" type="button" data-pesi="reset">Ripristina</button></div></details>'
     + (GT && Object.keys(GT).length ? '<div class="c-sec">Per tipologia di turno — costo per referto</div><div class="r-usub" style="margin:4px 0 6px">Gli esami di ogni giorno sono attribuiti ai turni di quel giorno (turno ECG → solo ECG; Holter / Holter 16 → solo holter; completo e domenica → tutti); se più turni possono riceverli la quota è divisa in parti uguali.</div>'
       + cntGrpMatrix(CNT_GRP.map(G => GT[G.g]).filter(Boolean), bench, false)
@@ -2362,7 +2368,7 @@ function cntCompute() {
     let n = 0; Object.values(days).forEach(t => Object.entries(t).forEach(([k, v]) => { if (!cntIgnorato(k)) n += v; }));
     const d = cntMatch(name, matchers);
     if (!d) { unmatched.push({ name, n }); return; }
-    if (!d.attivo) { inactive.push({ name, n, doc: d.nome }); return; }
+    if (!d.attivo) inactive.push({ name, n, doc: d.nome });   // incluso nei conteggi, con badge
     const e = byDoc.get(d.id) || byDoc.set(d.id, {}).get(d.id);
     Object.entries(days).forEach(([day, types]) => {
       const ent = Object.entries(types).filter(([t]) => !cntIgnorato(t)); if (!ent.length) return;
@@ -2385,7 +2391,7 @@ function cntCompute() {
     if (v.length) bench[t] = v.reduce((a, b) => a + b, 0) / v.length;
   });
   const T = { esami: 0, turni: 0, centsT: 0, centsE: 0, anyCons: false };
-  const rows = doctors.filter(d => d.attivo).map(d => {
+  const rows = doctors.filter(d => d.attivo || byDoc.has(d.id)).map(d => {
     const ex = byDoc.get(d.id) || {}, cells = {}, types = {}; let esami = 0;
     Object.entries(ex).forEach(([day, tp]) => {
       const tot = Object.values(tp).reduce((a, b) => a + b, 0);
@@ -2398,6 +2404,15 @@ function cntCompute() {
     evs.forEach(ev => {
       if (ev.kind === 'ecg') ecgEv[ev.date] = (ecgEv[ev.date] || 0) + 1;
       if (ev.kind === 'std') (stdDay[ev.date] = stdDay[ev.date] || []).push(ev.time || '');   // '' = turno completo senza fascia
+    });
+    // pre-passata: quanti turni ECG (con limite) ci sono per giorno + fascia + tipo, per non moltiplicare lo stesso doppio turno su ogni evento
+    const grpN = {}, grpSeen = {}, grpKey = (ev, v, z) => ev.date + '|' + (z && ev.time ? ev.time : '') + '|' + v.k;
+    evs.forEach(ev => {
+      if (ev.kind !== 'ecg') return;
+      const c0 = cells[ev.date]; if (!c0 || !c0.tot) return;
+      const v0 = cntVoce(ev, d, Math.ceil((c0.types['ECG'] || 0) / (ecgEv[ev.date] || 1)));
+      if (!v0.lim || d.tariffe[v0.k] == null) return;
+      const k0 = grpKey(ev, v0, ore[ev.date]); grpN[k0] = (grpN[k0] || 0) + 1;
     });
     evs.forEach(ev => {
       inCal++;
@@ -2413,14 +2428,23 @@ function cntCompute() {
       // Se nello stesso giorno il medico fa anche un turno completo, gli ECG del giorno sono in buona parte del turno completo:
       // superare il limite è normale e l'avviso non va mostrato. Fa eccezione il caso in cui le fasce siano chiaramente
       // separate (es. ECG al mattino e completo al pomeriggio): allora si controllano solo gli ECG della fascia del turno ECG.
-      let ecgChk = ecgN, noWarn = false;
+      let ecgChk = ecgN, noWarn = false, gk = null, gn = 1;
       if (v.lim) {
         const std = stdDay[ev.date], z = ore[ev.date];
         if (std && !(ev.time && std.every(t => t && t !== ev.time))) noWarn = true;
-        else if (ev.time && z) ecgChk = z[ev.time] || 0;
+        else {
+          gk = grpKey(ev, v, z); gn = grpN[gk] || 1;
+          if (ev.time && z) ecgChk = z[ev.time] || 0;      // ECG della fascia (già riferiti a tutto il gruppo)
+          else ecgChk = ecgN * gn;                          // senza orari: ECG del giorno attribuiti al gruppo di turni
+        }
       }
       // turno ECG moltiplicato: ogni limite superato vale un turno in più (oltre 100 fino a 200 = 2 turni, fino a 300 = 3 ...)
-      const mult = v.lim && !noWarn && ecgChk > v.lim ? Math.ceil(ecgChk / v.lim) : 1;
+      // I turni totali del gruppo = max(eventi in calendario, ceil(ECG / limite)); l'eccedenza è attribuita una sola volta (al primo evento del gruppo)
+      let mult = 1;
+      if (v.lim && !noWarn && gk) {
+        const tot = Math.max(gn, Math.ceil(ecgChk / v.lim));
+        if (!grpSeen[gk]) { grpSeen[gk] = true; mult = tot - (gn - 1); }
+      }
       b.n += mult; centsT += cents(d.tariffe[v.k]) * mult; ok += mult - 1; if (mult > 1) b.dbl++;
       sv.push({ date: ev.date, k: v.k, cents: cents(d.tariffe[v.k]) * mult, m: mult });
       (c.vn = c.vn || []).push(vocLabel(v.k) + (v.lim && !noWarn ? ' · ' + ecgChk + ' ECG su ' + v.lim + (mult > 1 ? ' → ' + mult + ' turni (' + mult + '×)' : '') : '') + (v.inferred ? ' (tipo dedotto dal n. di ECG)' : ''));
@@ -2445,7 +2469,7 @@ function cntCompute() {
     const conv = cntConv(typeRows, centsT, ok), convG = cntConvByTurno(sv, cells, typeRows, d.tariffe);
     if (hasCons) T.anyCons = true;
     T.esami += esami; T.turni += ok; T.centsT += centsT; T.centsE += centsE;
-    return { d, cells, esami, inCal, ok, senzaEsami, centsT, centsE, brk, warn: [...warn], typeRows, hasCons, cal: cntCal(evs), conv, convG };
+    return { d, inattivo: !d.attivo, cells, esami, inCal, ok, senzaEsami, centsT, centsE, brk, warn: [...warn], typeRows, hasCons, cal: cntCal(evs), conv, convG };
   });
   const convTot = cntConvTotals(rows), convGrp = cntConvGrpTotals(rows);
   return { rows, unmatched, inactive, T, shiftNoOwner, bench, convTot, convGrp };
@@ -2459,7 +2483,7 @@ function cntApplyFilter() {
 function cntDocBlock(x, hasShifts, bench) {
   x.bench = bench;
   const showT = hasShifts, total = x.centsT + x.centsE;
-  let h = '<details class="c-doc" open data-n="' + escHtml(nameKey(x.d.nome)) + '"><summary><span class="n">' + escHtml(x.d.nome) + '</span>'
+  let h = '<details class="c-doc" open data-n="' + escHtml(nameKey(x.d.nome)) + '"><summary><span class="n">' + escHtml(x.d.nome) + (x.inattivo ? ' <span class="c-off">Medico attualmente non attivo</span>' : '') + '</span>'
     + '<span class="m"><b>' + x.esami.toLocaleString('it-IT') + '</b> esami</span>'
     + '<span class="m"><b>' + (showT ? x.ok : '–') + '</b> turni</span>'
     + '<span class="t">' + fmtEuro(total / 100) + '</span></summary><div class="c-dbody">';
@@ -2554,7 +2578,7 @@ function cntRender() {
       + (D.titles.length ? '<br><br><b>Titoli non riconosciuti (' + D.titles.length + '):</b><br>' + D.titles.slice(0, 40).map(escHtml).join('<br>') + (D.titles.length > 40 ? '<br>… e altri ' + (D.titles.length - 40) : '') : '')
       + '</div></details>';
   }
-  h += '<div class="c-chips"><div class="c-chip"><b>' + T.esami.toLocaleString('it-IT') + '</b><span>esami dei medici attivi</span></div>'
+  h += '<div class="c-chips"><div class="c-chip"><b>' + T.esami.toLocaleString('it-IT') + '</b><span>esami totali</span></div>'
     + '<div class="c-chip"><b>' + T.turni + '</b><span>turni conteggiati</span></div>'
     + '<div class="c-chip"><b>' + fmtEuro(T.centsT / 100) + '</b><span>compenso turni</span></div>'
     + (T.anyCons ? '<div class="c-chip"><b>' + fmtEuro(T.centsE / 100) + '</b><span>compenso esami a consuntivo</span></div>' : '')
@@ -2576,8 +2600,6 @@ function cntRender() {
   const un = R.unmatched.filter(x => x.n > 0).sort((a, b) => b.n - a.n);
   if (un.length) h += '<details class="c-det warn"><summary>⚠ ' + un.length + ' medici nel file non associati a nessun medico in elenco (' + un.reduce((a, b) => a + b.n, 0).toLocaleString('it-IT') + ' esami)</summary><div>'
     + un.map(x => escHtml(x.name) + ' — ' + x.n).join('<br>') + '<div class="r-usub" style="margin-top:8px">Il nome in elenco deve essere del tipo COGNOME N. (cognome e iniziale del nome come nel file).</div></div></details>';
-  if (R.inactive.length) h += '<details class="c-det"><summary>Medici non attivi con esami (esclusi)</summary><div>'
-    + R.inactive.sort((a, b) => b.n - a.n).map(x => escHtml(x.name) + ' → ' + escHtml(x.doc) + ' — ' + x.n).join('<br>') + '</div></details>';
   body.innerHTML = h;
   cntApplyFilter();
 }
@@ -2767,7 +2789,7 @@ async function maybeImportLegacy() {
       const b = e.target.closest('[data-pesi]'); if (!b) return;
       if (b.dataset.pesi === 'reset') Object.assign(CNT_PESI, CNT_PESI_DEF);
       else document.querySelectorAll('#conv-body .cw-in').forEach(i => { const v = parseFloat(String(i.value).replace(',', '.')); if (v > 0) CNT_PESI[i.dataset.t] = v; });
-      try { localStorage.setItem('cnt_pesi_v2', JSON.stringify(CNT_PESI)); } catch (er) {}
+      try { localStorage.setItem('cnt_pesi_v3', JSON.stringify(CNT_PESI)); } catch (er) {}
       cntRender(); byId('conv-body').innerHTML = cnt.convHtml || '';
     });
     byId('cnt-search').addEventListener('input', e => { cnt.q = e.target.value; cntApplyFilter(); });

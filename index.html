@@ -2578,35 +2578,10 @@ function cntDocBlock(x, hasShifts, bench) {
       + '<td><b>' + (c.tot || '–') + '</b></td></tr>';
   });
   h += '</tbody><tfoot><tr><td colspan="2">Totale</td>' + x.typeRows.map(r => '<td>' + r.n + '</td>').join('') + '<td>' + x.esami + '</td></tr></tfoot></table></div>';
-  // esami per tipologia: con prezzi solo per chi fa consuntivo
-  h += '<table class="c-tb"><thead><tr><th>' + 'Riepilogo per tipologia' + '</th><th>Esami</th>' + (x.hasCons ? '<th>Prezzo unitario</th><th>Importo</th>' : '') + '</tr></thead><tbody>';
-  if (!x.typeRows.length) h += '<tr><td colspan="' + (x.hasCons ? 4 : 2) + '" class="mut">Nessun esame refertato nel mese</td></tr>';
-  x.typeRows.forEach(r => {
-    h += '<tr><td>' + escHtml(r.t) + '</td><td><b>' + r.n + '</b>' + (x.hasCons && r.inc ? '<small>' + r.inc + ' inclusi nei turni → ' + r.pay + ' a pagamento</small>' : '') + '</td>'
-      + (x.hasCons ? '<td>' + (r.prezzo != null ? fmtEuro(r.prezzo) : '<span class="mut">non a consuntivo</span>') + '</td>'
-      + '<td>' + (r.prezzo != null ? fmtEuro(r.c / 100) : '<span class="mut">—</span>') + '</td>' : '') + '</tr>';
-  });
-  h += '</tbody><tfoot><tr><td>Totale esami</td><td>' + x.esami + '</td>' + (x.hasCons ? '<td></td><td>' + fmtEuro(x.centsE / 100) + '</td>' : '') + '</tr></tfoot></table>';
   // turni
   const calTxt = [['Completo', x.cal.comp], ['Mattina', x.cal.mat], ['Pomeriggio', x.cal.pom], ['Domenica', x.cal.dom], ['di cui ECG', x.cal.ecg], ['Holter (10hc/10hp)', x.cal.hol], ['Holter (16hc)', x.cal.h16], ['Non riconosciuto', x.cal.altro]].filter(p => p[1]).map(p => p[0] + ' ' + p[1]).join(' · ');
   if (showT && x.cal.tot) h += '<div class="c-cal">Nella sezione Turni: <b>Tot. ' + x.cal.tot + '</b>' + (calTxt ? ' · ' + calTxt : '') + '</div>';
   const showTurniTb = !showT || x.inCal > 0;           // chi non fa turni: nessuna tabella turni
-  if (showTurniTb) {
-  h += '<table class="c-tb"><thead><tr><th>Tipo di turno</th><th>Turni conteggiati</th><th>Tariffa turno</th><th>Importo</th></tr></thead><tbody>';
-  const br = Object.entries(x.brk);
-  if (!showT) h += '<tr><td colspan="4" class="mut">Turni non disponibili (calendario non letto)</td></tr>';
-  else {
-    if (!br.length) h += '<tr><td colspan="4" class="mut">Nessun turno conteggiato' + (x.inCal ? '' : ' (nessun turno in calendario)') + '</td></tr>';
-    br.forEach(([k, b]) => {
-      const notes = [];
-      if (b.inf) notes.push(b.inf + ' dedotti dal numero di ECG del giorno (76-100 → turno da 100; 101-150 → 75 doppiato; oltre 150 → 100 moltiplicato)');
-      if (b.dbl) notes.push('di cui ' + b.dbl + ' turni ECG doppiati o triplicati (contati più volte)');
-      h += '<tr><td>' + escHtml(vocLabel(k)) + '</td><td><b>' + b.n + '</b>' + notes.map(t => '<small>' + t + '</small>').join('') + '</td><td>' + fmtEuro(b.imp) + '</td><td>' + fmtEuro(b.n * b.imp) + '</td></tr>';
-    });
-    if (x.senzaEsami) h += '<tr class="mut"><td colspan="4">○ ' + x.senzaEsami + (x.senzaEsami === 1 ? ' turno in calendario senza esami: non conteggiato' : ' turni in calendario senza esami: non conteggiati') + '</td></tr>';
-  }
-  h += '</tbody><tfoot><tr><td>Totale turni</td><td>' + (showT ? x.ok : '–') + '</td><td></td><td>' + (showT ? fmtEuro(x.centsT / 100) : '–') + '</td></tr></tfoot></table>';
-  }
   if (showT && x.conv.units && x.centsT) h += '<div class="c-sec" style="margin-top:14px">Convenienza del turno: costo per referto</div>' + cntConvTable(x.conv.list, x.bench || {}, x.conv);
   if (showT && x.convG) {
     const gl = CNT_GRP.filter(G => x.convG[G.g] && x.convG[G.g].centsT).map(G => ({ l: G.l, turni: x.convG[G.g].nTurni, centsT: x.convG[G.g].centsT, covTot: x.convG[G.g].covTot, list: x.convG[G.g].list }));

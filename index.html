@@ -2625,7 +2625,7 @@ function cntTurnoHtml(o) {
 function cntConsTableHtml(x) {
   const dot = t => '<span class="c-dot" style="background:' + avColor(t) + '"></span>';
   if (!x.typeRows.length) return '<div class="c-note" style="padding:18px">Nessun esame refertato nel mese</div>';
-  let h = '<div class="c-scroll" style="margin-top:0"><table class="c-tb c-mx"><thead><tr><th>Tipologia</th><th>Esami refertati</th><th>Importo a referto</th><th>Compenso spettante</th></tr></thead><tbody>';
+  let h = '<div class="c-scroll" style="margin-top:0"><table class="c-tb"><thead><tr><th>Tipologia</th><th>Esami refertati</th><th>Importo a referto</th><th>Compenso spettante</th></tr></thead><tbody>';
   x.typeRows.forEach(r => {
     h += '<tr><td style="text-align:left"><b>' + dot(r.t) + escHtml(r.t) + '</b></td><td><b>' + r.n.toLocaleString('it-IT') + '</b></td>'
       + '<td>' + (r.prezzo != null ? fmtEuro(r.prezzo) : '<span class="mut">tariffa mancante</span>') + '</td>'

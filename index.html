@@ -409,6 +409,11 @@
   .c-tb td small.cs-t { color: #9aa5b1; font-weight: 600; }
   .c-tb td small.cs-t + b { display: inline-block; margin-top: 6px; }
   .c-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .c-dsearch { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; } .c-dsearch .r-input { flex: 1 1 260px; max-width: 420px; }
+  button.c-pill { border: 1px solid transparent; cursor: pointer; font-family: inherit; transition: background .15s, color .15s; } button.c-pill:hover { background: #e8eef6; }
+  .c-pill.active { background: #1a73e8; color: #fff; } button.c-pill.active:hover { background: #1558b0; } .c-pill.active b { color: #fff; }
+  .c-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; vertical-align: 0; }
+  .c-tb tr[hidden] { display: none; }
   .c-pill { font-size: 12px; color: #5b6b7f; background: #f3f6fa; border-radius: 20px; padding: 4px 12px; font-weight: 600; } .c-pill b { color: #1f2933; font-size: 13px; font-weight: 800; }
   .c-tb.c-left th:not(:first-child), .c-tb.c-left td:not(:first-child) { text-align: left; }
   .c-detbtn { padding: 7px 13px; font-size: 12.5px; }
@@ -2628,25 +2633,43 @@ function cntDayTableHtml(x) {
 // «2025-09-17 14:32» → «17/09/2025 14:32»
 const cntFmtDT = v => { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}:\d{2}))?/); return m ? m[3] + '/' + m[2] + '/' + m[1] + (m[4] ? ' ' + m[4] : '') : ''; };
 const cntSortEsami = list => list.slice().sort((a, b) => a[6] < b[6] ? -1 : a[6] > b[6] ? 1 : 0);
-// popup «Dettaglio esami»: gli esami del medico, uno per riga, come estratti dal file caricato
+// popup «Dettaglio esami»: gli esami del medico, uno per riga, come estratti dal file caricato (con ricerca e filtro per tipologia)
+const cntDetMatch = e => {
+  const F = cnt.detF || {};
+  if (F.t && e[1] !== F.t) return false;
+  const w = normTxt(F.q || '').split(/\s+/).filter(Boolean); if (!w.length) return true;
+  const hay = normTxt(e[0] + ' ' + e[3] + ' ' + e[4]);
+  return w.every(x => hay.includes(x));
+};
+function cntDetFilter() {
+  const D = cnt.detCur; if (!D) return;
+  const F = cnt.detF, rows = document.querySelectorAll('#det-body tbody tr'); let shown = 0;
+  rows.forEach(tr => { const e = D.sorted[+tr.dataset.i], ok = cntDetMatch(e); tr.hidden = !ok; if (ok) shown++; });
+  document.querySelectorAll('#det-body [data-dt]').forEach(b => b.classList.toggle('active', b.dataset.dt === F.t));
+  const c = byId('det-cnt'); if (c) c.textContent = shown === D.sorted.length ? D.sorted.length.toLocaleString('it-IT') + ' esami' : shown.toLocaleString('it-IT') + ' di ' + D.sorted.length.toLocaleString('it-IT') + ' esami';
+  const em = byId('det-empty'); if (em) em.style.display = shown ? 'none' : 'block';
+}
 function cntExamDetailHtml(D) {
   if (!D.has) return '<div class="c-warn c-info">Il dettaglio dei singoli esami non è disponibile per questo mese: il file è stato caricato prima di questa funzione. Usa «Elimina e ricarica» e carica di nuovo il file.</div>';
   if (!D.list.length) return '<div class="c-note" style="padding:24px">Nessun esame refertato da questo medico nel mese.</div>';
-  const L = cntSortEsami(D.list), by = {}; L.forEach(e => by[e[1]] = (by[e[1]] || 0) + 1);
-  const td = v => v ? escHtml(v) : '<span class="mut">–</span>';
-  return '<div class="c-pills"><span class="c-pill"><b>' + L.length.toLocaleString('it-IT') + '</b> esami totali</span>'
-    + Object.entries(by).sort((a, b) => b[1] - a[1]).map(([t, n]) => '<span class="c-pill"><b>' + n.toLocaleString('it-IT') + '</b> ' + escHtml(t) + '</span>').join('') + '</div>'
+  const L = D.sorted = cntSortEsami(D.list), by = {}; L.forEach(e => by[e[1]] = (by[e[1]] || 0) + 1);
+  const td = v => v ? escHtml(v) : '<span class="mut">–</span>', dot = t => '<span class="c-dot" style="background:' + avColor(t) + '"></span>';
+  return '<div class="c-dsearch"><input class="r-input" id="det-q" type="search" placeholder="🔍 Cerca per ID, cliente o paziente…" autocomplete="off"><span class="r-usub" id="det-cnt"></span></div>'
+    + '<div class="c-pills"><button type="button" class="c-pill active" data-dt="">Tutte <b>' + L.length.toLocaleString('it-IT') + '</b></button>'
+    + Object.entries(by).sort((a, b) => b[1] - a[1]).map(([t, n]) => '<button type="button" class="c-pill" data-dt="' + escHtml(t) + '">' + dot(t) + escHtml(t) + ' <b>' + n.toLocaleString('it-IT') + '</b></button>').join('') + '</div>'
     + '<div class="c-scroll" style="margin-top:0"><table class="c-tb c-left c-mx"><thead><tr><th>ID</th><th>Tipologia</th><th>Stato</th><th>Cliente</th><th>Paziente</th><th>Data richiesta</th><th>Data refertazione</th></tr></thead><tbody>'
-    + L.map(e => '<tr><td class="mut">' + td(e[0]) + '</td><td><b>' + escHtml(e[1]) + '</b></td><td>' + td(e[2]) + '</td><td>' + td(e[3]) + '</td><td>' + td(e[4]) + '</td><td>' + (cntFmtDT(e[5]) || '<span class="mut">–</span>') + '</td><td>' + (cntFmtDT(e[6]) || '<span class="mut">–</span>') + '</td></tr>').join('')
-    + '</tbody></table></div>';
+    + L.map((e, i) => '<tr data-i="' + i + '"><td class="mut">' + td(e[0]) + '</td><td><b>' + dot(e[1]) + escHtml(e[1]) + '</b></td><td>' + td(e[2]) + '</td><td>' + td(e[3]) + '</td><td>' + td(e[4]) + '</td><td>' + (cntFmtDT(e[5]) || '<span class="mut">–</span>') + '</td><td>' + (cntFmtDT(e[6]) || '<span class="mut">–</span>') + '</td></tr>').join('')
+    + '</tbody></table></div><div class="c-note" id="det-empty" style="display:none;padding:22px">Nessun esame corrisponde alla ricerca.</div>';
 }
 function cntDetExport() {
-  const D = cnt.detCur; if (!D || !D.list.length) { toast('Nessun esame da esportare', 'err'); return; }
-  const aoa = [['ID', 'TIPOLOGIA', 'STATO', 'CLIENTE', 'PAZIENTE', 'DATA RICHIESTA', 'DATA REFERTAZIONE'], ...cntSortEsami(D.list).map(e => [e[0], e[1], e[2], e[3], e[4], cntFmtDT(e[5]), cntFmtDT(e[6])])];
+  const D = cnt.detCur; if (!D || !D.sorted || !D.sorted.length) { toast('Nessun esame da esportare', 'err'); return; }
+  const rows = D.sorted.filter(cntDetMatch);       // esporta ciò che è visibile con ricerca e filtro attivi
+  if (!rows.length) { toast('Nessun esame con questi filtri', 'err'); return; }
+  const aoa = [['ID', 'TIPOLOGIA', 'STATO', 'CLIENTE', 'PAZIENTE', 'DATA RICHIESTA', 'DATA REFERTAZIONE'], ...rows.map(e => [e[0], e[1], e[2], e[3], e[4], cntFmtDT(e[5]), cntFmtDT(e[6])])];
   const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = [{ wch: 12 }, { wch: 26 }, { wch: 12 }, { wch: 26 }, { wch: 28 }, { wch: 17 }, { wch: 19 }];
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Esami');
   XLSX.writeFile(wb, 'dettaglio_esami_' + D.nome.replace(/[^A-Za-z0-9]+/g, '_') + '_' + cnt.ym + '.xlsx');
-  toast('Excel scaricato', 'ok');
+  toast('Excel scaricato (' + rows.length + ' esami)', 'ok');
 }
 function cntDocBlock(x, hasShifts, bench) {
   x.bench = bench;
@@ -2912,12 +2935,14 @@ async function maybeImportLegacy() {
       if (a === 'prev') cntGo(-1); else if (a === 'next') cntGo(1);
       else if (a === 'del') cntDelete(); else if (a === 'reload') cntLoad();
       else if (a === 'expand' || a === 'collapse') document.querySelectorAll('#cnt-body .c-doc').forEach(e => { e.open = a === 'expand'; });
-      else if (a === 'detail') { e.preventDefault(); const D = (cnt.det || {})[b.dataset.id]; if (D) { byId('det-title').textContent = '🔎 Dettaglio esami · ' + D.nome + ' · ' + ymLabel(cnt.ym); cnt.detCur = D; byId('det-body').innerHTML = cntExamDetailHtml(D); byId('det-xlsx').style.display = D.has && D.list.length ? '' : 'none'; openModal('det-modal'); } }
+      else if (a === 'detail') { e.preventDefault(); const D = (cnt.det || {})[b.dataset.id]; if (D) { byId('det-title').textContent = '🔎 Dettaglio esami · ' + D.nome + ' · ' + ymLabel(cnt.ym); cnt.detCur = D; cnt.detF = { q: '', t: '' }; byId('det-body').innerHTML = cntExamDetailHtml(D); cntDetFilter(); byId('det-xlsx').style.display = D.has && D.list.length ? '' : 'none'; openModal('det-modal'); } }
       else if (a === 'conv') { byId('conv-body').innerHTML = cnt.convHtml || ''; openModal('conv-modal'); }
       else if (a === 'shifts') { const my = ++cnt.req; cnt.shiftsLoading = true; cntRender(); cntLoadShifts(my).then(() => { if (my === cnt.req) cntRender(); }); }
     });
     byId('conv-xlsx').addEventListener('click', cntConvExport);
     byId('det-xlsx').addEventListener('click', cntDetExport);
+    byId('det-body').addEventListener('input', e => { if (e.target.id === 'det-q') { cnt.detF.q = e.target.value; cntDetFilter(); } });
+    byId('det-body').addEventListener('click', e => { const b = e.target.closest('[data-dt]'); if (b) { cnt.detF.t = b.dataset.dt; cntDetFilter(); } });
     byId('conv-modal').addEventListener('click', e => {
       const b = e.target.closest('[data-pesi]'); if (!b) return;
       if (b.dataset.pesi === 'reset') Object.assign(CNT_PESI, CNT_PESI_DEF);

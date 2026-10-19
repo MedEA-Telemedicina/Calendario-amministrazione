@@ -408,6 +408,9 @@
   .c-tb td small.cs-c { color: #1a73e8; font-weight: 700; }
   .c-tb td small.cs-t { color: #9aa5b1; font-weight: 600; }
   .c-tb td small.cs-t + b { display: inline-block; margin-top: 6px; }
+  .c-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .c-pill { font-size: 12px; color: #5b6b7f; background: #f3f6fa; border-radius: 20px; padding: 4px 12px; font-weight: 600; } .c-pill b { color: #1f2933; font-size: 13px; font-weight: 800; }
+  .c-tb.c-left th:not(:first-child), .c-tb.c-left td:not(:first-child) { text-align: left; }
   .c-detbtn { padding: 7px 13px; font-size: 12.5px; }
   .c-doc .t { font-size: 16px; font-weight: 800; color: #1a73e8; min-width: 104px; text-align: right; font-variant-numeric: tabular-nums; }
   .c-dbody { padding: 6px 18px 18px; border-top: 1px solid #eef2f7; display: grid; gap: 14px; background: linear-gradient(#fafcff, #fff 70px); }
@@ -893,7 +896,7 @@
     <div class="r-modal" style="max-width:920px" role="dialog" aria-modal="true" aria-labelledby="det-title">
       <div class="r-modal-h"><h3 id="det-title">🔎 Dettaglio esami</h3><button class="r-x" type="button" data-close="det" aria-label="Chiudi">✕</button></div>
       <div class="r-modal-b" id="det-body"></div>
-      <div class="r-modal-f"><button class="r-btn ghost" type="button" data-close="det">Chiudi</button></div>
+      <div class="r-modal-f"><button class="r-btn primary" type="button" id="det-xlsx">⬇ Esporta Excel</button><button class="r-btn ghost" type="button" data-close="det">Chiudi</button></div>
     </div>
   </div>
 
@@ -2063,7 +2066,7 @@ function cntAnalyze(rows, ym) {
     throw new Error('Mese non corretto: il file contiene esami di ' + det + ', ma hai selezionato ' + ymLabel(ym) + '. Controlla il file oppure cambia mese.');
   }
   // 2) aggregazione
-  const doctors = {}, ecgOre = {}, ign = { rifiutati: 0, senzaMedico: 0, fuoriMese: 0, dataNonValida: 0, tipiIgnorati: 0 };
+  const doctors = {}, ecgOre = {}, esami = {}, ign = { rifiutati: 0, senzaMedico: 0, fuoriMese: 0, dataNonValida: 0, tipiIgnorati: 0 };
   let counted = 0;
   body.forEach(r => {
     if (normTxt(r[iS]).trim() !== 'refertato') { ign.rifiutati++; return; }
@@ -2076,6 +2079,9 @@ function cntAnalyze(rows, ym) {
     if (cntIgnorato(t)) { ign.tipiIgnorati++; return; }
     const a = doctors[med] || (doctors[med] = {}), b = a[d] || (a[d] = {});
     b[t] = (b[t] || 0) + 1; counted++;
+    // dettaglio esame per esame (solo tipologia, data/ora di refertazione e data richiesta: nessun dato del paziente)
+    const mnE = cntMinutes(r[iR]);
+    (esami[med] || (esami[med] = [])).push([d, t, mnE != null ? pad2(Math.floor(mnE / 60)) + ':' + pad2(mnE % 60) : '', iQ >= 0 ? (cntDate(r[iQ]) || '') : '']);
     // ECG per fascia oraria (solo se il file riporta anche l'ora di refertazione)
     if (t === 'ECG') {
       const mn = cntMinutes(r[iR]);
@@ -2084,6 +2090,7 @@ function cntAnalyze(rows, ym) {
   });
   const dati = { v: 1, doctors, ignorati: ign };
   if (Object.keys(ecgOre).length) dati.ecgOre = ecgOre;
+  if (Object.keys(esami).length) dati.esami = esami;
   return { righe: body.length, counted, dati };
 }
 
@@ -2461,6 +2468,11 @@ function cntCompute() {
     const e = oreBy.get(d.id) || oreBy.set(d.id, {}).get(d.id);
     Object.entries(days).forEach(([day, z]) => { const a = e[day] || (e[day] = { mat: 0, pom: 0 }); a.mat += z.mat || 0; a.pom += z.pom || 0; });
   });
+  const exBy = new Map();
+  Object.entries(dati.esami || {}).forEach(([name, list]) => {
+    const d = cntMatch(name, matchers); if (!d) return;
+    (exBy.get(d.id) || exBy.set(d.id, []).get(d.id)).push(...list);
+  });
   Object.entries(dati.doctors || {}).forEach(([name, days]) => {
     let n = 0; Object.values(days).forEach(t => Object.entries(t).forEach(([k, v]) => { if (!cntIgnorato(k)) n += v; }));
     const d = cntMatch(name, matchers);
@@ -2570,7 +2582,7 @@ function cntCompute() {
     const conv = cntConv(typeRows, centsT, ok), convG = cntConvByTurno(sv, cells, typeRows, d.tariffe);
     if (hasCons) T.anyCons = true;
     T.esami += esami; T.turni += ok; T.centsT += centsT; T.centsE += centsE;
-    return { d, inattivo: !d.attivo, cells, esami, inCal, ok, senzaEsami, centsT, centsE, brk, warn: [...warn], typeRows, hasCons, cal: cntCal(evs), conv, convG };
+    return { d, inattivo: !d.attivo, exList: exBy.get(d.id) || [], cells, esami, inCal, ok, senzaEsami, centsT, centsE, brk, warn: [...warn], typeRows, hasCons, cal: cntCal(evs), conv, convG };
   });
   const convTot = cntConvTotals(rows), convGrp = cntConvGrpTotals(rows);
   return { rows, unmatched, inactive, T, shiftNoOwner, bench, convTot, convGrp };
@@ -2593,7 +2605,7 @@ function cntTurnoHtml(o) {
   if (o.inf) parts.push('<span class="c-tag">tipo dedotto dal n. di ECG</span>');
   return '<div class="c-tl"><div class="a">' + escHtml(o.l) + '</div>' + (parts.length ? '<div class="b">' + parts.join('') + '</div>' : '') + bar + '</div>';
 }
-// tabella di tutti gli esami refertati giorno per giorno (una colonna per tipologia) — mostrata nel popup «Dettaglio esami»
+// tabella degli esami refertati per giorno e turno (una colonna per tipologia)
 function cntDayTableHtml(x) {
   let h = '';
   const days = Object.keys(x.cells).filter(k => x.cells[k].tot || x.cells[k].evs.length).sort(), tps = x.typeRows.map(r => r.t);
@@ -2611,6 +2623,27 @@ function cntDayTableHtml(x) {
   h += '</tbody><tfoot><tr><td colspan="2">Totale</td>' + x.typeRows.map(r => '<td>' + r.n + '</td>').join('') + '<td>' + x.esami + '</td></tr></tfoot></table></div>';
   return h;
 }
+const cntFmtData = iso => { if (!iso) return ''; const t = new Date(iso + 'T00:00:00'); return GG[t.getDay()] + ' ' + pad2(t.getDate()) + '/' + pad2(t.getMonth() + 1) + '/' + t.getFullYear(); };
+const cntSortEsami = list => list.slice().sort((a, b) => (a[0] + (a[2] || '')) < (b[0] + (b[2] || '')) ? -1 : (a[0] + (a[2] || '')) > (b[0] + (b[2] || '')) ? 1 : 0);
+// popup «Dettaglio esami»: gli esami del medico, uno per riga, come estratti dal file caricato
+function cntExamDetailHtml(D) {
+  if (!D.has) return '<div class="c-warn c-info">Il dettaglio dei singoli esami non è disponibile per questo mese: il file è stato caricato prima di questa funzione. Usa «Elimina e ricarica» e carica di nuovo il file.</div>';
+  if (!D.list.length) return '<div class="c-note" style="padding:24px">Nessun esame refertato da questo medico nel mese.</div>';
+  const L = cntSortEsami(D.list), by = {}; L.forEach(e => by[e[1]] = (by[e[1]] || 0) + 1);
+  return '<div class="c-pills"><span class="c-pill"><b>' + L.length.toLocaleString('it-IT') + '</b> esami totali</span>'
+    + Object.entries(by).sort((a, b) => b[1] - a[1]).map(([t, n]) => '<span class="c-pill"><b>' + n.toLocaleString('it-IT') + '</b> ' + escHtml(t) + '</span>').join('') + '</div>'
+    + '<div class="c-scroll" style="margin-top:0"><table class="c-tb c-left"><thead><tr><th>#</th><th>Data refertazione</th><th>Ora</th><th>Tipologia</th><th>Data richiesta</th></tr></thead><tbody>'
+    + L.map((e, i) => '<tr><td class="mut">' + (i + 1) + '</td><td class="c-day"><b>' + GG[new Date(e[0] + 'T00:00:00').getDay()] + '</b> ' + cntFmtData(e[0]).slice(4) + '</td><td>' + (e[2] || '<span class="mut">–</span>') + '</td><td><b>' + escHtml(e[1]) + '</b></td><td>' + (e[3] ? cntFmtData(e[3]).slice(4) : '<span class="mut">–</span>') + '</td></tr>').join('')
+    + '</tbody></table></div>';
+}
+function cntDetExport() {
+  const D = cnt.detCur; if (!D || !D.list.length) { toast('Nessun esame da esportare', 'err'); return; }
+  const aoa = [['Data refertazione', 'Ora', 'Tipologia', 'Data richiesta'], ...cntSortEsami(D.list).map(e => [e[0], e[2], e[1], e[3]])];
+  const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = [{ wch: 18 }, { wch: 8 }, { wch: 28 }, { wch: 16 }];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Esami');
+  XLSX.writeFile(wb, 'dettaglio_esami_' + D.nome.replace(/[^A-Za-z0-9]+/g, '_') + '_' + cnt.ym + '.xlsx');
+  toast('Excel scaricato', 'ok');
+}
 function cntDocBlock(x, hasShifts, bench) {
   x.bench = bench;
   const showT = hasShifts, total = x.centsT + x.centsE;
@@ -2619,7 +2652,8 @@ function cntDocBlock(x, hasShifts, bench) {
     + '<span class="m"><b>' + (showT ? x.ok : '–') + '</b> turni</span>'
     + '<span class="t">' + fmtEuro(total / 100) + '</span>'
     + '<button type="button" class="r-btn ghost c-detbtn" data-cnt="detail" data-id="' + escHtml(x.d.id) + '">🔎 Dettaglio esami</button></summary><div class="c-dbody">';
-  cnt.det = cnt.det || {}; cnt.det[x.d.id] = { nome: x.d.nome, html: cntDayTableHtml(x) };   // il dettaglio giorno per giorno si apre nel popup
+  h += '<div class="c-sec">Esami refertati per giorno e turno</div>' + cntDayTableHtml(x);
+  cnt.det = cnt.det || {}; cnt.det[x.d.id] = { nome: x.d.nome, list: x.exList || [], has: !!(cnt.rec && cnt.rec.dati && cnt.rec.dati.esami) };   // dati del popup «Dettaglio esami»
   // turni
   const calTxt = [['Completo', x.cal.comp], ['Mattina', x.cal.mat], ['Pomeriggio', x.cal.pom], ['Domenica', x.cal.dom], ['di cui ECG', x.cal.ecg], ['Holter (10hc/10hp)', x.cal.hol], ['Holter (16hc)', x.cal.h16], ['Non riconosciuto', x.cal.altro]].filter(p => p[1]).map(p => p[0] + ' ' + p[1]).join(' · ');
   if (showT && x.cal.tot) h += '<div class="c-cal">Nella sezione Turni: <b>Tot. ' + x.cal.tot + '</b>' + (calTxt ? ' · ' + calTxt : '') + '</div>';
@@ -2874,11 +2908,12 @@ async function maybeImportLegacy() {
       if (a === 'prev') cntGo(-1); else if (a === 'next') cntGo(1);
       else if (a === 'del') cntDelete(); else if (a === 'reload') cntLoad();
       else if (a === 'expand' || a === 'collapse') document.querySelectorAll('#cnt-body .c-doc').forEach(e => { e.open = a === 'expand'; });
-      else if (a === 'detail') { e.preventDefault(); const D = (cnt.det || {})[b.dataset.id]; if (D) { byId('det-title').textContent = '🔎 Dettaglio esami · ' + D.nome + ' · ' + ymLabel(cnt.ym); byId('det-body').innerHTML = D.html; openModal('det-modal'); } }
+      else if (a === 'detail') { e.preventDefault(); const D = (cnt.det || {})[b.dataset.id]; if (D) { byId('det-title').textContent = '🔎 Dettaglio esami · ' + D.nome + ' · ' + ymLabel(cnt.ym); cnt.detCur = D; byId('det-body').innerHTML = cntExamDetailHtml(D); byId('det-xlsx').style.display = D.has && D.list.length ? '' : 'none'; openModal('det-modal'); } }
       else if (a === 'conv') { byId('conv-body').innerHTML = cnt.convHtml || ''; openModal('conv-modal'); }
       else if (a === 'shifts') { const my = ++cnt.req; cnt.shiftsLoading = true; cntRender(); cntLoadShifts(my).then(() => { if (my === cnt.req) cntRender(); }); }
     });
     byId('conv-xlsx').addEventListener('click', cntConvExport);
+    byId('det-xlsx').addEventListener('click', cntDetExport);
     byId('conv-modal').addEventListener('click', e => {
       const b = e.target.closest('[data-pesi]'); if (!b) return;
       if (b.dataset.pesi === 'reset') Object.assign(CNT_PESI, CNT_PESI_DEF);

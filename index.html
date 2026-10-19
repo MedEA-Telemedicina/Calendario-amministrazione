@@ -353,61 +353,126 @@
   .r-kpi .l { font-size: 12px; color: #7b8794; margin-top: 5px; font-weight: 600; }
 
   /* ═══════════ CONTEGGI ═══════════ */
-  .c-nav { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 16px; flex-wrap: wrap; }
-  .c-month { font-size: 20px; font-weight: 800; color: #1f2933; min-width: 190px; text-align: center; }
-  .c-arrow { width: 38px; height: 38px; border-radius: 12px; border: none; background: #fff; box-shadow: var(--r-sh); font-size: 22px; line-height: 1; cursor: pointer; color: #1a73e8; font-weight: 700; }
-  .c-arrow:hover { background: #eaf2ff; }
-  .c-search { max-width: 220px; margin-left: 12px; padding: 9px 14px; }
+  /* rifinitura comune delle card */
+  .r-panel, .r-kpi, .r-tablewrap { border: 1px solid #edf1f6; }
+  .r-kpi .n { font-variant-numeric: tabular-nums; letter-spacing: -.4px; }
+
+  /* barra mese + ricerca */
+  .c-nav { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; padding: 10px 12px; background: #fff; border: 1px solid #edf1f6; border-radius: 18px; box-shadow: var(--r-sh); flex-wrap: wrap; }
+  .c-month { font-size: 19px; font-weight: 800; color: #1f2933; min-width: 170px; text-align: center; letter-spacing: -.2px; }
+  .c-arrow { width: 38px; height: 38px; border-radius: 12px; border: none; background: #eef4ff; font-size: 22px; line-height: 1; cursor: pointer; color: #1a73e8; font-weight: 700; transition: background .15s, color .15s, transform .15s; }
+  .c-arrow:hover { background: #1a73e8; color: #fff; }
+  .c-arrow:active { transform: scale(.93); }
+  .c-search { flex: 1 1 200px; max-width: 290px; margin-left: auto; padding: 9px 14px; }
   .c-note { text-align: center; color: #7b8794; font-size: 13.5px; }
-  .c-drop { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; border: 2px dashed #b9c9de; border-radius: 16px; padding: 42px 20px; cursor: pointer; background: #f8fafc; color: #3b4a5c; transition: background .2s, border-color .2s; line-height: 1.5; }
+
+  /* caricamento file */
+  .c-drop { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; border: 2px dashed #b9c9de; border-radius: 18px; padding: 46px 20px; cursor: pointer; background: linear-gradient(#f8fafc, #f2f6fb); color: #3b4a5c; transition: background .2s, border-color .2s, transform .2s; line-height: 1.5; }
   .c-drop:hover, .c-drop.over { background: #eaf2ff; border-color: #1a73e8; }
+  .c-drop.over { transform: scale(1.01); }
   .c-drop.busy { opacity: .6; pointer-events: none; }
-  .c-drop .big { font-size: 38px; }
-  .c-file { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 18px; }
+  .c-drop .big { width: 72px; height: 72px; border-radius: 22px; background: #fff; box-shadow: var(--r-sh); display: grid; place-items: center; font-size: 34px; margin-bottom: 4px; }
+  .c-file { display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; padding: 14px 18px; }
+  .c-fi { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .c-fico { width: 44px; height: 44px; border-radius: 13px; background: #eaf2ff; display: grid; place-items: center; font-size: 21px; flex-shrink: 0; }
+  .c-fname { font-weight: 800; font-size: 14px; color: #1f2933; word-break: break-word; }
   .c-btns { display: flex; gap: 8px; flex-wrap: wrap; }
-  .c-warn { background: #fff4e5; color: #8a4b00; border-radius: 12px; padding: 10px 14px; font-size: 13px; font-weight: 600; margin-bottom: 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .c-warn.c-info { background: #eaf2ff; color: #0d3b8a; }
-  .c-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
-  .c-chip { background: #fff; border-radius: 16px; padding: 12px 16px; box-shadow: var(--r-sh); }
-  .c-chip b { display: block; font-size: 21px; font-weight: 800; color: #1f2933; }
+  .c-warn { background: #fff7ea; color: #8a4b00; border: 1px solid #fde3b8; border-radius: 14px; padding: 11px 15px; font-size: 13px; font-weight: 600; margin-bottom: 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .c-warn.c-info { background: #eef5ff; border-color: #d3e3fb; color: #0d3b8a; }
+
+  /* riepilogo del mese */
+  .c-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .c-chip { position: relative; background: #fff; border: 1px solid #edf1f6; border-radius: 16px; padding: 14px 16px 14px 21px; box-shadow: var(--r-sh); overflow: hidden; }
+  .c-chip::before { content: ''; position: absolute; left: 0; top: 14px; bottom: 14px; width: 4px; border-radius: 0 4px 4px 0; background: #a9c3ee; }
+  .c-chip b { display: block; font-size: 22px; font-weight: 800; color: #1f2933; letter-spacing: -.4px; font-variant-numeric: tabular-nums; }
   .c-chip span { font-size: 12px; color: #7b8794; font-weight: 600; }
-  .c-chip.tot { background: linear-gradient(135deg, #1a73e8, #3d8bf5); } .c-chip.tot b, .c-chip.tot span { color: #fff; }
-  .c-docs { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
-  .c-doc { background: #fff; border-radius: 16px; box-shadow: var(--r-sh); overflow: hidden; }
+  .c-chip.tot { background: linear-gradient(135deg, #1558b0, #3d8bf5); border-color: transparent; box-shadow: 0 8px 22px rgba(26,115,232,.32); }
+  .c-chip.tot::before { background: rgba(255,255,255,.55); }
+  .c-chip.tot b { color: #fff; } .c-chip.tot span { color: rgba(255,255,255,.85); }
+
+  /* card medico */
+  .c-docs { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+  .c-doc { background: #fff; border: 1px solid #edf1f6; border-radius: 18px; box-shadow: var(--r-sh); overflow: hidden; transition: border-color .2s, box-shadow .2s; }
   .c-doc[hidden] { display: none; }
-  .c-doc > summary { display: flex; align-items: center; gap: 18px; padding: 14px 18px; cursor: pointer; list-style: none; }
+  .c-doc[open] { border-color: #d6e3f6; box-shadow: 0 8px 28px rgba(16,24,40,.09); }
+  .c-doc > summary { display: flex; align-items: center; gap: 10px 14px; padding: 14px 18px; cursor: pointer; list-style: none; flex-wrap: wrap; }
   .c-doc > summary::-webkit-details-marker { display: none; }
-  .c-doc > summary::before { content: '▸'; color: #9aa5b1; transition: transform .15s; }
-  .c-doc[open] > summary::before { transform: rotate(90deg); }
+  .c-doc > summary::before { content: '›'; width: 26px; height: 26px; border-radius: 50%; background: #f0f4f9; color: #7b8794; display: grid; place-items: center; font-size: 18px; font-weight: 800; line-height: 1; flex-shrink: 0; transition: transform .2s, background .2s, color .2s; }
+  .c-doc[open] > summary::before { transform: rotate(90deg); background: #e8f0fe; color: #1a73e8; }
   .c-doc > summary:hover { background: #f8fafc; }
-  .c-off { display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; background:#eef0f3; color:#5b6672; font-size:11px; font-weight:700; vertical-align:middle; }
-  .c-doc .n { font-size: 15px; font-weight: 800; color: #1f2933; flex: 1; }
-  .c-doc .m { font-size: 12.5px; color: #5b6b7f; } .c-doc .m b { color: #1f2933; font-size: 14px; }
-  .c-doc .t { font-size: 15px; font-weight: 800; color: #1a73e8; min-width: 110px; text-align: right; }
-  .c-dbody { padding: 4px 18px 18px; border-top: 1px solid #eef2f7; display: grid; gap: 16px; }
-  .c-tb { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
-  .c-tb th { text-align: left; font-size: 11.5px; color: #7b8794; font-weight: 700; padding: 6px 10px; border-bottom: 2px solid #e3e8ef; }
-  .c-tb td { padding: 7px 10px; border-bottom: 1px solid #f0f3f7; vertical-align: top; }
+  .c-doc .n { display: flex; align-items: center; gap: 12px; flex: 1 1 200px; min-width: 0; font-size: 15px; font-weight: 800; color: #1f2933; }
+  .c-doc .n .r-avatar { width: 36px; height: 36px; font-size: 13px; }
+  .c-off { display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: 999px; background: #eef0f3; color: #5b6672; font-size: 11px; font-weight: 700; vertical-align: middle; }
+  .c-doc .m { font-size: 12px; color: #5b6b7f; background: #f3f6fa; border-radius: 20px; padding: 4px 12px; white-space: nowrap; font-weight: 600; }
+  .c-doc .m b { color: #1f2933; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .c-doc .t { font-size: 16px; font-weight: 800; color: #1a73e8; min-width: 104px; text-align: right; font-variant-numeric: tabular-nums; }
+  .c-dbody { padding: 6px 18px 18px; border-top: 1px solid #eef2f7; display: grid; gap: 14px; background: linear-gradient(#fafcff, #fff 70px); }
+
+  /* titoli di sezione */
+  .c-sec { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; color: #52606d; margin-top: 8px; }
+  .c-sec::before { content: ''; width: 4px; height: 14px; border-radius: 3px; background: linear-gradient(#1a73e8, #6aa6ff); flex-shrink: 0; }
+  .c-dbody > .c-sec { margin-bottom: -6px; }
+  .c-dbody > .c-tb, .c-dbody > .c-scroll { margin-top: 0; }
+
+  /* tabelle */
+  .c-tb { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; margin-top: 10px; background: #fff; border: 1px solid #e6ebf2; border-radius: 12px; overflow: hidden; font-variant-numeric: tabular-nums; }
+  .c-tb th { text-align: left; font-size: 11.5px; color: #6b7a8c; font-weight: 700; padding: 9px 12px; background: #f6f8fb; border-bottom: 1px solid #e6ebf2; }
+  .c-tb td { padding: 9px 12px; border-bottom: 1px solid #f0f3f7; vertical-align: middle; }
+  .c-tb tbody tr:hover td { background: #f9fbfe; }
+  .c-tb tbody tr:last-child td { border-bottom: none; }
   .c-tb th:not(:first-child), .c-tb td:not(:first-child) { text-align: right; }
-  .c-tb td small { display: block; color: #c25e00; font-size: 11px; font-weight: 600; }
-  .c-tb tfoot td { font-weight: 800; border-top: 2px solid #dbe3ee; border-bottom: none; background: #f8fafc; }
+  .c-tb td small { display: block; color: #c25e00; font-size: 11px; font-weight: 600; margin-top: 2px; }
+  .c-tb tfoot td { font-weight: 800; color: #1f2933; border-top: 1px solid #dbe3ee; border-bottom: none; background: #f1f6fd; }
   .c-tb .mut, .mut { color: #9aa5b1; font-weight: 500; }
   .c-days .c-tb td:nth-child(2), .c-days .c-tb th:nth-child(2), .c-days .c-tb td:nth-child(3), .c-days .c-tb th:nth-child(3) { text-align: left; }
-  .okk { color: #1e7e34; font-weight: 700; } .noo { color: #d93025; font-weight: 700; }
-  .c-w { background: #fff4e5; color: #8a4b00; border-radius: 10px; padding: 8px 12px; font-size: 12.5px; font-weight: 600; }
-  .c-grand { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; background: #eaf2ff; border-radius: 12px; padding: 12px 16px; font-size: 13px; color: #0d3b8a; } .c-grand b { font-size: 16px; }
-  .c-cal { background: #f4f7fb; border-radius: 10px; padding: 8px 12px; font-size: 12.5px; color: #3b4a5c; margin-bottom: -4px; }
-  .c-sec { font-size: 12.5px; font-weight: 800; color: #3b4a5c; margin-top: 4px; }
   .c-scroll { overflow-x: auto; margin-top: -8px; }
   .c-tb.c-mx th:nth-child(2), .c-tb.c-mx td:nth-child(2) { text-align: left; white-space: nowrap; }
   .c-tb.c-mx td, .c-tb.c-mx th { white-space: nowrap; }
+  .c-tb.c-mx tr.c-no td { background: #fffafa; }
+  .c-day { color: #3b4a5c; font-weight: 600; }
+  .c-day b { display: inline-block; min-width: 30px; color: #1f2933; font-weight: 800; }
+  .c-day.dom b { color: #d93025; }
+  .okk { color: #1e7e34; font-weight: 700; } .noo { color: #d93025; font-weight: 700; }
+
+  /* cella «turno» del giorno: titolo + dettaglio ECG su due righe */
+  .c-turno { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+  .c-tl { display: flex; flex-direction: column; gap: 2px; }
+  .c-tl .a { display: flex; align-items: center; gap: 7px; font-weight: 800; color: #1e7e34; }
+  .c-tl .a::before { content: '✓'; width: 18px; height: 18px; border-radius: 50%; background: #e6f4ea; display: inline-grid; place-items: center; font-size: 11px; flex-shrink: 0; }
+  .c-tl .b { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; padding-left: 25px; font-size: 12px; font-weight: 500; color: #6b7a8c; }
+  .c-tl .b b { color: #1f2933; font-weight: 800; }
+  .c-tl.no .a { color: #c5372c; }
+  .c-tl.no .a::before { content: '!'; background: #fdecea; font-weight: 800; }
+  .c-x { display: inline-block; background: #fff2e0; color: #b45f06; border-radius: 20px; padding: 1px 9px; font-size: 11px; font-weight: 800; }
+  .c-tag { display: inline-block; background: #eef2f7; color: #5b6b7f; border-radius: 20px; padding: 1px 9px; font-size: 11px; font-weight: 700; }
+  .c-bar { height: 4px; width: 130px; margin-left: 25px; margin-top: 3px; border-radius: 4px; background: #e6ebf2; overflow: hidden; }
+  .c-bar i { display: block; height: 100%; border-radius: 4px; background: #34a853; }
+  .c-bar.over i { background: #f29900; }
+
+  /* avvisi, totale, note */
+  .c-w { background: #fff7ea; color: #8a4b00; border-left: 4px solid #f29900; border-radius: 4px 10px 10px 4px; padding: 9px 13px; font-size: 12.5px; font-weight: 600; }
+  .c-grand { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; background: linear-gradient(135deg, #0f3d8f, #1a73e8); border-radius: 14px; padding: 14px 18px; font-size: 13px; font-weight: 600; color: rgba(255,255,255,.88); }
+  .c-grand b { font-size: 18px; font-weight: 800; color: #fff; letter-spacing: -.2px; }
+  .c-cal { background: #f3f7fd; border: 1px solid #e1ebf8; border-radius: 12px; padding: 9px 14px; font-size: 12.5px; line-height: 1.6; color: #3b4a5c; }
   .c-days > summary { cursor: pointer; font-weight: 700; font-size: 13px; color: #3b4a5c; }
-  .c-det { background: #fff; border-radius: 14px; box-shadow: var(--r-sh); padding: 12px 16px; margin-bottom: 12px; font-size: 13px; color: #3b4a5c; }
+  .c-det { background: #fff; border: 1px solid #edf1f6; border-radius: 14px; box-shadow: var(--r-sh); padding: 12px 16px; margin-bottom: 12px; font-size: 13px; color: #3b4a5c; }
   .c-det summary { cursor: pointer; font-weight: 700; } .c-det > div { margin-top: 10px; line-height: 1.7; max-height: 260px; overflow: auto; }
+  .c-det.warn { background: #fffaf1; border-color: #fde3b8; }
   .c-det.warn summary { color: #c25e00; }
   .r-soon { border: 2px dashed #cfd9e6; border-radius: 16px; text-align: center; padding: 44px 20px; color: #7b8794; font-size: 13.5px; line-height: 1.6; }
   .r-soon .big { font-size: 42px; margin-bottom: 8px; }
   .r-soon b { color: #3b4a5c; font-size: 15px; }
+
+  @media (max-width: 640px) {
+    .c-nav { padding: 8px; gap: 8px; }
+    .c-month { min-width: 0; flex: 1; font-size: 17px; }
+    .c-search { max-width: none; margin-left: 0; flex-basis: 100%; }
+    .c-doc > summary { padding: 12px 14px; }
+    .c-doc .t { min-width: 0; margin-left: auto; }
+    .c-dbody { padding: 4px 12px 14px; }
+    .c-chip b { font-size: 19px; }
+    .c-fi { width: 100%; }
+  }
 
   /* ═══════════ MEDICI: TOOLBAR + CARD ═══════════ */
   .r-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
@@ -2447,7 +2512,7 @@ function cntCompute() {
       }
       b.n += mult; centsT += cents(d.tariffe[v.k]) * mult; ok += mult - 1; if (mult > 1) b.dbl++;
       sv.push({ date: ev.date, k: v.k, cents: cents(d.tariffe[v.k]) * mult, m: mult });
-      (c.vn = c.vn || []).push(vocLabel(v.k) + (v.lim && !noWarn ? ' · ' + ecgChk + ' ECG su ' + v.lim + (mult > 1 ? ' → ' + mult + ' turni (' + mult + '×)' : '') : '') + (v.inferred ? ' (tipo dedotto dal n. di ECG)' : ''));
+      (c.vn = c.vn || []).push({ l: vocLabel(v.k), lim: v.lim && !noWarn ? v.lim : 0, ecg: ecgChk, mult, inf: !!v.inferred });
       if (v.inferred) b.inf++;
       if (v.lim) {
         c.ecgIncl = (c.ecgIncl || 0) + ecgN;
@@ -2480,10 +2545,22 @@ function cntApplyFilter() {
   const q = nameKey(cnt.q || '');
   document.querySelectorAll('#cnt-body .c-doc').forEach(e => { e.hidden = !!q && !e.dataset.n.includes(q); });
 }
+// voce di turno nella tabella giorno/turno: nome del turno + dettaglio degli ECG refertati su una seconda riga
+function cntTurnoHtml(o) {
+  const parts = []; let bar = '';
+  if (o.lim) {
+    parts.push('<span><b>' + o.ecg + '</b> ECG refertati · limite ' + o.lim + ' per turno</span>');
+    const pct = Math.min(100, Math.round(o.ecg / (o.lim * Math.max(o.mult || 1, 1)) * 100));
+    bar = '<div class="c-bar' + (o.mult > 1 || o.ecg > o.lim ? ' over' : '') + '"><i style="width:' + pct + '%"></i></div>';
+  }
+  if (o.mult > 1) parts.push('<span class="c-x">' + o.mult + ' turni conteggiati</span>');
+  if (o.inf) parts.push('<span class="c-tag">tipo dedotto dal n. di ECG</span>');
+  return '<div class="c-tl"><div class="a">' + escHtml(o.l) + '</div>' + (parts.length ? '<div class="b">' + parts.join('') + '</div>' : '') + bar + '</div>';
+}
 function cntDocBlock(x, hasShifts, bench) {
   x.bench = bench;
   const showT = hasShifts, total = x.centsT + x.centsE;
-  let h = '<details class="c-doc" open data-n="' + escHtml(nameKey(x.d.nome)) + '"><summary><span class="n">' + escHtml(x.d.nome) + (x.inattivo ? ' <span class="c-off">Medico attualmente non attivo</span>' : '') + '</span>'
+  let h = '<details class="c-doc" open data-n="' + escHtml(nameKey(x.d.nome)) + '"><summary><span class="n"><span class="r-avatar" style="background:' + avColor(x.d.nome) + '">' + escHtml(initials(x.d.nome)) + '</span><span>' + escHtml(x.d.nome) + (x.inattivo ? ' <span class="c-off">Medico attualmente non attivo</span>' : '') + '</span></span>'
     + '<span class="m"><b>' + x.esami.toLocaleString('it-IT') + '</b> esami</span>'
     + '<span class="m"><b>' + (showT ? x.ok : '–') + '</b> turni</span>'
     + '<span class="t">' + fmtEuro(total / 100) + '</span></summary><div class="c-dbody">';
@@ -2493,11 +2570,10 @@ function cntDocBlock(x, hasShifts, bench) {
     + tps.map(t => '<th>' + escHtml(t) + '</th>').join('') + '<th>Totale</th></tr></thead><tbody>';
   if (!days.length) h += '<tr><td colspan="' + (3 + tps.length) + '" class="mut">Nessun esame né turno nel mese</td></tr>';
   days.forEach(k => {
-    const c = x.cells[k], dt = new Date(k + 'T00:00:00'), evs = escHtml(c.evs.map(e => e.replace(/^0[12]\s+/, '')).join(' + '));
-    const lab = escHtml(c.vn ? c.vn.join(' + ') : (c.evs.map(e => e.replace(/^0[12]\s+/, '')).join(' + ') || 'Turno'));
-    const t = c.ok ? '<span class="okk" title="' + evs + '">✓ ' + lab + '</span>'
-      : c.evs.length ? '<span class="noo" title="' + evs + '">○ ' + evs + ' — nessun esame</span>' : '<span class="mut">—</span>';
-    h += '<tr><td>' + GG[dt.getDay()] + ' ' + pad2(dt.getDate()) + '/' + pad2(dt.getMonth() + 1) + '</td><td>' + t + '</td>'
+    const c = x.cells[k], dt = new Date(k + 'T00:00:00'), evTxt = c.evs.map(e => e.replace(/^0[12]\s+/, '')).join(' + '), evs = escHtml(evTxt);
+    const t = c.ok ? '<div class="c-turno" title="' + evs + '">' + (c.vn ? c.vn.map(cntTurnoHtml).join('') : cntTurnoHtml({ l: evTxt || 'Turno' })) + '</div>'
+      : c.evs.length ? '<div class="c-tl no" title="' + evs + '"><div class="a">' + evs + '</div><div class="b">Nessun esame refertato: turno non conteggiato</div></div>' : '<span class="mut">—</span>';
+    h += '<tr' + (!c.ok && c.evs.length ? ' class="c-no"' : '') + '><td class="c-day' + (dt.getDay() === 0 ? ' dom' : '') + '"><b>' + GG[dt.getDay()] + '</b> ' + pad2(dt.getDate()) + '/' + pad2(dt.getMonth() + 1) + '</td><td>' + t + '</td>'
       + tps.map(tp => c.types[tp] ? '<td><b>' + c.types[tp] + '</b></td>' : '<td class="mut">–</td>').join('')
       + '<td><b>' + (c.tot || '–') + '</b></td></tr>';
   });
@@ -2561,9 +2637,9 @@ function cntRender() {
   }
   if (!doctorsLoaded) { body.innerHTML = '<div class="r-panel c-note">Elenco medici non ancora caricato…</div>'; return; }
   const r = cnt.rec, ign = r.dati.ignorati || {}, R = cntCompute(), hasShifts = !!cnt.shifts, T = R.T;
-  let h = '<div class="r-panel c-file"><div>📄 <b>' + escHtml(r.nome_file || 'file') + '</b><div class="r-usub">'
+  let h = '<div class="r-panel c-file"><div class="c-fi"><span class="c-fico">📄</span><div><div class="c-fname">' + escHtml(r.nome_file || 'file') + '</div><div class="r-usub">'
     + (r.righe_totali || 0).toLocaleString('it-IT') + ' righe · ' + (r.righe_conteggiate || 0).toLocaleString('it-IT') + ' esami refertati conteggiati · caricato il '
-    + (r.caricato_il ? new Date(r.caricato_il).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '–') + (r.caricato_da ? ' da ' + escHtml(r.caricato_da) : '') + '</div></div>'
+    + (r.caricato_il ? new Date(r.caricato_il).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '–') + (r.caricato_da ? ' da ' + escHtml(r.caricato_da) : '') + '</div></div></div>'
     + '<div class="c-btns"><button class="r-btn ghost" data-cnt="expand">Espandi tutti</button><button class="r-btn ghost" data-cnt="collapse">Comprimi tutti</button>'
     + '<button class="r-btn ghost" data-cnt="del">🗑 Elimina e ricarica</button></div></div>';
   if (cnt.shiftsLoading) h += '<div class="c-warn c-info">⏳ Lettura dei turni dal calendario…</div>';

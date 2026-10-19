@@ -450,8 +450,9 @@
   /* cella «turno» del giorno: titolo + dettaglio ECG su due righe */
   .c-turno { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
   .c-tl { display: flex; flex-direction: column; gap: 2px; }
-  .c-tl .a { display: flex; align-items: center; gap: 7px; font-weight: 800; color: #1e7e34; }
-  .c-tl .a::before { content: '✓'; width: 18px; height: 18px; border-radius: 50%; background: #e6f4ea; display: inline-grid; place-items: center; font-size: 11px; flex-shrink: 0; }
+  .c-tl .a { display: flex; align-items: center; gap: 7px; font-weight: 800; color: var(--tc, #1e7e34); }
+  .c-tl .a::before { content: '✓'; width: 18px; height: 18px; border-radius: 50%; background: var(--tb, #e6f4ea); display: inline-grid; place-items: center; font-size: 11px; flex-shrink: 0; }
+  .c-tl.tc { border-left: 4px solid var(--tc); padding-left: 8px; }
   .c-tl .b { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; padding-left: 25px; font-size: 12px; font-weight: 500; color: #6b7a8c; }
   .c-tl .b b { color: #1f2933; font-weight: 800; }
   .c-tl.no .a { color: #c5372c; }
@@ -2411,7 +2412,8 @@ function cntGrpMatrix(G, bench, withDoc) {
     + tps.map(t => '<th>' + escHtml(cntShort[t]) + '<br><span style=\"font-weight:500\">€ per referto · risparmio per esame</span></th>').join('') + '</tr></thead><tbody>';
   G.forEach(r => {
     const by = {}; r.list.forEach(x => by[x.t] = x);
-    h += '<tr><td>' + escHtml(r.l) + '</td><td>' + r.turni + '</td><td>' + fmtEuro(r.centsT / 100) + '</td>'
+    const gc = r.g && CNT_GRP_COL[r.g];
+    h += '<tr><td>' + (gc ? '<span class="c-dot" style="background:' + gc[0] + '"></span>' : '') + (gc ? '<b style="color:' + gc[0] + '">' + escHtml(r.l) + '</b>' : escHtml(r.l)) + '</td><td>' + r.turni + '</td><td>' + fmtEuro(r.centsT / 100) + '</td>'
       + tps.map(t => {
         const x = by[t]; if (!x || !x.cov || !x.c) return '<td><span class=\"mut\">—</span></td>';
         const cost = x.c / x.cov / 100;
@@ -2569,7 +2571,7 @@ function cntCompute() {
       }
       b.n += mult; centsT += cents(d.tariffe[v.k]) * mult; ok += mult - 1; if (mult > 1) b.dbl++;
       sv.push({ date: ev.date, k: v.k, cents: cents(d.tariffe[v.k]) * mult, m: mult });
-      (c.vn = c.vn || []).push({ l: vocLabel(v.k), lim: v.lim && !noWarn ? v.lim : 0, ecg: shown, mult, inf: !!v.inferred });
+      (c.vn = c.vn || []).push({ k: v.k, l: vocLabel(v.k), lim: v.lim && !noWarn ? v.lim : 0, ecg: shown, mult, inf: !!v.inferred });
       if (v.inferred) b.inf++;
       if (v.lim) {
         c.ecgIncl = (c.ecgIncl || 0) + ecgN;
@@ -2602,6 +2604,9 @@ function cntApplyFilter() {
   const q = nameKey(cnt.q || '');
   document.querySelectorAll('#cnt-body .c-doc').forEach(e => { e.hidden = !!q && !e.dataset.n.includes(q); });
 }
+// un colore per ogni tipologia di turno (testo, sfondo chiaro)
+const CNT_GRP_COL = { holter: ['#8b1a3a', '#f6dde5'], h16: ['#6a3fb5', '#e9e0f7'], completo: ['#1a73e8', '#dbe8fd'], ecg: ['#00796b', '#d6efec'], domenica: ['#d9530a', '#fde5d6'] };
+const cntGrpOfVoce = k => { const G = CNT_GRP.find(g => g.ks.includes(k)); return G ? G.g : ''; };
 // voce di turno nella tabella giorno/turno: nome del turno + dettaglio degli ECG refertati su una seconda riga
 function cntTurnoHtml(o) {
   const parts = []; let bar = '';
@@ -2613,7 +2618,8 @@ function cntTurnoHtml(o) {
   }
   if (o.mult > 1) parts.push('<span class="c-x">' + o.mult + ' turni conteggiati</span>');
   if (o.inf) parts.push('<span class="c-tag">tipo dedotto dal n. di ECG</span>');
-  return '<div class="c-tl"><div class="a">' + escHtml(o.l) + '</div>' + (parts.length ? '<div class="b">' + parts.join('') + '</div>' : '') + bar + '</div>';
+  const col = CNT_GRP_COL[cntGrpOfVoce(o.k)];
+  return '<div class="c-tl' + (col ? ' tc' : '') + '"' + (col ? ' style="--tc:' + col[0] + ';--tb:' + col[1] + '"' : '') + '><div class="a">' + escHtml(o.l) + '</div>' + (parts.length ? '<div class="b">' + parts.join('') + '</div>' : '') + bar + '</div>';
 }
 // medici solo a consuntivo: niente tabella giorno/turno, solo conteggio per tipologia con importo a referto e compenso spettante
 function cntConsTableHtml(x) {
@@ -2704,7 +2710,7 @@ function cntDocBlock(x, hasShifts, bench) {
   if (showT && x.cal.tot) h += '<div class="c-cal">Nella sezione Turni: <b>Tot. ' + x.cal.tot + '</b>' + (calTxt ? ' · ' + calTxt : '') + '</div>';
   const showTurniTb = !showT || x.inCal > 0;           // chi non fa turni: nessuna tabella turni
   if (showT && x.convG) {
-    const gl = CNT_GRP.filter(G => x.convG[G.g] && x.convG[G.g].centsT).map(G => ({ l: G.l, turni: x.convG[G.g].nTurni, centsT: x.convG[G.g].centsT, covTot: x.convG[G.g].covTot, list: x.convG[G.g].list }));
+    const gl = CNT_GRP.filter(G => x.convG[G.g] && x.convG[G.g].centsT).map(G => ({ g: G.g, l: G.l, turni: x.convG[G.g].nTurni, centsT: x.convG[G.g].centsT, covTot: x.convG[G.g].covTot, list: x.convG[G.g].list }));
     if (gl.length) h += '<div class="c-sec" style="margin-top:14px">Riepilogo per tipologia di turno</div>' + cntGrpMatrix(gl, x.bench || {}, false);
   }
   x.warn.forEach(w => { h += '<div class="c-w">⚠ ' + escHtml(w) + '</div>'; });

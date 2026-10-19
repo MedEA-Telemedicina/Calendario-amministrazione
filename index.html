@@ -466,6 +466,28 @@
   .c-bar.low i { background: #d93025; }     /* < 50 ECG */
 
   /* avvisi, totale, note */
+  /* occhio: mostra / nasconde il risparmio nel riepilogo per tipologia di turno */
+  .c-sech { display: flex; align-items: center; gap: 8px; }
+  .c-eye { display: inline-grid; place-items: center; width: 30px; height: 26px; padding: 0; border: 1px solid #d9e1ec; border-radius: 8px; background: #fff; color: #5b6878; cursor: pointer; }
+  .c-eye:hover { background: #eef3fa; color: #1a73e8; }
+  .c-eye svg { width: 17px; height: 17px; }
+  .c-eye .e-on { display: none; }
+  .c-grpwrap:not(.sav-off) .c-eye .e-on { display: block; }
+  .c-grpwrap:not(.sav-off) .c-eye .e-off { display: none; }
+  .c-grpwrap:not(.sav-off) .c-eye { color: #1a73e8; border-color: #a9c3ee; background: #eef5ff; }
+  .c-grpwrap.sav-off .c-sav { display: none !important; }
+  /* turno ECG aggiuntivo da confermare */
+  .c-pend { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; margin-left: 25px; padding: 7px 10px; background: #fff7ea; border: 1px solid #f9d79a; border-left: 4px solid #f29900; border-radius: 8px; color: #8a4b00; font-size: 12px; font-weight: 700; }
+  .c-pend .r-btn { padding: 4px 12px; font-size: 12px; }
+  .c-pend.done { background: #f1f8f3; border-color: #cfe8d5; border-left-color: #34a853; color: #1e7e34; }
+  .c-pend.no { background: #f4f6f9; border-color: #e2e8f0; border-left-color: #9aa5b4; color: #5b6878; }
+  .ex-box { font-size: 14px; line-height: 1.55; color: #1f2933; }
+  .ex-box .ex-n { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
+  .ex-box .ex-n div { background: #f6f8fb; border: 1px solid #e4eaf2; border-radius: 12px; padding: 8px 14px; min-width: 100px; }
+  .ex-box .ex-n b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+  .ex-box .ex-n span { font-size: 11.5px; color: #7b8794; font-weight: 600; }
+  .ex-btns { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .ex-btns .r-btn { justify-content: center; text-align: center; }
   .c-w { background: #fff7ea; color: #8a4b00; border-left: 4px solid #f29900; border-radius: 4px 10px 10px 4px; padding: 9px 13px; font-size: 12.5px; font-weight: 600; }
   .c-grand { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; background: linear-gradient(135deg, #0f3d8f, #1a73e8); border-radius: 14px; padding: 14px 18px; font-size: 13px; font-weight: 600; color: rgba(255,255,255,.88); }
   .c-grand b { font-size: 18px; font-weight: 800; color: #fff; letter-spacing: -.2px; }
@@ -905,6 +927,15 @@
       <div class="r-modal-h"><h3 id="det-title">🔎 Dettaglio esami</h3><button class="r-x" type="button" data-close="det" aria-label="Chiudi">✕</button></div>
       <div class="r-modal-b" id="det-body"></div>
       <div class="r-modal-f"><button class="r-btn primary" type="button" id="det-xlsx">⬇ Esporta Excel</button><button class="r-btn ghost" type="button" data-close="det">Chiudi</button></div>
+    </div>
+  </div>
+
+  <!-- ═══ MODALE CONFERMA TURNO ECG AGGIUNTIVO ═══ -->
+  <div class="r-modal-bg" id="extra-modal">
+    <div class="r-modal" style="max-width:520px" role="dialog" aria-modal="true" aria-labelledby="extra-title">
+      <div class="r-modal-h"><h3 id="extra-title">⚠ Conferma turno ECG aggiuntivo</h3><button class="r-x" type="button" data-close="extra" aria-label="Chiudi">✕</button></div>
+      <div class="r-modal-b" id="extra-body"></div>
+      <div class="r-modal-f"><button class="r-btn ghost" type="button" data-close="extra">Decidi più tardi</button></div>
     </div>
   </div>
 
@@ -2409,7 +2440,7 @@ function cntPesiTxt() { return Object.keys(CNT_PESI).map(t => escHtml(cntShort[t
 function cntGrpMatrix(G, bench, withDoc) {
   const tps = Object.keys(CNT_PESI);
   let h = '<div style=\"overflow-x:auto\"><table class=\"c-tb\"><thead><tr><th>' + (withDoc ? 'Medico' : 'Tipo di turno') + '</th><th>Turni</th><th>Compenso turni</th>'
-    + tps.map(t => '<th>' + escHtml(cntShort[t]) + '<br><span style=\"font-weight:500\">€ per referto · risparmio per esame</span></th>').join('') + '</tr></thead><tbody>';
+    + tps.map(t => '<th>' + escHtml(cntShort[t]) + '<br><span style=\"font-weight:500\">€ per referto<span class="c-sav"> · risparmio per esame</span></span></th>').join('') + '</tr></thead><tbody>';
   G.forEach(r => {
     const by = {}; r.list.forEach(x => by[x.t] = x);
     const gc = r.g && CNT_GRP_COL[r.g];
@@ -2417,7 +2448,7 @@ function cntGrpMatrix(G, bench, withDoc) {
       + tps.map(t => {
         const x = by[t]; if (!x || !x.cov || !x.c) return '<td><span class=\"mut\">—</span></td>';
         const cost = x.c / x.cov / 100;
-        return '<td><b>' + fmtEuro(cost) + '</b><small style=\"color:#9aa5b1\">' + (+x.cov.toFixed(1)).toLocaleString('it-IT') + ' esami</small><small style=\"display:block\">' + cntDiffEx(cntSavEx(bench, t, cost)) + '</small></td>';
+        return '<td><b>' + fmtEuro(cost) + '</b><small style=\"color:#9aa5b1\">' + (+x.cov.toFixed(1)).toLocaleString('it-IT') + ' esami</small><small class="c-sav" style=\"display:block\">' + cntDiffEx(cntSavEx(bench, t, cost)) + '</small></td>';
       }).join('') + '</tr>';
   });
   return h + '</tbody></table></div>';
@@ -2510,7 +2541,10 @@ function cntCompute() {
     const v = doctors.filter(d => d.attivo && d.tariffe[voce] != null).map(d => d.tariffe[voce]);
     if (v.length) bench[t] = v.reduce((a, b) => a + b, 0) / v.length;
   });
-  const T = { esami: 0, turni: 0, centsT: 0, centsE: 0, anyCons: false };
+  // conferme dei turni ECG aggiuntivi (salvate nel record del mese + copia locale di sicurezza)
+  let locEx = {}; try { locEx = JSON.parse(localStorage.getItem('cnt_extra_' + cnt.ym) || '{}') || {}; } catch (e) {}
+  const extraOk = Object.assign({}, locEx, dati.extraOk || {}), pendAll = [];
+  const T = { esami: 0, turni: 0, centsT: 0, centsE: 0, anyCons: false, pend: 0 };
   const rows = doctors.filter(d => d.attivo || byDoc.has(d.id)).map(d => {
     const ex = byDoc.get(d.id) || {}, cells = {}, types = {}; let esami = 0;
     Object.entries(ex).forEach(([day, tp]) => {
@@ -2560,10 +2594,22 @@ function cntCompute() {
       }
       // turno ECG moltiplicato: ogni limite superato vale un turno in più (oltre 100 fino a 200 = 2 turni, fino a 300 = 3 ...)
       // I turni totali del gruppo = max(eventi in calendario, ceil(ECG / limite)); l'eccedenza è attribuita una sola volta (al primo evento del gruppo)
-      let mult = 1, shown = ecgChk;     // shown = ECG da mostrare su QUESTO turno (con doppio turno, la quota del singolo turno)
+      // I turni in calendario (gn) sono sempre conteggiati; gli eventuali turni in più (need) NON sono più assegnati
+      // in automatico: servono la conferma dell'utente (extraOk[key] = n. di turni aggiuntivi da assegnare, 0 = nessuno).
+      let mult = 1, shown = ecgChk, pendO = null;     // shown = ECG da mostrare su QUESTO turno (con doppio turno, la quota del singolo turno)
       if (v.lim && !noWarn && gk) {
-        const tot = Math.max(gn, Math.ceil(ecgChk / v.lim)), first = !grpSeen[gk];
-        if (first) { grpSeen[gk] = true; mult = tot - (gn - 1); }
+        const tot = Math.max(gn, Math.ceil(ecgChk / v.lim)), first = !grpSeen[gk], need = tot - gn;
+        if (first) {
+          grpSeen[gk] = true;
+          let conf = 0;
+          if (need > 0) {
+            const pk = d.id + '|' + gk, dec = extraOk[pk];
+            conf = dec != null ? Math.min(Math.max(+dec || 0, 0), need) : 0;
+            pendO = { key: pk, doc: d.nome, date: ev.date, time: ev.time || '', ecg: ecgChk, lim: v.lim, gn, need, conf, decided: dec != null, imp: d.tariffe[v.k], label: vocLabel(v.k) };
+            pendAll.push(pendO); if (!pendO.decided) T.pend++;
+          }
+          mult = conf + 1;
+        }
         if (gn > 1) {
           if (tot > gn) shown = first ? ecgChk - v.lim * (gn - 1) : v.lim;                       // oltre il doppio: i turni «pieni» mostrano il limite, il resto va al primo
           else shown = first ? ecgChk - Math.floor(ecgChk / gn) * (gn - 1) : Math.floor(ecgChk / gn);   // ripartizione equa tra i turni
@@ -2571,11 +2617,10 @@ function cntCompute() {
       }
       b.n += mult; centsT += cents(d.tariffe[v.k]) * mult; ok += mult - 1; if (mult > 1) b.dbl++;
       sv.push({ date: ev.date, k: v.k, cents: cents(d.tariffe[v.k]) * mult, m: mult });
-      (c.vn = c.vn || []).push({ k: v.k, l: vocLabel(v.k), lim: v.lim && !noWarn ? v.lim : 0, ecg: shown, mult, inf: !!v.inferred });
+      (c.vn = c.vn || []).push({ k: v.k, l: vocLabel(v.k), lim: v.lim && !noWarn ? v.lim : 0, ecg: shown, mult, inf: !!v.inferred, pend: pendO });
       if (v.inferred) b.inf++;
       if (v.lim) {
         c.ecgIncl = (c.ecgIncl || 0) + ecgN;
-        if (!noWarn && mult >= 3) { const dt = new Date(ev.date + 'T00:00:00'); warn.add('Il ' + pad2(dt.getDate()) + '/' + pad2(dt.getMonth() + 1) + (ev.time ? (ev.time === 'mat' ? ' (mattina)' : ' (pomeriggio)') : '') + ' gli ECG (' + ecgChk + ') superano il doppio del limite (' + v.lim + ' per turno): valorizzati ' + mult + ' turni, verificare'); }
       }
     });
     const hasCons = CNT_CONS.some(k => d.tariffe[k] != null);
@@ -2593,10 +2638,10 @@ function cntCompute() {
     const conv = cntConv(typeRows, centsT, ok), convG = cntConvByTurno(sv, cells, typeRows, d.tariffe);
     if (hasCons) T.anyCons = true;
     T.esami += esami; T.turni += ok; T.centsT += centsT; T.centsE += centsE;
-    return { d, inattivo: !d.attivo, exList: exBy.get(d.id) || [], cells, esami, inCal, ok, senzaEsami, centsT, centsE, brk, warn: [...warn], typeRows, hasCons, cal: cntCal(evs), conv, convG };
+    return { d, pend: pendAll.filter(q => q.key.startsWith(d.id + '|')), inattivo: !d.attivo, exList: exBy.get(d.id) || [], cells, esami, inCal, ok, senzaEsami, centsT, centsE, brk, warn: [...warn], typeRows, hasCons, cal: cntCal(evs), conv, convG };
   });
   const convTot = cntConvTotals(rows), convGrp = cntConvGrpTotals(rows);
-  return { rows, unmatched, inactive, T, shiftNoOwner, bench, convTot, convGrp };
+  return { rows, unmatched, inactive, T, shiftNoOwner, bench, convTot, convGrp, pend: pendAll };
 }
 
 // ── rendering ──
@@ -2619,7 +2664,18 @@ function cntTurnoHtml(o) {
   if (o.mult > 1) parts.push('<span class="c-x">' + o.mult + ' turni conteggiati</span>');
   if (o.inf) parts.push('<span class="c-tag">tipo dedotto dal n. di ECG</span>');
   const col = CNT_GRP_COL[cntGrpOfVoce(o.k)];
-  return '<div class="c-tl' + (col ? ' tc' : '') + '"' + (col ? ' style="--tc:' + col[0] + ';--tb:' + col[1] + '"' : '') + '><div class="a">' + escHtml(o.l) + '</div>' + (parts.length ? '<div class="b">' + parts.join('') + '</div>' : '') + bar + '</div>';
+  const pendH = o.pend ? cntPendInline(o.pend) : '';
+  return '<div class="c-tl' + (col ? ' tc' : '') + '"' + (col ? ' style="--tc:' + col[0] + ';--tb:' + col[1] + '"' : '') + '><div class="a">' + escHtml(o.l) + '</div>' + (parts.length ? '<div class="b">' + parts.join('') + '</div>' : '') + bar + pendH + '</div>';
+}
+// helper conferma turni ECG aggiuntivi
+const cntOrd = n => n + '°';
+const cntFascia = t => t === 'mat' ? ' (mattina)' : t === 'pom' ? ' (pomeriggio)' : '';
+const cntDM = ds => { const dt = new Date(ds + 'T00:00:00'); return pad2(dt.getDate()) + '/' + pad2(dt.getMonth() + 1); };
+function cntPendInline(q) {
+  const btn = lbl => '<button type="button" class="r-btn ghost" data-cnt="extra" data-key="' + escHtml(q.key) + '">' + lbl + '</button>';
+  if (!q.decided) return '<div class="c-pend"><span>⚠ ' + q.ecg + ' ECG: oltre i ' + q.gn + ' turni in calendario (limite ' + q.lim + ' ciascuno). Turno aggiuntivo <u>non assegnato</u> finché non confermi.</span>' + btn('Conferma…') + '</div>';
+  if (q.conf > 0) return '<div class="c-pend done"><span>✓ Confermato: ' + (q.conf === 1 ? cntOrd(q.gn + 1) + ' turno' : q.conf + ' turni aggiuntivi') + ' ECG assegnato/i</span>' + btn('Modifica') + '</div>';
+  return '<div class="c-pend no"><span>Turno aggiuntivo ECG non assegnato (' + q.ecg + ' ECG oltre la capienza)</span>' + btn('Modifica') + '</div>';
 }
 // medici solo a consuntivo: niente tabella giorno/turno, solo conteggio per tipologia con importo a referto e compenso spettante
 function cntConsTableHtml(x) {
@@ -2711,11 +2767,57 @@ function cntDocBlock(x, hasShifts, bench) {
   const showTurniTb = !showT || x.inCal > 0;           // chi non fa turni: nessuna tabella turni
   if (showT && x.convG) {
     const gl = CNT_GRP.filter(G => x.convG[G.g] && x.convG[G.g].centsT).map(G => ({ g: G.g, l: G.l, turni: x.convG[G.g].nTurni, centsT: x.convG[G.g].centsT, covTot: x.convG[G.g].covTot, list: x.convG[G.g].list }));
-    if (gl.length) h += '<div class="c-sec" style="margin-top:14px">Riepilogo per tipologia di turno</div>' + cntGrpMatrix(gl, x.bench || {}, false);
+    if (gl.length) {
+      const open = !!(cnt.savOpen && cnt.savOpen[x.d.id]);
+      h += '<div class="c-grpwrap' + (open ? '' : ' sav-off') + '"><div class="c-sec c-sech" style="margin-top:14px">Riepilogo per tipologia di turno'
+        + '<button type="button" class="c-eye" data-cnt="sav" data-id="' + escHtml(x.d.id) + '" title="Mostra / nascondi il risparmio" aria-label="Mostra o nascondi il risparmio">'
+        + '<svg class="e-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>'
+        + '<svg class="e-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.9 10.9 0 0 1 12 19C5 19 1 12 1 12a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.1 9.1 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg></button></div>'
+        + cntGrpMatrix(gl, x.bench || {}, false) + '</div>';
+    }
   }
   x.warn.forEach(w => { h += '<div class="c-w">⚠ ' + escHtml(w) + '</div>'; });
+  x.pend.filter(q => !q.decided).forEach(q => { h += '<div class="c-w">⚠ Il ' + cntDM(q.date) + cntFascia(q.time) + ' sono stati refertati <b>' + q.ecg + ' ECG</b> con ' + q.gn + ' turn' + (q.gn === 1 ? 'o' : 'i') + ' ECG in calendario (limite ' + q.lim + '): assegnare il ' + cntOrd(q.gn + 1) + ' turno? <button type="button" class="r-btn primary" style="padding:4px 12px;font-size:12px;margin-left:8px" data-cnt="extra" data-key="' + escHtml(q.key) + '">Conferma…</button></div>'; });
   h += '<div class="c-grand"><span>' + (!showTurniTb ? (x.hasCons ? 'Esami a consuntivo ' + fmtEuro(x.centsE / 100) : 'Esami refertati ' + x.esami) : x.hasCons ? 'Turni ' + fmtEuro(x.centsT / 100) + ' + Esami a consuntivo ' + fmtEuro(x.centsE / 100) : 'Esami refertati ' + x.esami + ' · Turni conteggiati ' + (showT ? x.ok : '–')) + '</span><b>Totale ' + fmtEuro(total / 100) + '</b></div>';
   return h + '</div></details>';
+}
+// ── conferma turni ECG aggiuntivi ──
+function cntExtraHtml(q) {
+  const tot = q.gn + q.need, extra = q.ecg - q.lim * q.gn;
+  let h = '<div class="ex-box"><div><b>' + escHtml(q.doc) + '</b> · ' + cntDM(q.date) + cntFascia(q.time) + '</div>'
+    + '<div class="ex-n"><div><b>' + q.gn + '</b><span>turni ECG in calendario</span></div><div><b>' + q.lim * q.gn + '</b><span>ECG coperti (' + q.lim + ' × ' + q.gn + ')</span></div><div><b>' + q.ecg + '</b><span>ECG refertati</span></div></div>'
+    + 'Gli ECG refertati superano la capienza dei turni in calendario di <b>' + extra + '</b>. '
+    + 'Vuoi assegnare ' + (q.need === 1 ? 'il <b>' + cntOrd(q.gn + 1) + ' turno ECG</b>' : 'turni ECG aggiuntivi') + ' in questo giorno?'
+    + '<div class="ex-btns">';
+  for (let k = 1; k <= q.need; k++) {
+    h += '<button type="button" class="r-btn primary" data-extra="' + k + '">' + (q.need === 1 ? 'Sì, assegna il ' + cntOrd(q.gn + 1) + ' turno' : 'Assegna ' + k + (k === 1 ? ' turno aggiuntivo' : ' turni aggiuntivi') + ' (totale ' + (q.gn + k) + ')')
+      + (q.imp != null ? ' · +' + fmtEuro(q.imp * k) : '') + '</button>';
+  }
+  h += '<button type="button" class="r-btn ghost" data-extra="0">No, non assegnare (restano ' + q.gn + ' turn' + (q.gn === 1 ? 'o' : 'i') + ')</button></div></div>';
+  return h;
+}
+function cntOpenExtra(key, queue) {
+  const q = (cnt.pendMap || {})[key]; if (!q) return;
+  cnt.extraKey = key; cnt.extraQueue = !!queue;
+  byId('extra-body').innerHTML = cntExtraHtml(q);
+  openModal('extra-modal');
+}
+async function cntSaveExtra(ym) {
+  const o = (cnt.rec && cnt.rec.dati && cnt.rec.dati.extraOk) || {};
+  try { localStorage.setItem('cnt_extra_' + ym, JSON.stringify(o)); } catch (e) {}
+  try {
+    const { error } = await getSb().from('conteggi_mesi').update({ dati: cnt.rec.dati }).eq('mese', ym);
+    if (error) throw error;
+  } catch (e) { toast('Conferma salvata solo su questo browser: ' + (e.message || e), 'err'); }
+}
+function cntAnswerExtra(n) {
+  const key = cnt.extraKey, q = (cnt.pendMap || {})[key]; if (!q || !cnt.rec) return;
+  const dati = cnt.rec.dati; dati.extraOk = dati.extraOk || {}; dati.extraOk[key] = n;
+  cntSaveExtra(cnt.ym);
+  cntRender();
+  toast(n ? 'Turno ECG aggiuntivo assegnato' : 'Turno ECG aggiuntivo non assegnato', 'ok');
+  const next = cnt.extraQueue ? Object.values(cnt.pendMap || {}).find(x => !x.decided) : null;
+  if (next) cntOpenExtra(next.key, true); else closeModal('extra-modal');
 }
 function cntRender() {
   const body = byId('cnt-body'); if (!body || !cnt.ym) return;
@@ -2760,6 +2862,8 @@ function cntRender() {
     + '<div class="c-chip"><b>' + fmtEuro(T.centsT / 100) + '</b><span>compenso turni</span></div>'
     + (T.anyCons ? '<div class="c-chip"><b>' + fmtEuro(T.centsE / 100) + '</b><span>compenso esami a consuntivo</span></div>' : '')
     + '<div class="c-chip tot"><b>' + fmtEuro((T.centsT + T.centsE) / 100) + '</b><span>totale mese</span></div></div>';
+  cnt.pendMap = {}; R.pend.forEach(q => { cnt.pendMap[q.key] = q; });
+  if (hasShifts && T.pend) h += '<div class="c-warn">⚠ <span><b>' + T.pend + '</b> ' + (T.pend === 1 ? 'giorno con ECG oltre' : 'giorni con ECG oltre') + ' la capienza dei turni in calendario: i turni aggiuntivi <b>non sono ancora conteggiati</b> e vanno confermati.</span><button class="r-btn primary" type="button" data-cnt="extra" data-queue="1">Rivedi e conferma</button></div>';
   if (hasShifts && R.convTot.list.length) {
     cnt.convHtml = cntConvModalHtml(R.convTot, R.bench, R.convGrp); cnt.convData = { R, ym: cnt.ym };
     h += '<div style="margin:12px 0"><button class="r-btn primary" data-cnt="conv">📊 Riepilogo dei turni</button></div>';
@@ -2960,8 +3064,11 @@ async function maybeImportLegacy() {
       else if (a === 'expand' || a === 'collapse') document.querySelectorAll('#cnt-body .c-doc').forEach(e => { e.open = a === 'expand'; });
       else if (a === 'detail') { e.preventDefault(); const D = (cnt.det || {})[b.dataset.id]; if (D) { byId('det-title').textContent = '🔎 Dettaglio esami · ' + D.nome + ' · ' + ymLabel(cnt.ym); cnt.detCur = D; cnt.detF = { q: '', t: '' }; byId('det-body').innerHTML = cntExamDetailHtml(D); cntDetFilter(); byId('det-xlsx').style.display = D.has && D.list.length ? '' : 'none'; openModal('det-modal'); } }
       else if (a === 'conv') { byId('conv-body').innerHTML = cnt.convHtml || ''; openModal('conv-modal'); }
+      else if (a === 'sav') { const w = b.closest('.c-grpwrap'), on = w.classList.toggle('sav-off'); (cnt.savOpen = cnt.savOpen || {})[b.dataset.id] = !on; }
+      else if (a === 'extra') { e.preventDefault(); const k = b.dataset.queue ? ((Object.values(cnt.pendMap || {}).find(x => !x.decided) || {}).key) : b.dataset.key; if (k) cntOpenExtra(k, !!b.dataset.queue); }
       else if (a === 'shifts') { const my = ++cnt.req; cnt.shiftsLoading = true; cntRender(); cntLoadShifts(my).then(() => { if (my === cnt.req) cntRender(); }); }
     });
+    byId('extra-modal').addEventListener('click', e => { const b = e.target.closest('[data-extra]'); if (b) cntAnswerExtra(+b.dataset.extra); });
     byId('conv-xlsx').addEventListener('click', cntConvExport);
     byId('det-xlsx').addEventListener('click', cntDetExport);
     byId('det-body').addEventListener('input', e => { if (e.target.id === 'det-q') { cnt.detF.q = e.target.value; cntDetFilter(); } });
@@ -3029,10 +3136,10 @@ async function maybeImportLegacy() {
   // chiusura modali: pulsanti ✕/Annulla, click sullo sfondo, tasto Esc
   document.addEventListener('click', e => {
     const c = e.target.closest('[data-close]');
-    if (c) { c.dataset.close === 'doc' ? closeDoctorModal() : c.dataset.close === 'conv' ? closeModal('conv-modal') : c.dataset.close === 'det' ? closeModal('det-modal') : closeUserModal(); return; }
+    if (c) { c.dataset.close === 'doc' ? closeDoctorModal() : c.dataset.close === 'conv' ? closeModal('conv-modal') : c.dataset.close === 'det' ? closeModal('det-modal') : c.dataset.close === 'extra' ? closeModal('extra-modal') : closeUserModal(); return; }
     if (e.target.classList && e.target.classList.contains('r-modal-bg')) closeModal(e.target.id);
   });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDoctorModal(); closeUserModal(); closeModal('conv-modal'); closeModal('det-modal'); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDoctorModal(); closeUserModal(); closeModal('conv-modal'); closeModal('det-modal'); closeModal('extra-modal'); } });
 })();
 
 // ─── UI HELPERS ───────────────────────────────────────────────

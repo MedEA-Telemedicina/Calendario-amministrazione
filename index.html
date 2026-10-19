@@ -460,7 +460,9 @@
   .c-tag { display: inline-block; background: #eef2f7; color: #5b6b7f; border-radius: 20px; padding: 1px 9px; font-size: 11px; font-weight: 700; }
   .c-bar { height: 4px; width: 130px; margin-left: 25px; margin-top: 3px; border-radius: 4px; background: #e6ebf2; overflow: hidden; }
   .c-bar i { display: block; height: 100%; border-radius: 4px; background: #34a853; }
-  .c-bar.over i { background: #f29900; }
+  .c-bar.ok i { background: #34a853; }      /* >= 75 ECG */
+  .c-bar.mid i { background: #f9ab00; }     /* 50 - 74 ECG */
+  .c-bar.low i { background: #d93025; }     /* < 50 ECG */
 
   /* avvisi, totale, note */
   .c-w { background: #fff7ea; color: #8a4b00; border-left: 4px solid #f29900; border-radius: 4px 10px 10px 4px; padding: 9px 13px; font-size: 12.5px; font-weight: 600; }
@@ -2606,11 +2608,25 @@ function cntTurnoHtml(o) {
   if (o.lim) {
     parts.push('<span><b>' + o.ecg + '</b> ECG refertati · limite ' + o.lim + ' per turno</span>');
     const pct = Math.min(100, Math.round(o.ecg / (o.lim * Math.max(o.mult || 1, 1)) * 100));
-    bar = '<div class="c-bar' + (o.mult > 1 || o.ecg > o.lim ? ' over' : '') + '"><i style="width:' + pct + '%"></i></div>';
+    const lvl = o.ecg >= 75 ? 'ok' : o.ecg >= 50 ? 'mid' : 'low';   // verde >= 75 · giallo 50-74 · rosso < 50
+    bar = '<div class="c-bar ' + lvl + '"><i style="width:' + pct + '%"></i></div>';
   }
   if (o.mult > 1) parts.push('<span class="c-x">' + o.mult + ' turni conteggiati</span>');
   if (o.inf) parts.push('<span class="c-tag">tipo dedotto dal n. di ECG</span>');
   return '<div class="c-tl"><div class="a">' + escHtml(o.l) + '</div>' + (parts.length ? '<div class="b">' + parts.join('') + '</div>' : '') + bar + '</div>';
+}
+// medici solo a consuntivo: niente tabella giorno/turno, solo conteggio per tipologia con importo a referto e compenso spettante
+function cntConsTableHtml(x) {
+  const dot = t => '<span class="c-dot" style="background:' + avColor(t) + '"></span>';
+  if (!x.typeRows.length) return '<div class="c-note" style="padding:18px">Nessun esame refertato nel mese</div>';
+  let h = '<div class="c-scroll" style="margin-top:0"><table class="c-tb c-mx"><thead><tr><th>Tipologia</th><th>Esami refertati</th><th>Importo a referto</th><th>Compenso spettante</th></tr></thead><tbody>';
+  x.typeRows.forEach(r => {
+    h += '<tr><td style="text-align:left"><b>' + dot(r.t) + escHtml(r.t) + '</b></td><td><b>' + r.n.toLocaleString('it-IT') + '</b></td>'
+      + '<td>' + (r.prezzo != null ? fmtEuro(r.prezzo) : '<span class="mut">tariffa mancante</span>') + '</td>'
+      + '<td><b>' + (r.prezzo != null ? fmtEuro(r.c / 100) : '<span class="mut">–</span>') + '</b></td></tr>';
+  });
+  h += '</tbody><tfoot><tr><td style="text-align:left">Totale</td><td>' + x.esami.toLocaleString('it-IT') + '</td><td></td><td>' + fmtEuro(x.centsE / 100) + '</td></tr></tfoot></table></div>';
+  return h;
 }
 // tabella degli esami refertati per giorno e turno (una colonna per tipologia)
 function cntDayTableHtml(x) {
@@ -2679,7 +2695,9 @@ function cntDocBlock(x, hasShifts, bench) {
     + '<span class="m"><b>' + (showT ? x.ok : '–') + '</b> turni</span>'
     + '<span class="t">' + fmtEuro(total / 100) + '</span>'
     + '<button type="button" class="r-btn ghost c-detbtn" data-cnt="detail" data-id="' + escHtml(x.d.id) + '">🔎 Dettaglio esami</button></summary><div class="c-dbody">';
-  h += '<div class="c-sec">Esami refertati per giorno e turno</div>' + cntDayTableHtml(x);
+  const consOnly = x.hasCons && x.inCal === 0;      // medico pagato solo a consuntivo (nessun turno in calendario)
+  h += consOnly ? '<div class="c-sec">Esami refertati e compenso a consuntivo</div>' + cntConsTableHtml(x)
+    : '<div class="c-sec">Esami refertati per giorno e turno</div>' + cntDayTableHtml(x);
   cnt.det = cnt.det || {}; cnt.det[x.d.id] = { nome: x.d.nome, list: x.exList || [], has: !!(cnt.rec && cnt.rec.dati && cnt.rec.dati.esamiV === 2) };   // dati del popup «Dettaglio esami»
   // turni
   const calTxt = [['Completo', x.cal.comp], ['Mattina', x.cal.mat], ['Pomeriggio', x.cal.pom], ['Domenica', x.cal.dom], ['di cui ECG', x.cal.ecg], ['Holter (10hc/10hp)', x.cal.hol], ['Holter (16hc)', x.cal.h16], ['Non riconosciuto', x.cal.altro]].filter(p => p[1]).map(p => p[0] + ' ' + p[1]).join(' · ');

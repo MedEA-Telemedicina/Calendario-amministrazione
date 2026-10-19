@@ -2273,11 +2273,13 @@ const CNT_GRP = [
   { g: 'ecg',      l: 'Turno ECG',       ks: ['turno_ecg_75', 'turno_ecg_100'] },
   { g: 'domenica', l: 'Turno domenica',  ks: ['turno_domenica'] }
 ];
-// Nei turni Holter la ripartizione del compenso è fissa e non dipende dai pesi generali:
-// turno Holter 10 hc + 10 hp da 200 € = 14 € per hc e 6 € per hp (rapporto 7 : 3, l'holter 12D vale come hc);
-// turno Holter 16 hc da 200 € = 12,50 € per hc (200 ÷ 16).
-const CNT_PESI_HOLTER = { 'ECG': 0, 'HOLTER CARDIACO': 7, 'HOLTER CARDIACO 12D': 7, 'HOLTER PRESSORIO': 3 };
-const CNT_PESI_GRP = { holter: CNT_PESI_HOLTER, h16: CNT_PESI_HOLTER };
+// Nei turni Holter l'importo del referto è FISSO (non dipende dai pesi né dal n. di esami fatti):
+// turno Holter (10 hc + 10 hp) = 14 € per hc e 6 € per hp (l'holter 12D vale come hc);
+// turno Holter 16 hc = 12,50 € per hc.
+const CNT_FISSO = {
+  holter: { 'HOLTER CARDIACO': 14, 'HOLTER CARDIACO 12D': 14, 'HOLTER PRESSORIO': 6 },
+  h16:    { 'HOLTER CARDIACO': 12.5, 'HOLTER CARDIACO 12D': 12.5 }
+};
 const cntGrpOf = k => (CNT_GRP.find(x => x.ks.includes(k)) || {}).g;
 function cntAccepts(g, t) { return g === 'ecg' ? t === 'ECG' : (g === 'holter' || g === 'h16') ? t !== 'ECG' : true; }
 function cntConvByTurno(sv, cells, typeRows, tariffe) {
@@ -2295,9 +2297,18 @@ function cntConvByTurno(sv, cells, typeRows, tariffe) {
   });
   const out = {};
   Object.entries(acc).forEach(([g, a]) => {
+    const fx = CNT_FISSO[g];
+    if (fx) {      // importo fisso per referto: costo = esami coperti × importo
+      const list = Object.keys(CNT_PESI).map(t => {
+        const n = a.n[t] || 0, r = ratio[t] || { cov: 0, cons: 0 }, cov = fx[t] != null ? n * r.cov : 0;
+        return { t, w: null, n, cov, cCons: n * r.cons, c: cov * (fx[t] || 0) * 100 };
+      }).filter(r => r.n || r.cov);
+      out[g] = { list, centsT: a.centsT, units: 0, unit: 0, covTot: list.reduce((x, r) => x + r.cov, 0), nTurni: a.turni };
+      return;
+    }
     out[g] = cntConvCore(Object.keys(CNT_PESI).map(t => {
       const n = a.n[t] || 0, r = ratio[t] || { cov: 0, cons: 0 };
-      return { t, w: (CNT_PESI_GRP[g] || CNT_PESI)[t], n, cov: n * r.cov, cCons: n * r.cons };
+      return { t, w: CNT_PESI[t], n, cov: n * r.cov, cCons: n * r.cons };
     }), a.centsT, a.turni);
   });
   return out;
@@ -2338,21 +2349,21 @@ const cntDiffEx = d => d == null ? '<span class="mut">—</span>' : '<span class
 const cntSavEx = (bench, t, costEur) => bench[t] != null && costEur != null ? bench[t] - costEur : null;
 const cntShort = { 'ECG': 'ECG', 'HOLTER CARDIACO': 'Holter ECG', 'HOLTER PRESSORIO': 'Holter pressorio', 'HOLTER CARDIACO 12D': 'Holter 12D' };
 function cntConvTable(list, bench, tot) {
-  const hasCons = list.some(r => r.cCons);
+  const hasCons = list.some(r => r.cCons), fisso = list.some(r => r.w == null);
   let h = '<div style="overflow-x:auto">';
   if (tot.unit) h += '<div class="r-usub" style="margin:4px 0 8px">Compenso turni <b>' + fmtEuro(tot.centsT / 100) + '</b> ÷ <b>' + tot.units.toLocaleString('it-IT') + '</b> unità di peso = <b>' + fmtEuro(tot.unit / 100) + '</b> per unità</div>';
   h += '<table class="c-tb"><thead><tr><th>Tipologia</th><th>Peso</th><th>Esami refertati</th><th>Coperti dal turno</th><th>€ per referto</th><th>Costo attribuito</th>'
     + '<th>Consuntivo medio (riferimento)</th><th>Risparmio per esame</th>' + (hasCons ? '<th>A consuntivo (scorporato)</th>' : '') + '</tr></thead><tbody>';
   list.forEach(r => {
     const bm = bench[r.t], d = bm != null && r.cov && r.c ? bm - r.c / r.cov / 100 : null;
-    h += '<tr><td>' + escHtml(cntShort[r.t] || r.t) + '</td><td>' + r.w + '</td><td>' + r.n.toLocaleString('it-IT') + '</td><td>' + r.cov.toLocaleString('it-IT') + '</td>'
+    h += '<tr><td>' + escHtml(cntShort[r.t] || r.t) + '</td><td>' + (r.w == null ? '<span class="mut">fisso</span>' : r.w) + '</td><td>' + r.n.toLocaleString('it-IT') + '</td><td>' + r.cov.toLocaleString('it-IT') + '</td>'
       + '<td><b>' + (r.cov && r.c ? fmtEuro(r.c / r.cov / 100) : '<span class="mut">—</span>') + '</b></td><td>' + (r.c ? fmtEuro(r.c / 100) : '<span class="mut">—</span>') + '</td>'
       + '<td>' + (bm != null ? fmtEuro(bm) : '<span class="mut">—</span>') + '</td><td>' + cntDiffEx(d) + '</td>'
       + (hasCons ? '<td>' + (r.cCons ? fmtEuro(r.cCons / 100) : '<span class="mut">—</span>') + '</td>' : '') + '</tr>';
   });
   const cov = list.reduce((a, r) => a + r.cov, 0), bs = cntBenchSaving(list, bench);
   h += '</tbody><tfoot><tr><td>Totale</td><td></td><td>' + list.reduce((a, r) => a + r.n, 0).toLocaleString('it-IT') + '</td><td>' + cov.toLocaleString('it-IT') + '</td>'
-    + '<td></td><td>' + fmtEuro(tot.centsT / 100) + '</td><td></td><td></td>'
+    + '<td></td><td>' + fmtEuro((fisso ? list.reduce((a, r) => a + r.c, 0) : tot.centsT) / 100) + '</td><td></td><td></td>'
     + (hasCons ? '<td>' + fmtEuro(list.reduce((a, r) => a + r.cCons, 0) / 100) + '</td>' : '') + '</tr></tfoot></table></div>';
   return h;
 }
@@ -2404,7 +2415,7 @@ function cntConvModalHtml(C, bench, GT) {
     + '<details class="c-det" style="margin-bottom:12px"><summary>⚙ Modifica i pesi delle tipologie</summary><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">'
     + Object.keys(CNT_PESI).map(t => '<label style="font-size:12px;font-weight:700;color:#3b4a5c">' + escHtml(cntShort[t] || t) + '<br><input type="number" class="r-input cw-in" data-t="' + escHtml(t) + '" min="0.01" step="0.01" value="' + CNT_PESI[t] + '" style="width:90px"></label>').join('')
     + '<button class="r-btn primary" type="button" data-pesi="save">Applica</button><button class="r-btn ghost" type="button" data-pesi="reset">Ripristina</button></div></details>'
-    + (GT && Object.keys(GT).length ? '<div class="c-sec">Per tipologia di turno — costo per referto</div><div class="r-usub" style="margin:4px 0 6px">Gli esami di ogni giorno sono attribuiti ai turni di quel giorno (turno ECG → solo ECG; Holter / Holter 16 → solo holter; completo e domenica → tutti); se più turni possono riceverli la quota è divisa in parti uguali.</div>'
+    + (GT && Object.keys(GT).length ? '<div class="c-sec">Per tipologia di turno — costo per referto</div><div class="r-usub" style="margin:4px 0 6px">Gli esami di ogni giorno sono attribuiti ai turni di quel giorno (turno ECG → solo ECG; Holter / Holter 16 → solo holter; completo e domenica → tutti); se più turni possono riceverli la quota è divisa in parti uguali. Nei turni Holter l\'importo del referto è fisso: <b>Holter (10 hc + 10 hp) 14 € per hc e 6 € per hp</b>; <b>Holter 16 hc 12,50 € per hc</b>.</div>'
       + cntGrpMatrix(CNT_GRP.map(G => GT[G.g]).filter(Boolean), bench, false)
       + CNT_GRP.filter(G => GT[G.g]).map(G => '<details class="c-det" style="margin-top:10px"><summary><b>' + escHtml(G.l) + '</b> · ' + GT[G.g].turni + ' turni · ' + fmtEuro(GT[G.g].centsT / 100) + '</summary><div>'
         + '<div class="c-sec" style="margin-top:6px">Complessivo</div>' + cntConvTable(GT[G.g].list, bench, { centsT: GT[G.g].centsT, unit: 0, units: 0 })

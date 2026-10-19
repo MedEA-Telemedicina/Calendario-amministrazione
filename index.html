@@ -2052,7 +2052,8 @@ function cntAnalyze(rows, ym) {
   if (!rows || rows.length < 2) throw new Error('Il file è vuoto.');
   const hdr = rows[0].map(h => normTxt(h).replace(/[^a-z]/g, ''));
   const iT = hdr.indexOf('tipologia'), iS = hdr.indexOf('stato'), iM = hdr.indexOf('medico'),
-        iR = hdr.indexOf('datarefertazione'), iQ = hdr.indexOf('datarichiesta');
+        iR = hdr.indexOf('datarefertazione'), iQ = hdr.indexOf('datarichiesta'),
+        iI = hdr.indexOf('id'), iC = hdr.indexOf('cliente'), iP = hdr.indexOf('paziente');
   const miss = [['TIPOLOGIA', iT], ['STATO', iS], ['MEDICO', iM], ['DATA REFERTAZIONE', iR]].filter(x => x[1] < 0).map(x => x[0]);
   if (miss.length) throw new Error('Colonne mancanti nel file: ' + miss.join(', ') + '. Il file non sembra l\'esportazione degli esami.');
   const body = rows.slice(1).filter(r => r.some(c => String(c).trim() !== ''));
@@ -2079,9 +2080,10 @@ function cntAnalyze(rows, ym) {
     if (cntIgnorato(t)) { ign.tipiIgnorati++; return; }
     const a = doctors[med] || (doctors[med] = {}), b = a[d] || (a[d] = {});
     b[t] = (b[t] || 0) + 1; counted++;
-    // dettaglio esame per esame (solo tipologia, data/ora di refertazione e data richiesta: nessun dato del paziente)
-    const mnE = cntMinutes(r[iR]);
-    (esami[med] || (esami[med] = [])).push([d, t, mnE != null ? pad2(Math.floor(mnE / 60)) + ':' + pad2(mnE % 60) : '', iQ >= 0 ? (cntDate(r[iQ]) || '') : '']);
+    // dettaglio esame per esame: ID, tipologia, stato, cliente, paziente, data richiesta, data refertazione
+    const cell = i => i >= 0 && r[i] != null ? String(r[i]).replace(/\s+/g, ' ').trim() : '';
+    const dt = v => { const dd = cntDate(v); if (!dd) return ''; const mm = cntMinutes(v); return dd + (mm != null ? ' ' + pad2(Math.floor(mm / 60)) + ':' + pad2(mm % 60) : ''); };
+    (esami[med] || (esami[med] = [])).push([cell(iI), t, cell(iS), cell(iC), cell(iP), dt(iQ >= 0 ? r[iQ] : null), dt(r[iR])]);
     // ECG per fascia oraria (solo se il file riporta anche l'ora di refertazione)
     if (t === 'ECG') {
       const mn = cntMinutes(r[iR]);
@@ -2090,7 +2092,7 @@ function cntAnalyze(rows, ym) {
   });
   const dati = { v: 1, doctors, ignorati: ign };
   if (Object.keys(ecgOre).length) dati.ecgOre = ecgOre;
-  if (Object.keys(esami).length) dati.esami = esami;
+  if (Object.keys(esami).length) { dati.esami = esami; dati.esamiV = 2; }
   return { righe: body.length, counted, dati };
 }
 
@@ -2623,23 +2625,25 @@ function cntDayTableHtml(x) {
   h += '</tbody><tfoot><tr><td colspan="2">Totale</td>' + x.typeRows.map(r => '<td>' + r.n + '</td>').join('') + '<td>' + x.esami + '</td></tr></tfoot></table></div>';
   return h;
 }
-const cntFmtData = iso => { if (!iso) return ''; const t = new Date(iso + 'T00:00:00'); return GG[t.getDay()] + ' ' + pad2(t.getDate()) + '/' + pad2(t.getMonth() + 1) + '/' + t.getFullYear(); };
-const cntSortEsami = list => list.slice().sort((a, b) => (a[0] + (a[2] || '')) < (b[0] + (b[2] || '')) ? -1 : (a[0] + (a[2] || '')) > (b[0] + (b[2] || '')) ? 1 : 0);
+// «2025-09-17 14:32» → «17/09/2025 14:32»
+const cntFmtDT = v => { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}:\d{2}))?/); return m ? m[3] + '/' + m[2] + '/' + m[1] + (m[4] ? ' ' + m[4] : '') : ''; };
+const cntSortEsami = list => list.slice().sort((a, b) => a[6] < b[6] ? -1 : a[6] > b[6] ? 1 : 0);
 // popup «Dettaglio esami»: gli esami del medico, uno per riga, come estratti dal file caricato
 function cntExamDetailHtml(D) {
   if (!D.has) return '<div class="c-warn c-info">Il dettaglio dei singoli esami non è disponibile per questo mese: il file è stato caricato prima di questa funzione. Usa «Elimina e ricarica» e carica di nuovo il file.</div>';
   if (!D.list.length) return '<div class="c-note" style="padding:24px">Nessun esame refertato da questo medico nel mese.</div>';
   const L = cntSortEsami(D.list), by = {}; L.forEach(e => by[e[1]] = (by[e[1]] || 0) + 1);
+  const td = v => v ? escHtml(v) : '<span class="mut">–</span>';
   return '<div class="c-pills"><span class="c-pill"><b>' + L.length.toLocaleString('it-IT') + '</b> esami totali</span>'
     + Object.entries(by).sort((a, b) => b[1] - a[1]).map(([t, n]) => '<span class="c-pill"><b>' + n.toLocaleString('it-IT') + '</b> ' + escHtml(t) + '</span>').join('') + '</div>'
-    + '<div class="c-scroll" style="margin-top:0"><table class="c-tb c-left"><thead><tr><th>#</th><th>Data refertazione</th><th>Ora</th><th>Tipologia</th><th>Data richiesta</th></tr></thead><tbody>'
-    + L.map((e, i) => '<tr><td class="mut">' + (i + 1) + '</td><td class="c-day"><b>' + GG[new Date(e[0] + 'T00:00:00').getDay()] + '</b> ' + cntFmtData(e[0]).slice(4) + '</td><td>' + (e[2] || '<span class="mut">–</span>') + '</td><td><b>' + escHtml(e[1]) + '</b></td><td>' + (e[3] ? cntFmtData(e[3]).slice(4) : '<span class="mut">–</span>') + '</td></tr>').join('')
+    + '<div class="c-scroll" style="margin-top:0"><table class="c-tb c-left c-mx"><thead><tr><th>ID</th><th>Tipologia</th><th>Stato</th><th>Cliente</th><th>Paziente</th><th>Data richiesta</th><th>Data refertazione</th></tr></thead><tbody>'
+    + L.map(e => '<tr><td class="mut">' + td(e[0]) + '</td><td><b>' + escHtml(e[1]) + '</b></td><td>' + td(e[2]) + '</td><td>' + td(e[3]) + '</td><td>' + td(e[4]) + '</td><td>' + (cntFmtDT(e[5]) || '<span class="mut">–</span>') + '</td><td>' + (cntFmtDT(e[6]) || '<span class="mut">–</span>') + '</td></tr>').join('')
     + '</tbody></table></div>';
 }
 function cntDetExport() {
   const D = cnt.detCur; if (!D || !D.list.length) { toast('Nessun esame da esportare', 'err'); return; }
-  const aoa = [['Data refertazione', 'Ora', 'Tipologia', 'Data richiesta'], ...cntSortEsami(D.list).map(e => [e[0], e[2], e[1], e[3]])];
-  const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = [{ wch: 18 }, { wch: 8 }, { wch: 28 }, { wch: 16 }];
+  const aoa = [['ID', 'TIPOLOGIA', 'STATO', 'CLIENTE', 'PAZIENTE', 'DATA RICHIESTA', 'DATA REFERTAZIONE'], ...cntSortEsami(D.list).map(e => [e[0], e[1], e[2], e[3], e[4], cntFmtDT(e[5]), cntFmtDT(e[6])])];
+  const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = [{ wch: 12 }, { wch: 26 }, { wch: 12 }, { wch: 26 }, { wch: 28 }, { wch: 17 }, { wch: 19 }];
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Esami');
   XLSX.writeFile(wb, 'dettaglio_esami_' + D.nome.replace(/[^A-Za-z0-9]+/g, '_') + '_' + cnt.ym + '.xlsx');
   toast('Excel scaricato', 'ok');
@@ -2653,7 +2657,7 @@ function cntDocBlock(x, hasShifts, bench) {
     + '<span class="t">' + fmtEuro(total / 100) + '</span>'
     + '<button type="button" class="r-btn ghost c-detbtn" data-cnt="detail" data-id="' + escHtml(x.d.id) + '">🔎 Dettaglio esami</button></summary><div class="c-dbody">';
   h += '<div class="c-sec">Esami refertati per giorno e turno</div>' + cntDayTableHtml(x);
-  cnt.det = cnt.det || {}; cnt.det[x.d.id] = { nome: x.d.nome, list: x.exList || [], has: !!(cnt.rec && cnt.rec.dati && cnt.rec.dati.esami) };   // dati del popup «Dettaglio esami»
+  cnt.det = cnt.det || {}; cnt.det[x.d.id] = { nome: x.d.nome, list: x.exList || [], has: !!(cnt.rec && cnt.rec.dati && cnt.rec.dati.esamiV === 2) };   // dati del popup «Dettaglio esami»
   // turni
   const calTxt = [['Completo', x.cal.comp], ['Mattina', x.cal.mat], ['Pomeriggio', x.cal.pom], ['Domenica', x.cal.dom], ['di cui ECG', x.cal.ecg], ['Holter (10hc/10hp)', x.cal.hol], ['Holter (16hc)', x.cal.h16], ['Non riconosciuto', x.cal.altro]].filter(p => p[1]).map(p => p[0] + ' ' + p[1]).join(' · ');
   if (showT && x.cal.tot) h += '<div class="c-cal">Nella sezione Turni: <b>Tot. ' + x.cal.tot + '</b>' + (calTxt ? ' · ' + calTxt : '') + '</div>';

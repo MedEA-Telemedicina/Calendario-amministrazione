@@ -405,6 +405,10 @@
   .c-off { display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: 999px; background: #eef0f3; color: #5b6672; font-size: 11px; font-weight: 700; vertical-align: middle; }
   .c-doc .m { font-size: 12px; color: #5b6b7f; background: #f3f6fa; border-radius: 20px; padding: 4px 12px; white-space: nowrap; font-weight: 600; }
   .c-doc .m b { color: #1f2933; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .c-tb td small.cs-c { color: #1a73e8; font-weight: 700; }
+  .c-tb td small.cs-t { color: #9aa5b1; font-weight: 600; }
+  .c-tb td small.cs-t + b { display: inline-block; margin-top: 6px; }
+  .c-detbtn { padding: 7px 13px; font-size: 12.5px; }
   .c-doc .t { font-size: 16px; font-weight: 800; color: #1a73e8; min-width: 104px; text-align: right; font-variant-numeric: tabular-nums; }
   .c-dbody { padding: 6px 18px 18px; border-top: 1px solid #eef2f7; display: grid; gap: 14px; background: linear-gradient(#fafcff, #fff 70px); }
 
@@ -881,6 +885,15 @@
         <button class="r-btn ghost" type="button" data-close="doc">Annulla</button>
         <button class="r-btn primary" id="m-save" type="button">💾 Salva medico</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ═══ MODALE DETTAGLIO ESAMI (per medico) ═══ -->
+  <div class="r-modal-bg" id="det-modal">
+    <div class="r-modal" style="max-width:920px" role="dialog" aria-modal="true" aria-labelledby="det-title">
+      <div class="r-modal-h"><h3 id="det-title">🔎 Dettaglio esami</h3><button class="r-x" type="button" data-close="det" aria-label="Chiudi">✕</button></div>
+      <div class="r-modal-b" id="det-body"></div>
+      <div class="r-modal-f"><button class="r-btn ghost" type="button" data-close="det">Chiudi</button></div>
     </div>
   </div>
 
@@ -2259,7 +2272,7 @@ function cntConv(typeRows, centsT, nTurni) {
   const tr = {}; typeRows.forEach(r => tr[r.t] = r);
   return cntConvCore(Object.keys(CNT_PESI).map(t => {
     const r = tr[t], n = r ? r.n : 0;
-    return { t, w: CNT_PESI[t], n, cov: r ? (r.prezzo != null ? r.inc : r.n) : 0, cCons: r ? r.c : 0 };
+    return { t, w: CNT_PESI[t], n, cov: r ? (r.prezzo != null ? r.inc : r.n) : 0, cCons: r ? r.c : 0, pay: r && r.prezzo != null ? r.pay : 0 };
   }), centsT, nTurni);
 }
 // ── convenienza per TIPOLOGIA DI TURNO ──
@@ -2283,7 +2296,7 @@ const CNT_FISSO = {
 const cntGrpOf = k => (CNT_GRP.find(x => x.ks.includes(k)) || {}).g;
 function cntAccepts(g, t) { return g === 'ecg' ? t === 'ECG' : (g === 'holter' || g === 'h16') ? t !== 'ECG' : true; }
 function cntConvByTurno(sv, cells, typeRows, tariffe) {
-  const ratio = {}; typeRows.forEach(r => { if (CNT_PESI[r.t] && r.n) ratio[r.t] = { cov: (r.prezzo != null ? r.inc : r.n) / r.n, cons: r.c / r.n }; });
+  const ratio = {}; typeRows.forEach(r => { if (CNT_PESI[r.t] && r.n) ratio[r.t] = { cov: (r.prezzo != null ? r.inc : r.n) / r.n, cons: r.c / r.n, pay: (r.prezzo != null ? r.pay : 0) / r.n }; });
   const acc = {};
   sv.forEach(s => { const g = cntGrpOf(s.k), a = acc[g] || (acc[g] = { turni: 0, centsT: 0, n: {} }); a.turni += s.m || 1; a.centsT += s.cents; });
   const byDay = {}; sv.forEach(s => (byDay[s.date] = byDay[s.date] || []).push(s));
@@ -2300,15 +2313,15 @@ function cntConvByTurno(sv, cells, typeRows, tariffe) {
     const fx = CNT_FISSO[g];
     if (fx) {      // importo fisso per referto: costo = esami coperti × importo
       const list = Object.keys(CNT_PESI).map(t => {
-        const n = a.n[t] || 0, r = ratio[t] || { cov: 0, cons: 0 }, cov = fx[t] != null ? n * r.cov : 0;
-        return { t, w: null, n, cov, cCons: n * r.cons, c: cov * (fx[t] || 0) * 100 };
+        const n = a.n[t] || 0, r = ratio[t] || { cov: 0, cons: 0, pay: 0 }, cov = fx[t] != null ? n * r.cov : 0;
+        return { t, w: null, n, cov, cCons: n * r.cons, pay: n * r.pay, c: cov * (fx[t] || 0) * 100 };
       }).filter(r => r.n || r.cov);
       out[g] = { list, centsT: a.centsT, units: 0, unit: 0, covTot: list.reduce((x, r) => x + r.cov, 0), nTurni: a.turni };
       return;
     }
     out[g] = cntConvCore(Object.keys(CNT_PESI).map(t => {
-      const n = a.n[t] || 0, r = ratio[t] || { cov: 0, cons: 0 };
-      return { t, w: CNT_PESI[t], n, cov: n * r.cov, cCons: n * r.cons };
+      const n = a.n[t] || 0, r = ratio[t] || { cov: 0, cons: 0, pay: 0 };
+      return { t, w: CNT_PESI[t], n, cov: n * r.cov, cCons: n * r.cons, pay: n * r.pay };
     }), a.centsT, a.turni);
   });
   return out;
@@ -2320,7 +2333,7 @@ function cntConvGrpTotals(rows) {
     rows.forEach(x => {
       const cv = x.convG && x.convG[G.g]; if (!cv || !cv.centsT) return;
       centsT += cv.centsT; turni += cv.nTurni; covTot += cv.covTot;
-      cv.list.forEach(r => { const a = m[r.t] || (m[r.t] = { t: r.t, w: r.w, n: 0, cov: 0, c: 0, cCons: 0 }); a.n += r.n; a.cov += r.cov; a.c += r.c; a.cCons += r.cCons; });
+      cv.list.forEach(r => { const a = m[r.t] || (m[r.t] = { t: r.t, w: r.w, n: 0, cov: 0, c: 0, cCons: 0, pay: 0 }); a.n += r.n; a.cov += r.cov; a.c += r.c; a.cCons += r.cCons; a.pay += r.pay || 0; });
       perDoc.push({ nome: x.d.nome, turni: cv.nTurni, centsT: cv.centsT, unit: cv.unit, list: cv.list });
     });
     if (turni) out[G.g] = { g: G.g, l: G.l, centsT, turni, covTot, perDoc, list: Object.keys(CNT_PESI).map(t => m[t]).filter(Boolean) };
@@ -2332,7 +2345,7 @@ function cntConvTotals(rows) {
   rows.forEach(x => {
     const cv = x.conv; if (!cv.units || !cv.centsT) return;
     centsT += cv.centsT; covTot += cv.covTot; turni += x.ok;
-    cv.list.forEach(r => { const a = m[r.t] || (m[r.t] = { t: r.t, w: r.w, n: 0, cov: 0, c: 0, cCons: 0 }); a.n += r.n; a.cov += r.cov; a.c += r.c; a.cCons += r.cCons; });
+    cv.list.forEach(r => { const a = m[r.t] || (m[r.t] = { t: r.t, w: r.w, n: 0, cov: 0, c: 0, cCons: 0, pay: 0 }); a.n += r.n; a.cov += r.cov; a.c += r.c; a.cCons += r.cCons; a.pay += r.pay || 0; });
     perDoc.push({ nome: x.d.nome, turni: x.ok, centsT: cv.centsT, unit: cv.unit, list: cv.list });
   });
   const list = Object.keys(CNT_PESI).map(t => m[t]).filter(Boolean);
@@ -2348,6 +2361,13 @@ const cntDiffTxt = d => d == null ? '<span class="mut">—</span>' : '<span clas
 const cntDiffEx = d => d == null ? '<span class="mut">—</span>' : '<span class="' + (d >= 0 ? 'okk' : 'noo') + '">' + (d >= 0 ? 'risparmio ' : 'extra ') + fmtEuro(Math.abs(d)) + ' / esame</span>';
 const cntSavEx = (bench, t, costEur) => bench[t] != null && costEur != null ? bench[t] - costEur : null;
 const cntShort = { 'ECG': 'ECG', 'HOLTER CARDIACO': 'Holter ECG', 'HOLTER PRESSORIO': 'Holter pressorio', 'HOLTER CARDIACO 12D': 'Holter 12D' };
+// «€ per referto»: costo del referto coperto dal turno e, per gli esami pagati a consuntivo, l'importo effettivo da contratto
+function cntEuroRef(r) {
+  const parts = [];
+  if (r.cov && r.c) parts.push('<b>' + fmtEuro(r.c / r.cov / 100) + '</b>' + (r.pay ? '<small class="cs-t">coperto dal turno</small>' : ''));
+  if (r.pay && r.cCons) parts.push('<b>' + fmtEuro(r.cCons / r.pay / 100) + '</b><small class="cs-c">a consuntivo (da contratto)</small>');
+  return parts.length ? parts.join('') : '<span class="mut">—</span>';
+}
 function cntConvTable(list, bench, tot) {
   const hasCons = list.some(r => r.cCons), fisso = list.some(r => r.w == null);
   let h = '<div style="overflow-x:auto">';
@@ -2357,7 +2377,7 @@ function cntConvTable(list, bench, tot) {
   list.forEach(r => {
     const bm = bench[r.t], d = bm != null && r.cov && r.c ? bm - r.c / r.cov / 100 : null;
     h += '<tr><td>' + escHtml(cntShort[r.t] || r.t) + '</td><td>' + (r.w == null ? '<span class="mut">fisso</span>' : r.w) + '</td><td>' + r.n.toLocaleString('it-IT') + '</td><td>' + r.cov.toLocaleString('it-IT') + '</td>'
-      + '<td><b>' + (r.cov && r.c ? fmtEuro(r.c / r.cov / 100) : '<span class="mut">—</span>') + '</b></td><td>' + (r.c ? fmtEuro(r.c / 100) : '<span class="mut">—</span>') + '</td>'
+      + '<td>' + cntEuroRef(r) + '</td><td>' + (r.c ? fmtEuro(r.c / 100) : '<span class="mut">—</span>') + '</td>'
       + '<td>' + (bm != null ? fmtEuro(bm) : '<span class="mut">—</span>') + '</td><td>' + cntDiffEx(d) + '</td>'
       + (hasCons ? '<td>' + (r.cCons ? fmtEuro(r.cCons / 100) : '<span class="mut">—</span>') + '</td>' : '') + '</tr>';
   });
@@ -2573,16 +2593,11 @@ function cntTurnoHtml(o) {
   if (o.inf) parts.push('<span class="c-tag">tipo dedotto dal n. di ECG</span>');
   return '<div class="c-tl"><div class="a">' + escHtml(o.l) + '</div>' + (parts.length ? '<div class="b">' + parts.join('') + '</div>' : '') + bar + '</div>';
 }
-function cntDocBlock(x, hasShifts, bench) {
-  x.bench = bench;
-  const showT = hasShifts, total = x.centsT + x.centsE;
-  let h = '<details class="c-doc" open data-n="' + escHtml(nameKey(x.d.nome)) + '"><summary><span class="n"><span class="r-avatar" style="background:' + avColor(x.d.nome) + '">' + escHtml(initials(x.d.nome)) + '</span><span>' + escHtml(x.d.nome) + (x.inattivo ? ' <span class="c-off">Medico attualmente non attivo</span>' : '') + '</span></span>'
-    + '<span class="m"><b>' + x.esami.toLocaleString('it-IT') + '</b> esami</span>'
-    + '<span class="m"><b>' + (showT ? x.ok : '–') + '</b> turni</span>'
-    + '<span class="t">' + fmtEuro(total / 100) + '</span></summary><div class="c-dbody">';
-  // esami refertati per giorno e turno (una colonna per tipologia)
+// tabella di tutti gli esami refertati giorno per giorno (una colonna per tipologia) — mostrata nel popup «Dettaglio esami»
+function cntDayTableHtml(x) {
+  let h = '';
   const days = Object.keys(x.cells).filter(k => x.cells[k].tot || x.cells[k].evs.length).sort(), tps = x.typeRows.map(r => r.t);
-  h += '<div class="c-sec">Esami refertati per giorno e turno</div><div class="c-scroll"><table class="c-tb c-mx"><thead><tr><th>Giorno</th><th>Turno</th>'
+  h += '<div class="c-scroll" style="margin-top:0"><table class="c-tb c-mx"><thead><tr><th>Giorno</th><th>Turno</th>'
     + tps.map(t => '<th>' + escHtml(t) + '</th>').join('') + '<th>Totale</th></tr></thead><tbody>';
   if (!days.length) h += '<tr><td colspan="' + (3 + tps.length) + '" class="mut">Nessun esame né turno nel mese</td></tr>';
   days.forEach(k => {
@@ -2594,6 +2609,17 @@ function cntDocBlock(x, hasShifts, bench) {
       + '<td><b>' + (c.tot || '–') + '</b></td></tr>';
   });
   h += '</tbody><tfoot><tr><td colspan="2">Totale</td>' + x.typeRows.map(r => '<td>' + r.n + '</td>').join('') + '<td>' + x.esami + '</td></tr></tfoot></table></div>';
+  return h;
+}
+function cntDocBlock(x, hasShifts, bench) {
+  x.bench = bench;
+  const showT = hasShifts, total = x.centsT + x.centsE;
+  let h = '<details class="c-doc" open data-n="' + escHtml(nameKey(x.d.nome)) + '"><summary><span class="n"><span class="r-avatar" style="background:' + avColor(x.d.nome) + '">' + escHtml(initials(x.d.nome)) + '</span><span>' + escHtml(x.d.nome) + (x.inattivo ? ' <span class="c-off">Medico attualmente non attivo</span>' : '') + '</span></span>'
+    + '<span class="m"><b>' + x.esami.toLocaleString('it-IT') + '</b> esami</span>'
+    + '<span class="m"><b>' + (showT ? x.ok : '–') + '</b> turni</span>'
+    + '<span class="t">' + fmtEuro(total / 100) + '</span>'
+    + '<button type="button" class="r-btn ghost c-detbtn" data-cnt="detail" data-id="' + escHtml(x.d.id) + '">🔎 Dettaglio esami</button></summary><div class="c-dbody">';
+  cnt.det = cnt.det || {}; cnt.det[x.d.id] = { nome: x.d.nome, html: cntDayTableHtml(x) };   // il dettaglio giorno per giorno si apre nel popup
   // turni
   const calTxt = [['Completo', x.cal.comp], ['Mattina', x.cal.mat], ['Pomeriggio', x.cal.pom], ['Domenica', x.cal.dom], ['di cui ECG', x.cal.ecg], ['Holter (10hc/10hp)', x.cal.hol], ['Holter (16hc)', x.cal.h16], ['Non riconosciuto', x.cal.altro]].filter(p => p[1]).map(p => p[0] + ' ' + p[1]).join(' · ');
   if (showT && x.cal.tot) h += '<div class="c-cal">Nella sezione Turni: <b>Tot. ' + x.cal.tot + '</b>' + (calTxt ? ' · ' + calTxt : '') + '</div>';
@@ -2848,6 +2874,7 @@ async function maybeImportLegacy() {
       if (a === 'prev') cntGo(-1); else if (a === 'next') cntGo(1);
       else if (a === 'del') cntDelete(); else if (a === 'reload') cntLoad();
       else if (a === 'expand' || a === 'collapse') document.querySelectorAll('#cnt-body .c-doc').forEach(e => { e.open = a === 'expand'; });
+      else if (a === 'detail') { e.preventDefault(); const D = (cnt.det || {})[b.dataset.id]; if (D) { byId('det-title').textContent = '🔎 Dettaglio esami · ' + D.nome + ' · ' + ymLabel(cnt.ym); byId('det-body').innerHTML = D.html; openModal('det-modal'); } }
       else if (a === 'conv') { byId('conv-body').innerHTML = cnt.convHtml || ''; openModal('conv-modal'); }
       else if (a === 'shifts') { const my = ++cnt.req; cnt.shiftsLoading = true; cntRender(); cntLoadShifts(my).then(() => { if (my === cnt.req) cntRender(); }); }
     });
@@ -2915,10 +2942,10 @@ async function maybeImportLegacy() {
   // chiusura modali: pulsanti ✕/Annulla, click sullo sfondo, tasto Esc
   document.addEventListener('click', e => {
     const c = e.target.closest('[data-close]');
-    if (c) { c.dataset.close === 'doc' ? closeDoctorModal() : c.dataset.close === 'conv' ? closeModal('conv-modal') : closeUserModal(); return; }
+    if (c) { c.dataset.close === 'doc' ? closeDoctorModal() : c.dataset.close === 'conv' ? closeModal('conv-modal') : c.dataset.close === 'det' ? closeModal('det-modal') : closeUserModal(); return; }
     if (e.target.classList && e.target.classList.contains('r-modal-bg')) closeModal(e.target.id);
   });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDoctorModal(); closeUserModal(); closeModal('conv-modal'); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDoctorModal(); closeUserModal(); closeModal('conv-modal'); closeModal('det-modal'); } });
 })();
 
 // ─── UI HELPERS ───────────────────────────────────────────────

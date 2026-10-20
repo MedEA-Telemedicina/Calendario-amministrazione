@@ -2668,19 +2668,28 @@ function cntApplyFilter() {
 const CNT_GRP_COL = { holter: ['#8b1a3a', '#f6dde5'], h16: ['#6a3fb5', '#e9e0f7'], completo: ['#1a73e8', '#dbe8fd'], ecg: ['#00796b', '#d6efec'], domenica: ['#d9530a', '#fde5d6'] };
 const cntGrpOfVoce = k => { const G = CNT_GRP.find(g => g.ks.includes(k)); return G ? G.g : ''; };
 // voce di turno nella tabella giorno/turno: nome del turno + dettaglio degli ECG refertati su una seconda riga
+// un turno ECG moltiplicato (doppio/triplo confermato) compare tante volte quanti sono i turni conteggiati,
+// ognuno con la propria quota di ECG e la propria barra (% rispetto al limite del singolo turno)
 function cntTurnoHtml(o) {
+  const m = o.lim ? Math.max(o.mult || 1, 1) : 1;
+  if (m === 1) return cntTurnoOne(o, o.ecg, o.pend);
+  const base = o.ecg > o.lim * m ? o.lim : Math.floor(o.ecg / m);   // oltre la capienza: i turni «pieni» mostrano il limite, il resto va al primo; altrimenti ripartizione equa
+  let h = '';
+  for (let i = 0; i < m; i++) h += cntTurnoOne(o, i === 0 ? o.ecg - base * (m - 1) : base, i === m - 1 ? o.pend : null);   // la conferma compare una sola volta, dopo l'ultimo
+  return h;
+}
+function cntTurnoOne(o, ecg, pend) {
   const parts = []; let bar = '';
   if (o.lim) {
-    // percentuale di riempimento = ECG refertati / limite del turno (× turni conteggiati)
-    const raw = o.ecg / (o.lim * Math.max(o.mult || 1, 1)) * 100, pct = Math.min(100, Math.round(raw));
+    // percentuale di riempimento = ECG refertati / limite del singolo turno
+    const raw = ecg / o.lim * 100, pct = Math.min(100, Math.round(raw));
     const lvl = raw > 75 ? 'ok' : raw >= 50 ? 'mid' : 'low';   // verde > 75% · giallo 50-75% · rosso < 50%
-    parts.push('<span><b>' + o.ecg + '</b> ECG refertati · limite ' + o.lim + ' per turno · <b>' + Math.round(raw) + '%</b></span>');
-    bar = '<div class="c-bar ' + lvl + '" title="' + Math.round(raw) + '% del limite (' + o.ecg + ' su ' + o.lim * Math.max(o.mult || 1, 1) + ' ECG)"><i style="width:' + pct + '%"></i></div>';
+    parts.push('<span><b>' + ecg + '</b> ECG refertati · limite ' + o.lim + ' per turno · <b>' + Math.round(raw) + '%</b></span>');
+    bar = '<div class="c-bar ' + lvl + '" title="' + Math.round(raw) + '% del limite (' + ecg + ' su ' + o.lim + ' ECG)"><i style="width:' + pct + '%"></i></div>';
   }
-  if (o.mult > 1) parts.push('<span class="c-x">' + o.mult + ' turni conteggiati</span>');
   if (o.inf) parts.push('<span class="c-tag">tipo dedotto dal n. di ECG</span>');
   const col = CNT_GRP_COL[cntGrpOfVoce(o.k)];
-  const pendH = o.pend ? cntPendInline(o.pend) : '';
+  const pendH = pend ? cntPendInline(pend) : '';
   return '<div class="c-tl' + (col ? ' tc' : '') + '"' + (col ? ' style="--tc:' + col[0] + ';--tb:' + col[1] + '"' : '') + '><div class="a">' + escHtml(o.l) + '</div>' + (parts.length ? '<div class="b">' + parts.join('') + '</div>' : '') + bar + pendH + '</div>';
 }
 // helper conferma turni ECG aggiuntivi

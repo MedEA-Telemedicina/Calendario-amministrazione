@@ -406,6 +406,7 @@
   .c-att input { width: 16px; height: 16px; margin: 0; accent-color: #e8710a; cursor: pointer; }
   .c-att.on { background: #fff0dc; color: #b45309; }
   .c-doc.att { border-color: #f5c27a; box-shadow: inset 4px 0 0 #e8710a, var(--r-sh); }
+  .r-att { display: inline-block; margin-left: 6px; font-size: 14px; vertical-align: middle; cursor: help; }
   .c-wolist { display: flex; flex-wrap: wrap; gap: 8px 10px; }
   .c-wo { display: inline-flex; align-items: center; gap: 8px; padding: 3px 4px 3px 12px; border-radius: 999px; background: #fff; border: 1px solid #edf1f6; font-weight: 600; }
   .c-attbox { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin: 12px 0; padding: 12px 16px; border-radius: 14px; background: #fff0dc; border: 1px solid #f5c27a; color: #8a4a05; font-size: 13px; }
@@ -470,9 +471,9 @@
   .c-tag { display: inline-block; background: #eef2f7; color: #5b6b7f; border-radius: 20px; padding: 1px 9px; font-size: 11px; font-weight: 700; }
   .c-bar { height: 4px; width: 130px; margin-left: 25px; margin-top: 3px; border-radius: 4px; background: #e6ebf2; overflow: hidden; }
   .c-bar i { display: block; height: 100%; border-radius: 4px; background: #34a853; }
-  .c-bar.ok i { background: #34a853; }      /* >= 75 ECG */
-  .c-bar.mid i { background: #f9ab00; }     /* 50 - 74 ECG */
-  .c-bar.low i { background: #d93025; }     /* < 50 ECG */
+  .c-bar.ok i { background: #34a853; }      /* > 75% del limite */
+  .c-bar.mid i { background: #f9ab00; }     /* 50 - 75% del limite */
+  .c-bar.low i { background: #d93025; }     /* < 50% del limite */
 
   /* avvisi, totale, note */
   /* occhio: mostra / nasconde il risparmio nel riepilogo per tipologia di turno */
@@ -1687,13 +1688,14 @@ async function finishUnlock() {
   byId('admin-backup-card').style.display = isAdmin() ? 'block' : 'none';
   switchSubTab('conteggi');
   requestAnimationFrame(moveIndicator);
+  try { await loadAtt(); } catch (e) {}
   await loadDoctors();
   cntRender();
   await maybeImportLegacy();
 }
 async function lockRend() {
   rendUnlocked = false; currentUser = null;
-  doctors = []; doctorsLoaded = false; adminUsers = []; usersLoaded = false;
+  doctors = []; doctorsLoaded = false; attMap = {}; adminUsers = []; usersLoaded = false;
   cntReset(); if (byId('cnt-body')) byId('cnt-body').innerHTML = '';
   docFilter = 'all'; docVoce = ''; docQuery = '';
   closeDoctorModal(); closeUserModal();
@@ -1883,7 +1885,7 @@ function rowHtml(d) {
   const t1 = linesFor(d, 0), t2 = linesFor(d, 1);
   return d._h =
     `<tr class="r-doc${d.attivo ? '' : ' off'}" data-id="${d.id}">` +
-      `<td class="n"><span class="r-doc-name">${escHtml(d.nome)}</span>${d.note ? `<span class="r-doc-sub">${escHtml(d.note)}</span>` : ''}</td>` +
+      `<td class="n"><span class="r-doc-name">${escHtml(d.nome)}${cntIsAtt(d.id) ? ` <span class="r-att" title="${escHtml(attTip(d.id))}">⚠️</span>` : ''}</span>${d.note ? `<span class="r-doc-sub">${escHtml(d.note)}</span>` : ''}</td>` +
       `<td class="t t1${t1 ? '' : ' empty'}" data-label="Turni">${t1 || '<span class="r-none">—</span>'}</td>` +
       `<td class="t t2${t2 ? '' : ' empty'}" data-label="Esami a consuntivo">${t2 || '<span class="r-none">—</span>'}</td>` +
       `<td class="c"><label class="r-switch" title="Attivo / Non attivo"><input type="checkbox" data-act="toggle" ${d.attivo ? 'checked' : ''}><span></span></label></td>` +
@@ -2658,7 +2660,7 @@ function cntApplyFilter() {
   const q = nameKey(cnt.q || '');
   const oa = !!cnt.onlyAtt;
   document.querySelectorAll('#cnt-body .c-doc, #cnt-body .c-wo').forEach(e => { e.hidden = (!!q && !e.dataset.n.includes(q)) || (oa && e.dataset.att !== '1'); });
-  const n = Object.keys(cnt.scelte || {}).filter(k => k.startsWith('att|') && cnt.scelte[k] === 1).length;
+  const n = doctors.filter(d => cntIsAtt(d.id)).length;
   setTxt('cnt-att-n', n ? '(' + n + ')' : '');
   const cb = byId('cnt-onlyatt'); if (cb) cb.checked = oa;
 }
@@ -2669,10 +2671,11 @@ const cntGrpOfVoce = k => { const G = CNT_GRP.find(g => g.ks.includes(k)); retur
 function cntTurnoHtml(o) {
   const parts = []; let bar = '';
   if (o.lim) {
-    parts.push('<span><b>' + o.ecg + '</b> ECG refertati · limite ' + o.lim + ' per turno</span>');
-    const pct = Math.min(100, Math.round(o.ecg / (o.lim * Math.max(o.mult || 1, 1)) * 100));
-    const lvl = o.ecg >= 75 ? 'ok' : o.ecg >= 50 ? 'mid' : 'low';   // verde >= 75 · giallo 50-74 · rosso < 50
-    bar = '<div class="c-bar ' + lvl + '"><i style="width:' + pct + '%"></i></div>';
+    // percentuale di riempimento = ECG refertati / limite del turno (× turni conteggiati)
+    const raw = o.ecg / (o.lim * Math.max(o.mult || 1, 1)) * 100, pct = Math.min(100, Math.round(raw));
+    const lvl = raw > 75 ? 'ok' : raw >= 50 ? 'mid' : 'low';   // verde > 75% · giallo 50-75% · rosso < 50%
+    parts.push('<span><b>' + o.ecg + '</b> ECG refertati · limite ' + o.lim + ' per turno · <b>' + Math.round(raw) + '%</b></span>');
+    bar = '<div class="c-bar ' + lvl + '" title="' + Math.round(raw) + '% del limite (' + o.ecg + ' su ' + o.lim * Math.max(o.mult || 1, 1) + ' ECG)"><i style="width:' + pct + '%"></i></div>';
   }
   if (o.mult > 1) parts.push('<span class="c-x">' + o.mult + ' turni conteggiati</span>');
   if (o.inf) parts.push('<span class="c-tag">tipo dedotto dal n. di ECG</span>');
@@ -2882,7 +2885,9 @@ async function cntLoadPesi() {
   return false;
 }
 async function cntSync() {
-  if (!rendUnlocked || !cnt.ym || !cnt.loaded || cnt.loading || !cnt.rec || cnt.saving || cnt.syncing) return;
+  if (!rendUnlocked) return;
+  try { if (await loadAtt()) attRefresh(); } catch (e) {}
+  if (!cnt.ym || !cnt.loaded || cnt.loading || !cnt.rec || cnt.saving || cnt.syncing) return;
   cnt.syncing = true; const my = cnt.req;
   try {
     const a = await cntLoadScelte(my), b = await cntLoadPesi();
@@ -2897,7 +2902,7 @@ function cntOnRemote(ym, p) {
     const same = cnt.scelte[r.chiave] === r.valore && (cnt.scelteMeta[r.chiave] || {}).il === r.aggiornato_il;
     cnt.scelte[r.chiave] = r.valore; cnt.scelteMeta[r.chiave] = { da: r.aggiornato_da, il: r.aggiornato_il };
     if (same) return;
-    if (r.aggiornato_da && r.aggiornato_da !== myName()) toast(r.aggiornato_da + (String(r.chiave).startsWith('att|') ? ' ha aggiornato i medici da attenzionare' : ' ha aggiornato un turno ECG aggiuntivo'));
+    if (r.aggiornato_da && r.aggiornato_da !== myName()) toast(r.aggiornato_da + ' ha aggiornato un turno ECG aggiuntivo');
   }
   cntRender();
 }
@@ -2915,27 +2920,47 @@ function cntSubscribe() {
 setInterval(() => { if (document.visibilityState === 'visible') cntSync(); }, SYNC_POLL_MS);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') cntSync(); });
 
-// ── medici «da attenzionare» (per mese, condivisi: riga 'att|<id medico>' in conteggi_scelte, valore 1 = segnalato) ──
-const cntIsAtt = id => (cnt.scelte || {})['att|' + id] === 1;
-function cntAttHtml(id) {
-  const on = cntIsAtt(id), mt = (cnt.scelteMeta || {})['att|' + id];
-  const tip = on && mt && mt.da ? 'Segnalato da ' + mt.da + (mt.il ? ', ' + new Date(mt.il).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '') : 'Segna questo medico come da attenzionare (visibile a tutti)';
-  return '<span class="c-att' + (on ? ' on' : '') + '" title="' + escHtml(tip) + '"><input type="checkbox" data-att="' + escHtml(id) + '"' + (on ? ' checked' : '') + '> Da attenzionare</span>';
+// ── medici «da attenzionare» ──
+// Segnalazione GLOBALE sul medico (non legata al mese): resta su tutti i mesi finché qualcuno non la toglie.
+// Una riga per medico in rend_impostazioni (chiave 'att|<id medico>', valore true/false): nessuna sovrascrittura tra utenti.
+let attMap = {}, attSaving = 0;                      // attMap: id medico -> { da, il } (solo i medici segnalati)
+const cntIsAtt = id => String(id) in attMap;
+async function loadAtt() {
+  if (attSaving) return false;
+  const { data, error } = await getSb().from('rend_impostazioni').select('chiave,valore,aggiornato_da,aggiornato_il').like('chiave', 'att|%');
+  if (error || !data) return false;
+  const m = {};
+  data.forEach(r => { if (r.valore === true) m[String(r.chiave).slice(4)] = { da: r.aggiornato_da, il: r.aggiornato_il }; });
+  const ch = JSON.stringify(m) !== JSON.stringify(attMap);
+  attMap = m; return ch;
 }
+function attTip(id) {
+  const mt = attMap[String(id)];
+  return mt ? 'Da attenzionare' + (mt.da ? ' · segnalato da ' + mt.da + (mt.il ? ', ' + new Date(mt.il).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '') : '') : '';
+}
+function cntAttHtml(id) {
+  const on = cntIsAtt(id);
+  return '<span class="c-att' + (on ? ' on' : '') + '" title="' + escHtml(on ? attTip(id) : 'Segna questo medico come da attenzionare: resta segnalato su tutti i mesi, per tutti gli utenti') + '"><input type="checkbox" data-att="' + escHtml(id) + '"' + (on ? ' checked' : '') + '> Da attenzionare</span>';
+}
+function attRefresh() { doctors.forEach(d => { d._h = null; }); renderDoctors(); if (cnt.rec && !cnt.loading) cntRender(); }
 async function cntToggleAtt(id, on) {
-  if (!cnt.rec) return;
-  if (cnt.scelteErr) { toast('Impossibile salvare: manca la tabella conteggi_scelte su Supabase (esegui supabase_persistenza.sql)', 'err'); cntRender(); return; }
-  const key = 'att|' + id, ym = cnt.ym, had = key in cnt.scelte, prev = cnt.scelte[key], prevMeta = cnt.scelteMeta[key];
-  cnt.scelte[key] = on ? 1 : 0; cnt.scelteMeta[key] = { da: myName(), il: new Date().toISOString() };
-  cnt.saving++; cntRender();
+  id = String(id);
+  const had = id in attMap, prev = attMap[id];
+  if (on) attMap[id] = { da: myName(), il: new Date().toISOString() }; else delete attMap[id];
+  attSaving++; attRefresh();
   try {
-    const row = await cntPutScelta(ym, key, on ? 1 : 0);
-    if (ym === cnt.ym) { cnt.scelteMeta[key] = { da: row.aggiornato_da, il: row.aggiornato_il }; cntRender(); }
-    toast(on ? 'Medico segnalato come da attenzionare (visibile a tutti)' : 'Segnalazione rimossa', 'ok');
+    const row = { chiave: 'att|' + id, valore: !!on, aggiornato_da: myName(), aggiornato_il: new Date().toISOString() };
+    const { data, error } = await getSb().from('rend_impostazioni').upsert(row, { onConflict: 'chiave' }).select();
+    if (error) throw error;
+    if (!data || !data.length) throw new Error('scrittura rifiutata dal database (policy RLS di rend_impostazioni)');
+    if (on) attMap[id] = { da: row.aggiornato_da, il: row.aggiornato_il };
+    attRefresh();
+    toast(on ? 'Medico segnalato come da attenzionare su tutti i mesi' : 'Segnalazione rimossa', 'ok');
   } catch (e) {
-    if (ym === cnt.ym) { if (had) { cnt.scelte[key] = prev; cnt.scelteMeta[key] = prevMeta; } else { delete cnt.scelte[key]; delete cnt.scelteMeta[key]; } cntRender(); }
+    if (had) attMap[id] = prev; else delete attMap[id];
+    attRefresh();
     toast('Segnalazione NON salvata: ' + (e.message || e), 'err');
-  } finally { cnt.saving--; }
+  } finally { attSaving--; }
 }
 
 async function cntAnswerExtra(n) {

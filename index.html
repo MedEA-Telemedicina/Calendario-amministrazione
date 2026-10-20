@@ -2030,7 +2030,7 @@ async function saveDoctorModal() {
 // ═══════════ CONTEGGI MENSILI ═══════════
 // File esami del mese -> salvato (già aggregato) su Supabase in `conteggi_mesi`.
 // Turno conteggiato = medico in turno nel calendario "Medici in Turno" con almeno 1 esame refertato quel giorno.
-const cnt = { ym: null, rec: null, loaded: false, loading: false, err: '', shifts: null, shiftsErr: '', shiftsLoading: false, req: 0 };
+const cnt = { ym: null, rec: null, loaded: false, loading: false, err: '', shifts: null, shiftsErr: '', shiftsLoading: false, req: 0, scelte: {}, scelteMeta: {}, scelteErr: '', saving: 0, syncing: false };
 const pad2 = n => String(n).padStart(2, '0');
 const WD = ['D', 'L', 'M', 'M', 'G', 'V', 'S'];
 function ymLabel(ym) { const [y, m] = ym.split('-').map(Number); const s = new Date(y, m - 1, 1).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' }); return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -2307,7 +2307,7 @@ const cents = x => Math.round(x * 100);
 // Gli esami pagati a consuntivo sono scorporati (restano fuori dal calcolo); gli altri tipi di esame non rientrano.
 const CNT_PESI_DEF = { 'ECG': 1, 'HOLTER CARDIACO': 2.81, 'HOLTER PRESSORIO': 1.63, 'HOLTER CARDIACO 12D': 2.81 };
 const CNT_PESI = Object.assign({}, CNT_PESI_DEF);
-try { const sv = JSON.parse(localStorage.getItem('cnt_pesi_v3') || 'null'); if (sv) Object.keys(CNT_PESI_DEF).forEach(t => { if (sv[t] > 0) CNT_PESI[t] = +sv[t]; }); } catch (e) {}
+// i pesi vengono caricati da Supabase (tabella rend_impostazioni) e sono condivisi tra tutti gli utenti: vedi cntLoadPesi()
 // nucleo del calcolo: all = [{ t, w, n, cov, cCons }]
 function cntConvCore(all, centsT, nTurni) {
   const units = all.reduce((a, r) => a + r.cov * r.w, 0);
@@ -2541,9 +2541,8 @@ function cntCompute() {
     const v = doctors.filter(d => d.attivo && d.tariffe[voce] != null).map(d => d.tariffe[voce]);
     if (v.length) bench[t] = v.reduce((a, b) => a + b, 0) / v.length;
   });
-  // conferme dei turni ECG aggiuntivi (salvate nel record del mese + copia locale di sicurezza)
-  let locEx = {}; try { locEx = JSON.parse(localStorage.getItem('cnt_extra_' + cnt.ym) || '{}') || {}; } catch (e) {}
-  const extraOk = Object.assign({}, locEx, dati.extraOk || {}), pendAll = [];
+  // conferme dei turni ECG aggiuntivi: sorgente unica = tabella conteggi_scelte (condivisa); dati.extraOk = solo vecchi salvataggi
+  const extraOk = Object.assign({}, dati.extraOk || {}, cnt.scelte || {}), pendAll = [];
   const T = { esami: 0, turni: 0, centsT: 0, centsE: 0, anyCons: false, pend: 0 };
   const rows = doctors.filter(d => d.attivo || byDoc.has(d.id)).map(d => {
     const ex = byDoc.get(d.id) || {}, cells = {}, types = {}; let esami = 0;
@@ -2673,9 +2672,11 @@ const cntFascia = t => t === 'mat' ? ' (mattina)' : t === 'pom' ? ' (pomeriggio)
 const cntDM = ds => { const dt = new Date(ds + 'T00:00:00'); return pad2(dt.getDate()) + '/' + pad2(dt.getMonth() + 1); };
 function cntPendInline(q) {
   const btn = lbl => '<button type="button" class="r-btn ghost" data-cnt="extra" data-key="' + escHtml(q.key) + '">' + lbl + '</button>';
+  const mt = (cnt.scelteMeta || {})[q.key];
+  const who = mt && mt.da ? ' <span class="mut">· ' + escHtml(mt.da) + (mt.il ? ', ' + new Date(mt.il).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '') + '</span>' : '';
   if (!q.decided) return '<div class="c-pend"><span>⚠ ' + q.ecg + ' ECG: oltre i ' + q.gn + ' turni in calendario (limite ' + q.lim + ' ciascuno). Turno aggiuntivo <u>non assegnato</u> finché non confermi.</span>' + btn('Conferma…') + '</div>';
-  if (q.conf > 0) return '<div class="c-pend done"><span>✓ Confermato: ' + (q.conf === 1 ? cntOrd(q.gn + 1) + ' turno' : q.conf + ' turni aggiuntivi') + ' ECG assegnato/i</span>' + btn('Modifica') + '</div>';
-  return '<div class="c-pend no"><span>Turno aggiuntivo ECG non assegnato (' + q.ecg + ' ECG oltre la capienza)</span>' + btn('Modifica') + '</div>';
+  if (q.conf > 0) return '<div class="c-pend done"><span>✓ Confermato: ' + (q.conf === 1 ? cntOrd(q.gn + 1) + ' turno' : q.conf + ' turni aggiuntivi') + ' ECG assegnato/i' + who + '</span>' + btn('Modifica') + '</div>';
+  return '<div class="c-pend no"><span>Turno aggiuntivo ECG non assegnato (' + q.ecg + ' ECG oltre la capienza)' + who + '</span>' + btn('Modifica') + '</div>';
 }
 // medici solo a consuntivo: niente tabella giorno/turno, solo conteggio per tipologia con importo a referto e compenso spettante
 function cntConsTableHtml(x) {
@@ -2802,22 +2803,123 @@ function cntOpenExtra(key, queue) {
   byId('extra-body').innerHTML = cntExtraHtml(q);
   openModal('extra-modal');
 }
-async function cntSaveExtra(ym) {
-  const o = (cnt.rec && cnt.rec.dati && cnt.rec.dati.extraOk) || {};
-  try { localStorage.setItem('cnt_extra_' + ym, JSON.stringify(o)); } catch (e) {}
-  try {
-    const { error } = await getSb().from('conteggi_mesi').update({ dati: cnt.rec.dati }).eq('mese', ym);
-    if (error) throw error;
-  } catch (e) { toast('Conferma salvata solo su questo browser: ' + (e.message || e), 'err'); }
+// ── scelte condivise e persistenti (Supabase) ──
+// Doppio/triplo turno ECG e pesi di convenienza vivono nel database: ogni utente vede subito quanto deciso dagli altri
+// (Realtime + aggiornamento periodico di sicurezza). Ogni scelta è una riga a sé: due utenti non si sovrascrivono mai a vicenda.
+const SYNC_POLL_MS = 20000;
+let cntChan = null;
+const scelteMissing = m => /conteggi_scelte|42P01|does not exist|schema cache/i.test(m || '');
+const myName = () => displayName((currentUser && currentUser.email) || '');
+async function cntLoadScelte(my) {
+  const ym = cnt.ym;
+  const { data, error } = await getSb().from('conteggi_scelte').select('chiave,valore,aggiornato_da,aggiornato_il').eq('mese', ym);
+  if (my !== cnt.req || ym !== cnt.ym) return false;
+  if (error) { if (scelteMissing(error.message || error.code)) cnt.scelteErr = error.message || 'tabella mancante'; return false; }
+  const s = {}, m = {};
+  (data || []).forEach(r => { s[r.chiave] = r.valore; m[r.chiave] = { da: r.aggiornato_da, il: r.aggiornato_il }; });
+  const changed = JSON.stringify(s) !== JSON.stringify(cnt.scelte) || JSON.stringify(m) !== JSON.stringify(cnt.scelteMeta) || !!cnt.scelteErr;
+  cnt.scelte = s; cnt.scelteMeta = m; cnt.scelteErr = '';
+  return changed;
 }
-function cntAnswerExtra(n) {
-  const key = cnt.extraKey, q = (cnt.pendMap || {})[key]; if (!q || !cnt.rec) return;
-  const dati = cnt.rec.dati; dati.extraOk = dati.extraOk || {}; dati.extraOk[key] = n;
-  cntSaveExtra(cnt.ym);
+async function cntPutScelta(ym, key, n) {
+  const row = { mese: ym, chiave: key, valore: n, aggiornato_da: myName(), aggiornato_il: new Date().toISOString() };
+  const { data, error } = await getSb().from('conteggi_scelte').upsert(row, { onConflict: 'mese,chiave' }).select();
+  if (error) throw error;
+  if (!data || !data.length) throw new Error('scrittura rifiutata dal database (policy RLS di conteggi_scelte)');
+  return row;
+}
+// una tantum: le conferme che erano rimaste solo in questo browser vengono caricate sul database, così le vedono tutti
+async function cntMigrateLocal(ym) {
+  let loc = null; try { loc = JSON.parse(localStorage.getItem('cnt_extra_' + ym) || 'null'); } catch (e) { return; }
+  if (!loc || typeof loc !== 'object') { try { localStorage.removeItem('cnt_extra_' + ym); } catch (e) {} return; }
+  const legacy = (cnt.rec && cnt.rec.dati && cnt.rec.dati.extraOk) || {};
+  const rows = Object.entries(loc).filter(([k, v]) => v != null && !(k in cnt.scelte) && !(k in legacy))
+    .map(([k, v]) => ({ mese: ym, chiave: k, valore: Math.max(0, +v || 0), aggiornato_da: myName(), aggiornato_il: new Date().toISOString() }));
+  if (rows.length) {
+    const { data, error } = await getSb().from('conteggi_scelte').upsert(rows, { onConflict: 'mese,chiave' }).select();
+    if (error || !data || !data.length) return;                       // riprova al prossimo caricamento: non perdiamo nulla
+    rows.forEach(r => { cnt.scelte[r.chiave] = r.valore; cnt.scelteMeta[r.chiave] = { da: r.aggiornato_da, il: r.aggiornato_il }; });
+    toast(rows.length + (rows.length === 1 ? ' scelta salvata solo su questo browser è stata condivisa' : ' scelte salvate solo su questo browser sono state condivise'), 'ok');
+  }
+  try { localStorage.removeItem('cnt_extra_' + ym); } catch (e) {}
+}
+// pesi di convenienza condivisi (tabella rend_impostazioni, chiave 'cnt_pesi')
+function cntApplyPesi(sv) {
+  let ch = false;
+  Object.keys(CNT_PESI_DEF).forEach(t => { const v = sv && +sv[t], nv = v > 0 ? v : CNT_PESI_DEF[t]; if (CNT_PESI[t] !== nv) { CNT_PESI[t] = nv; ch = true; } });
+  return ch;
+}
+async function cntSavePesi() {
+  try {
+    const row = { chiave: 'cnt_pesi', valore: Object.assign({}, CNT_PESI), aggiornato_da: myName(), aggiornato_il: new Date().toISOString() };
+    const { data, error } = await getSb().from('rend_impostazioni').upsert(row, { onConflict: 'chiave' }).select();
+    return !error && !!(data && data.length);
+  } catch (e) { return false; }
+}
+async function cntLoadPesi() {
+  try {
+    const { data, error } = await getSb().from('rend_impostazioni').select('valore').eq('chiave', 'cnt_pesi').maybeSingle();
+    if (error) return false;
+    if (data && data.valore) return cntApplyPesi(data.valore);
+    let loc = null; try { loc = JSON.parse(localStorage.getItem('cnt_pesi_v3') || 'null'); } catch (e) {}
+    if (loc) { const ch = cntApplyPesi(loc); if (await cntSavePesi()) { try { localStorage.removeItem('cnt_pesi_v3'); } catch (e) {} } return ch; }
+  } catch (e) {}
+  return false;
+}
+async function cntSync() {
+  if (!rendUnlocked || !cnt.ym || !cnt.loaded || cnt.loading || !cnt.rec || cnt.saving || cnt.syncing) return;
+  cnt.syncing = true; const my = cnt.req;
+  try {
+    const a = await cntLoadScelte(my), b = await cntLoadPesi();
+    if (my === cnt.req && (a || b)) cntRender();
+  } catch (e) {} finally { cnt.syncing = false; }
+}
+function cntOnRemote(ym, p) {
+  if (ym !== cnt.ym || !p) return;
+  if (p.eventType === 'DELETE') { const k = p.old && p.old.chiave; if (!k) return; delete cnt.scelte[k]; delete cnt.scelteMeta[k]; }
+  else {
+    const r = p.new; if (!r || !r.chiave) return;
+    const same = cnt.scelte[r.chiave] === r.valore && (cnt.scelteMeta[r.chiave] || {}).il === r.aggiornato_il;
+    cnt.scelte[r.chiave] = r.valore; cnt.scelteMeta[r.chiave] = { da: r.aggiornato_da, il: r.aggiornato_il };
+    if (same) return;
+    if (r.aggiornato_da && r.aggiornato_da !== myName()) toast(r.aggiornato_da + ' ha aggiornato un turno ECG aggiuntivo');
+  }
   cntRender();
-  toast(n ? 'Turno ECG aggiuntivo assegnato' : 'Turno ECG aggiuntivo non assegnato', 'ok');
+}
+function cntUnsubscribe() { if (cntChan) { try { getSb().removeChannel(cntChan); } catch (e) {} cntChan = null; } }
+function cntSubscribe() {
+  cntUnsubscribe();
+  const ym = cnt.ym; if (!ym || !rendUnlocked) return;
+  try {
+    cntChan = getSb().channel('rend-sync-' + ym)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conteggi_scelte', filter: 'mese=eq.' + ym }, p => cntOnRemote(ym, p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rend_impostazioni' }, () => cntSync())
+      .subscribe();
+  } catch (e) { cntChan = null; }                                      // senza Realtime resta l'aggiornamento periodico
+}
+setInterval(() => { if (document.visibilityState === 'visible') cntSync(); }, SYNC_POLL_MS);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') cntSync(); });
+
+async function cntAnswerExtra(n) {
+  const key = cnt.extraKey, q = (cnt.pendMap || {})[key]; if (!q || !cnt.rec) return;
+  if (cnt.scelteErr) { toast('Impossibile salvare: manca la tabella conteggi_scelte su Supabase (esegui supabase_persistenza.sql)', 'err'); return; }
+  const ym = cnt.ym, had = key in cnt.scelte, prev = cnt.scelte[key], prevMeta = cnt.scelteMeta[key];
+  cnt.scelte[key] = n; cnt.scelteMeta[key] = { da: myName(), il: new Date().toISOString() };   // aggiornamento immediato, poi conferma dal database
+  cnt.saving++;
+  cntRender();
   const next = cnt.extraQueue ? Object.values(cnt.pendMap || {}).find(x => !x.decided) : null;
   if (next) cntOpenExtra(next.key, true); else closeModal('extra-modal');
+  try {
+    const row = await cntPutScelta(ym, key, n);
+    if (ym === cnt.ym) { cnt.scelteMeta[key] = { da: row.aggiornato_da, il: row.aggiornato_il }; cntRender(); }
+    toast(n ? 'Turno ECG aggiuntivo assegnato (visibile a tutti)' : 'Turno ECG aggiuntivo non assegnato (visibile a tutti)', 'ok');
+  } catch (e) {
+    if (ym === cnt.ym) {
+      if (had) { cnt.scelte[key] = prev; cnt.scelteMeta[key] = prevMeta; } else { delete cnt.scelte[key]; delete cnt.scelteMeta[key]; }
+      cntRender();
+    }
+    toast('Scelta NON salvata: ' + (e.message || e), 'err');
+  } finally { cnt.saving--; }
 }
 function cntRender() {
   const body = byId('cnt-body'); if (!body || !cnt.ym) return;
@@ -2845,6 +2947,7 @@ function cntRender() {
     + (r.caricato_il ? new Date(r.caricato_il).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '–') + (r.caricato_da ? ' da ' + escHtml(r.caricato_da) : '') + '</div></div></div>'
     + '<div class="c-btns"><button class="r-btn ghost" data-cnt="expand">Espandi tutti</button><button class="r-btn ghost" data-cnt="collapse">Comprimi tutti</button>'
     + '<button class="r-btn ghost" data-cnt="del">🗑 Elimina e ricarica</button></div></div>';
+  if (cnt.scelteErr) h += '<div class="c-warn">⚠ <span>Le scelte sui turni aggiuntivi <b>non possono essere salvate né condivise</b>: tabella <b>conteggi_scelte</b> non trovata su Supabase. Esegui lo script <b>supabase_persistenza.sql</b> nel SQL Editor e ricarica la pagina.</span></div>';
   if (cnt.shiftsLoading) h += '<div class="c-warn c-info">⏳ Lettura dei turni dal calendario…</div>';
   else if (cnt.shiftsErr) h += '<div class="c-warn">Turni non disponibili (' + escHtml(cnt.shiftsErr) + ') — sono mostrati solo gli esami, senza turni né compensi. <button class="r-btn ghost" data-cnt="shifts">↻ Riprova</button></div>';
   if (cnt.shifts && cnt.shiftsDiag) {
@@ -2881,22 +2984,29 @@ function cntRender() {
   const un = R.unmatched.filter(x => x.n > 0).sort((a, b) => b.n - a.n);
   if (un.length) h += '<details class="c-det warn"><summary>⚠ ' + un.length + ' medici nel file non associati a nessun medico in elenco (' + un.reduce((a, b) => a + b.n, 0).toLocaleString('it-IT') + ' esami)</summary><div>'
     + un.map(x => escHtml(x.name) + ' — ' + x.n).join('<br>') + '<div class="r-usub" style="margin-top:8px">Il nome in elenco deve essere del tipo COGNOME N. (cognome e iniziale del nome come nel file).</div></div></details>';
+  const wasOpen = {}; body.querySelectorAll('.c-doc').forEach(e => { wasOpen[e.dataset.n] = e.open; });   // un aggiornamento non deve richiudere/riaprire i blocchi
   body.innerHTML = h;
+  body.querySelectorAll('.c-doc').forEach(e => { if (e.dataset.n in wasOpen) e.open = wasOpen[e.dataset.n]; });
   cntApplyFilter();
 }
 
 // ── caricamento dati / azioni ──
 async function cntLoad() {
   const my = ++cnt.req;
-  cnt.loading = true; cnt.err = ''; cnt.rec = null; cnt.shifts = null; cnt.shiftsErr = ''; cnt.shiftsLoading = false; cnt.loaded = false;
+  cnt.loading = true; cnt.err = ''; cnt.rec = null; cnt.scelte = {}; cnt.scelteMeta = {}; cnt.scelteErr = ''; cnt.shifts = null; cnt.shiftsErr = ''; cnt.shiftsLoading = false; cnt.loaded = false;
   cntRender();
   try {
     const { data, error } = await getSb().from('conteggi_mesi').select('*').eq('mese', cnt.ym).maybeSingle();
     if (my !== cnt.req) return;
     if (error) throw error;
     cnt.rec = data || null; cnt.loaded = true;
+    if (cnt.rec) {
+      await cntLoadScelte(my); if (my !== cnt.req) return;
+      await cntLoadPesi(); if (my !== cnt.req) return;
+      if (!cnt.scelteErr) await cntMigrateLocal(cnt.ym);
+    }
   } catch (e) { if (my !== cnt.req) return; cnt.err = e.message || String(e); }
-  cnt.loading = false; cntRender();
+  cnt.loading = false; cntRender(); cntSubscribe();
   if (cnt.rec) { cnt.shiftsLoading = true; cntRender(); await cntLoadShifts(my); if (my === cnt.req) cntRender(); }
 }
 function cntOnShow() {
@@ -2927,13 +3037,19 @@ async function cntUpload(file) {
   }
 }
 async function cntDelete() {
-  if (!cnt.rec || !confirm('Eliminare i conteggi di ' + ymLabel(cnt.ym) + ' salvati? Potrai ricaricare il file.')) return;
-  const { error } = await getSb().from('conteggi_mesi').delete().eq('mese', cnt.ym);
+  if (!cnt.rec || !confirm('Eliminare i conteggi di ' + ymLabel(cnt.ym) + ' salvati? Verranno azzerate anche le scelte sui turni aggiuntivi (doppio/triplo turno) per tutti gli utenti. Potrai ricaricare il file.')) return;
+  const ym = cnt.ym;
+  // prima azzero le scelte del mese (doppi/tripli turni), poi elimino il file: così dopo il ricaricamento si riparte da zero
+  const rs = await getSb().from('conteggi_scelte').delete().eq('mese', ym);
+  if (rs.error && !scelteMissing(rs.error.message || rs.error.code)) { toast('Errore nell\'azzeramento delle scelte: ' + rs.error.message, 'err'); return; }
+  const { error } = await getSb().from('conteggi_mesi').delete().eq('mese', ym);
   if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  try { localStorage.removeItem('cnt_extra_' + ym); } catch (e) {}
+  cnt.scelte = {}; cnt.scelteMeta = {};
   cnt.req++; cnt.rec = null; cnt.shifts = null; cnt.shiftsErr = ''; cnt.shiftsLoading = false;
   toast('Conteggi eliminati', 'ok'); cntRender();
 }
-function cntReset() { cnt.req++; cnt.ym = null; cnt.rec = null; cnt.loaded = false; cnt.loading = false; cnt.err = ''; cnt.shifts = null; cnt.shiftsErr = ''; cnt.shiftsLoading = false; }
+function cntReset() { cntUnsubscribe(); cnt.scelte = {}; cnt.scelteMeta = {}; cnt.scelteErr = ''; cnt.req++; cnt.ym = null; cnt.rec = null; cnt.loaded = false; cnt.loading = false; cnt.err = ''; cnt.shifts = null; cnt.shiftsErr = ''; cnt.shiftsLoading = false; }
 
 // ── export Excel della lista medici ──
 function exportDoctorsExcel() {
@@ -3077,8 +3193,8 @@ async function maybeImportLegacy() {
       const b = e.target.closest('[data-pesi]'); if (!b) return;
       if (b.dataset.pesi === 'reset') Object.assign(CNT_PESI, CNT_PESI_DEF);
       else document.querySelectorAll('#conv-body .cw-in').forEach(i => { const v = parseFloat(String(i.value).replace(',', '.')); if (v > 0) CNT_PESI[i.dataset.t] = v; });
-      try { localStorage.setItem('cnt_pesi_v3', JSON.stringify(CNT_PESI)); } catch (er) {}
       cntRender(); byId('conv-body').innerHTML = cnt.convHtml || '';
+      cntSavePesi().then(ok => toast(ok ? 'Pesi salvati e condivisi con tutti gli utenti' : 'Pesi NON salvati sul database (esegui supabase_persistenza.sql): validi solo su questo schermo', ok ? 'ok' : 'err'));
     });
     byId('cnt-search').addEventListener('input', e => { cnt.q = e.target.value; cntApplyFilter(); });
     root.addEventListener('change', e => { if (e.target.id === 'cnt-file' && e.target.files[0]) { const f = e.target.files[0]; e.target.value = ''; cntUpload(f); } });

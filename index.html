@@ -402,6 +402,15 @@
   .c-doc > summary:hover { background: #f8fafc; }
   .c-doc .n { display: flex; align-items: center; gap: 12px; flex: 1 1 200px; min-width: 0; font-size: 15px; font-weight: 800; color: #1f2933; }
   .c-doc .n .r-avatar { width: 36px; height: 36px; font-size: 13px; }
+  .c-att { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px 4px 8px; border-radius: 999px; background: #f3f6fa; color: #5b6b7f; font-size: 12px; font-weight: 700; cursor: pointer; user-select: none; white-space: nowrap; transition: background .15s, color .15s; }
+  .c-att input { width: 16px; height: 16px; margin: 0; accent-color: #e8710a; cursor: pointer; }
+  .c-att.on { background: #fff0dc; color: #b45309; }
+  .c-doc.att { border-color: #f5c27a; box-shadow: inset 4px 0 0 #e8710a, var(--r-sh); }
+  .c-wolist { display: flex; flex-wrap: wrap; gap: 8px 10px; }
+  .c-wo { display: inline-flex; align-items: center; gap: 8px; padding: 3px 4px 3px 12px; border-radius: 999px; background: #fff; border: 1px solid #edf1f6; font-weight: 600; }
+  .c-attbox { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin: 12px 0; padding: 12px 16px; border-radius: 14px; background: #fff0dc; border: 1px solid #f5c27a; color: #8a4a05; font-size: 13px; }
+  .c-onlyatt { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: #3b4a5c; cursor: pointer; white-space: nowrap; }
+  .c-onlyatt input { width: 16px; height: 16px; margin: 0; accent-color: #e8710a; }
   .c-off { display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: 999px; background: #eef0f3; color: #5b6672; font-size: 11px; font-weight: 700; vertical-align: middle; }
   .c-doc .m { font-size: 12px; color: #5b6b7f; background: #f3f6fa; border-radius: 20px; padding: 4px 12px; white-space: nowrap; font-weight: 600; }
   .c-doc .m b { color: #1f2933; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -838,6 +847,7 @@
           <button class="c-arrow" data-cnt="prev" type="button" title="Mese precedente">‹</button>
           <div class="c-month" id="cnt-month">–</div>
           <button class="c-arrow" data-cnt="next" type="button" title="Mese successivo">›</button>
+          <label class="c-onlyatt"><input type="checkbox" id="cnt-onlyatt"> ⚑ Solo da attenzionare <span id="cnt-att-n"></span></label>
           <input class="r-input c-search" id="cnt-search" type="search" placeholder="🔍 Cerca medico…" autocomplete="off">
         </div>
         <div id="cnt-body"></div>
@@ -2646,7 +2656,11 @@ function cntCompute() {
 // ── rendering ──
 function cntApplyFilter() {
   const q = nameKey(cnt.q || '');
-  document.querySelectorAll('#cnt-body .c-doc').forEach(e => { e.hidden = !!q && !e.dataset.n.includes(q); });
+  const oa = !!cnt.onlyAtt;
+  document.querySelectorAll('#cnt-body .c-doc, #cnt-body .c-wo').forEach(e => { e.hidden = (!!q && !e.dataset.n.includes(q)) || (oa && e.dataset.att !== '1'); });
+  const n = Object.keys(cnt.scelte || {}).filter(k => k.startsWith('att|') && cnt.scelte[k] === 1).length;
+  setTxt('cnt-att-n', n ? '(' + n + ')' : '');
+  const cb = byId('cnt-onlyatt'); if (cb) cb.checked = oa;
 }
 // un colore per ogni tipologia di turno (testo, sfondo chiaro)
 const CNT_GRP_COL = { holter: ['#8b1a3a', '#f6dde5'], h16: ['#6a3fb5', '#e9e0f7'], completo: ['#1a73e8', '#dbe8fd'], ecg: ['#00796b', '#d6efec'], domenica: ['#d9530a', '#fde5d6'] };
@@ -2753,7 +2767,8 @@ function cntDetExport() {
 function cntDocBlock(x, hasShifts, bench) {
   x.bench = bench;
   const showT = hasShifts, total = x.centsT + x.centsE;
-  let h = '<details class="c-doc" open data-n="' + escHtml(nameKey(x.d.nome)) + '"><summary><span class="n"><span class="r-avatar" style="background:' + avColor(x.d.nome) + '">' + escHtml(initials(x.d.nome)) + '</span><span>' + escHtml(x.d.nome) + (x.inattivo ? ' <span class="c-off">Medico attualmente non attivo</span>' : '') + '</span></span>'
+  let h = '<details class="c-doc' + (cntIsAtt(x.d.id) ? ' att' : '') + '" open data-n="' + escHtml(nameKey(x.d.nome)) + '" data-att="' + (cntIsAtt(x.d.id) ? 1 : 0) + '"><summary><span class="n"><span class="r-avatar" style="background:' + avColor(x.d.nome) + '">' + escHtml(initials(x.d.nome)) + '</span><span>' + escHtml(x.d.nome) + (x.inattivo ? ' <span class="c-off">Medico attualmente non attivo</span>' : '') + '</span></span>'
+    + cntAttHtml(x.d.id)
     + '<span class="m"><b>' + x.esami.toLocaleString('it-IT') + '</b> esami</span>'
     + '<span class="m"><b>' + (showT ? x.ok : '–') + '</b> turni</span>'
     + '<span class="t">' + fmtEuro(total / 100) + '</span>'
@@ -2882,7 +2897,7 @@ function cntOnRemote(ym, p) {
     const same = cnt.scelte[r.chiave] === r.valore && (cnt.scelteMeta[r.chiave] || {}).il === r.aggiornato_il;
     cnt.scelte[r.chiave] = r.valore; cnt.scelteMeta[r.chiave] = { da: r.aggiornato_da, il: r.aggiornato_il };
     if (same) return;
-    if (r.aggiornato_da && r.aggiornato_da !== myName()) toast(r.aggiornato_da + ' ha aggiornato un turno ECG aggiuntivo');
+    if (r.aggiornato_da && r.aggiornato_da !== myName()) toast(r.aggiornato_da + (String(r.chiave).startsWith('att|') ? ' ha aggiornato i medici da attenzionare' : ' ha aggiornato un turno ECG aggiuntivo'));
   }
   cntRender();
 }
@@ -2899,6 +2914,29 @@ function cntSubscribe() {
 }
 setInterval(() => { if (document.visibilityState === 'visible') cntSync(); }, SYNC_POLL_MS);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') cntSync(); });
+
+// ── medici «da attenzionare» (per mese, condivisi: riga 'att|<id medico>' in conteggi_scelte, valore 1 = segnalato) ──
+const cntIsAtt = id => (cnt.scelte || {})['att|' + id] === 1;
+function cntAttHtml(id) {
+  const on = cntIsAtt(id), mt = (cnt.scelteMeta || {})['att|' + id];
+  const tip = on && mt && mt.da ? 'Segnalato da ' + mt.da + (mt.il ? ', ' + new Date(mt.il).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '') : 'Segna questo medico come da attenzionare (visibile a tutti)';
+  return '<span class="c-att' + (on ? ' on' : '') + '" title="' + escHtml(tip) + '"><input type="checkbox" data-att="' + escHtml(id) + '"' + (on ? ' checked' : '') + '> Da attenzionare</span>';
+}
+async function cntToggleAtt(id, on) {
+  if (!cnt.rec) return;
+  if (cnt.scelteErr) { toast('Impossibile salvare: manca la tabella conteggi_scelte su Supabase (esegui supabase_persistenza.sql)', 'err'); cntRender(); return; }
+  const key = 'att|' + id, ym = cnt.ym, had = key in cnt.scelte, prev = cnt.scelte[key], prevMeta = cnt.scelteMeta[key];
+  cnt.scelte[key] = on ? 1 : 0; cnt.scelteMeta[key] = { da: myName(), il: new Date().toISOString() };
+  cnt.saving++; cntRender();
+  try {
+    const row = await cntPutScelta(ym, key, on ? 1 : 0);
+    if (ym === cnt.ym) { cnt.scelteMeta[key] = { da: row.aggiornato_da, il: row.aggiornato_il }; cntRender(); }
+    toast(on ? 'Medico segnalato come da attenzionare (visibile a tutti)' : 'Segnalazione rimossa', 'ok');
+  } catch (e) {
+    if (ym === cnt.ym) { if (had) { cnt.scelte[key] = prev; cnt.scelteMeta[key] = prevMeta; } else { delete cnt.scelte[key]; delete cnt.scelteMeta[key]; } cntRender(); }
+    toast('Segnalazione NON salvata: ' + (e.message || e), 'err');
+  } finally { cnt.saving--; }
+}
 
 async function cntAnswerExtra(n) {
   const key = cnt.extraKey, q = (cnt.pendMap || {})[key]; if (!q || !cnt.rec) return;
@@ -2965,6 +3003,8 @@ function cntRender() {
     + '<div class="c-chip"><b>' + fmtEuro(T.centsT / 100) + '</b><span>compenso turni</span></div>'
     + (T.anyCons ? '<div class="c-chip"><b>' + fmtEuro(T.centsE / 100) + '</b><span>compenso esami a consuntivo</span></div>' : '')
     + '<div class="c-chip tot"><b>' + fmtEuro((T.centsT + T.centsE) / 100) + '</b><span>totale mese</span></div></div>';
+  const attDocs = doctors.filter(d => cntIsAtt(d.id));
+  if (attDocs.length) h += '<div class="c-attbox"><b>⚑ Da attenzionare (' + attDocs.length + '):</b> ' + attDocs.map(d => '<span class="c-att on" style="cursor:default">' + escHtml(d.nome) + '</span>').join('') + '</div>';
   cnt.pendMap = {}; R.pend.forEach(q => { cnt.pendMap[q.key] = q; });
   if (hasShifts && T.pend) h += '<div class="c-warn">⚠ <span><b>' + T.pend + '</b> ' + (T.pend === 1 ? 'giorno con ECG oltre' : 'giorni con ECG oltre') + ' la capienza dei turni in calendario: i turni aggiuntivi <b>non sono ancora conteggiati</b> e vanno confermati.</span><button class="r-btn primary" type="button" data-cnt="extra" data-queue="1">Rivedi e conferma</button></div>';
   if (hasShifts && R.convTot.list.length) {
@@ -2973,7 +3013,7 @@ function cntRender() {
   } else cnt.convHtml = '';
   const withData = R.rows.filter(x => x.esami || x.inCal), without = R.rows.filter(x => !x.esami && !x.inCal);
   h += '<div class="c-docs">' + withData.map(x => cntDocBlock(x, hasShifts, R.bench)).join('') + '</div>';
-  if (without.length) h += '<details class="c-det"><summary>Medici attivi senza esami né turni nel mese (' + without.length + ')</summary><div>' + without.map(x => escHtml(x.d.nome)).join(' · ') + '</div></details>';
+  if (without.length) h += '<details class="c-det"' + (without.some(x => cntIsAtt(x.d.id)) ? ' open' : '') + '><summary>Medici attivi senza esami né turni nel mese (' + without.length + ')</summary><div class="c-wolist">' + without.map(x => '<span class="c-wo" data-n="' + escHtml(nameKey(x.d.nome)) + '" data-att="' + (cntIsAtt(x.d.id) ? 1 : 0) + '"><span>' + escHtml(x.d.nome) + '</span>' + cntAttHtml(x.d.id) + '</span>').join('') + '</div></details>';
   const ignTxt = [];
   if (ign.rifiutati) ignTxt.push(ign.rifiutati + ' esami rifiutati/non refertati');
   if (ign.senzaMedico) ignTxt.push(ign.senzaMedico + ' refertati senza medico');
@@ -3173,6 +3213,8 @@ async function maybeImportLegacy() {
   (function () {
     const root = byId('sub-view-conteggi');
     root.addEventListener('click', e => {
+      const att = e.target.closest('.c-att');
+      if (att) { if (e.target.tagName !== 'INPUT') { e.preventDefault(); att.querySelector('input').click(); } return; }   // la spunta non deve aprire/chiudere il blocco
       const b = e.target.closest('[data-cnt]'); if (!b) return;
       const a = b.dataset.cnt;
       if (a === 'prev') cntGo(-1); else if (a === 'next') cntGo(1);
@@ -3197,6 +3239,10 @@ async function maybeImportLegacy() {
       cntSavePesi().then(ok => toast(ok ? 'Pesi salvati e condivisi con tutti gli utenti' : 'Pesi NON salvati sul database (esegui supabase_persistenza.sql): validi solo su questo schermo', ok ? 'ok' : 'err'));
     });
     byId('cnt-search').addEventListener('input', e => { cnt.q = e.target.value; cntApplyFilter(); });
+    root.addEventListener('change', e => {
+      if (e.target.dataset && e.target.dataset.att) cntToggleAtt(e.target.dataset.att, e.target.checked);
+      else if (e.target.id === 'cnt-onlyatt') { cnt.onlyAtt = e.target.checked; cntApplyFilter(); }
+    });
     root.addEventListener('change', e => { if (e.target.id === 'cnt-file' && e.target.files[0]) { const f = e.target.files[0]; e.target.value = ''; cntUpload(f); } });
     root.addEventListener('dragover', e => { const d = e.target.closest('.c-drop'); if (d) { e.preventDefault(); d.classList.add('over'); } });
     root.addEventListener('dragleave', e => { const d = e.target.closest('.c-drop'); if (d) d.classList.remove('over'); });

@@ -2571,7 +2571,7 @@ function cntCompute() {
       if (ev.kind === 'std') (stdDay[ev.date] = stdDay[ev.date] || []).push(ev.time || '');   // '' = turno completo senza fascia
     });
     // pre-passata: quanti turni ECG (con limite) ci sono per giorno + fascia + tipo, per non moltiplicare lo stesso doppio turno su ogni evento
-    const grpN = {}, grpSeen = {}, grpKey = (ev, v, z) => ev.date + '|' + (z && ev.time ? ev.time : '') + '|' + v.k;
+    const grpN = {}, grpSeen = {}, grpPlan = {}, grpKey = (ev, v, z) => ev.date + '|' + (z && ev.time ? ev.time : '') + '|' + v.k;
     evs.forEach(ev => {
       if (ev.kind !== 'ecg') return;
       const c0 = cells[ev.date]; if (!c0 || !c0.tot) return;
@@ -2600,14 +2600,14 @@ function cntCompute() {
         else {
           gk = grpKey(ev, v, z); gn = grpN[gk] || 1;
           if (ev.time && z) ecgChk = z[ev.time] || 0;      // ECG della fascia (già riferiti a tutto il gruppo)
-          else ecgChk = ecgN * gn;                          // senza orari: ECG del giorno attribuiti al gruppo di turni
+          else ecgChk = Math.min(ecgN * gn, c.types['ECG'] || 0);   // senza orari: ECG del giorno attribuiti al gruppo di turni (mai più di quelli refertati: ecgN è arrotondato per eccesso)
         }
       }
       // turno ECG moltiplicato: ogni limite superato vale un turno in più (oltre 100 fino a 200 = 2 turni, fino a 300 = 3 ...)
       // I turni totali del gruppo = max(eventi in calendario, ceil(ECG / limite)); l'eccedenza è attribuita una sola volta (al primo evento del gruppo)
       // I turni in calendario (gn) sono sempre conteggiati; gli eventuali turni in più (need) NON sono più assegnati
       // in automatico: servono la conferma dell'utente (extraOk[key] = n. di turni aggiuntivi da assegnare, 0 = nessuno).
-      let mult = 1, shown = ecgChk, pendO = null;     // shown = ECG da mostrare su QUESTO turno (con doppio turno, la quota del singolo turno)
+      let mult = 1, shown = ecgChk, pendO = null, parts = null;     // shown = ECG da mostrare su QUESTO turno (con doppio turno, la quota del singolo turno)
       if (v.lim && !noWarn && gk) {
         const tot = Math.max(gn, Math.ceil(ecgChk / v.lim)), first = !grpSeen[gk], need = tot - gn;
         if (first) {
@@ -2620,15 +2620,24 @@ function cntCompute() {
             pendAll.push(pendO); if (!pendO.decided) T.pend++;
           }
           mult = conf + 1;
+          // turni aggiuntivi confermati: i turni si riempiono uno dopo l'altro (es. 219 ECG su 3 turni da 100 = 100 · 100 · 19);
+          // se gli ECG superano comunque la capienza, l'eccedenza resta sull'ultimo turno
+          if (conf > 0) {
+            const T = gn + conf; let rem = ecgChk; const sh = [];
+            for (let j = 0; j < T; j++) { const x = j < T - 1 ? Math.min(v.lim, rem) : rem; sh.push(x); rem -= x; }
+            grpPlan[gk] = { sh, pos: 0 };
+          }
         }
-        if (gn > 1) {
+        const plan = grpPlan[gk];
+        if (plan) { const np = first ? mult : 1; parts = plan.sh.slice(plan.pos, plan.pos + np); plan.pos += np; shown = parts.reduce((a, b) => a + b, 0); }
+        else if (gn > 1) {
           if (tot > gn) shown = first ? ecgChk - v.lim * (gn - 1) : v.lim;                       // oltre il doppio: i turni «pieni» mostrano il limite, il resto va al primo
           else shown = first ? ecgChk - Math.floor(ecgChk / gn) * (gn - 1) : Math.floor(ecgChk / gn);   // ripartizione equa tra i turni
         }
       }
       b.n += mult; centsT += cents(d.tariffe[v.k]) * mult; ok += mult - 1; if (mult > 1) b.dbl++;
       sv.push({ date: ev.date, k: v.k, cents: cents(d.tariffe[v.k]) * mult, m: mult });
-      (c.vn = c.vn || []).push({ k: v.k, l: vocLabel(v.k), lim: v.lim && !noWarn ? v.lim : 0, ecg: shown, mult, inf: !!v.inferred, pend: pendO });
+      (c.vn = c.vn || []).push({ k: v.k, l: vocLabel(v.k), lim: v.lim && !noWarn ? v.lim : 0, ecg: shown, parts, mult, inf: !!v.inferred, pend: pendO });
       if (v.inferred) b.inf++;
       if (v.lim) {
         c.ecgIncl = (c.ecgIncl || 0) + ecgN;
@@ -2669,14 +2678,10 @@ const CNT_GRP_COL = { holter: ['#8b1a3a', '#f6dde5'], h16: ['#6a3fb5', '#e9e0f7'
 const cntGrpOfVoce = k => { const G = CNT_GRP.find(g => g.ks.includes(k)); return G ? G.g : ''; };
 // voce di turno nella tabella giorno/turno: nome del turno + dettaglio degli ECG refertati su una seconda riga
 // un turno ECG moltiplicato (doppio/triplo confermato) compare tante volte quanti sono i turni conteggiati,
-// ognuno con la propria quota di ECG e la propria barra (% rispetto al limite del singolo turno)
+// ognuno con la propria quota di ECG (calcolata in cntCompute) e la propria barra (% rispetto al limite del singolo turno)
 function cntTurnoHtml(o) {
-  const m = o.lim ? Math.max(o.mult || 1, 1) : 1;
-  if (m === 1) return cntTurnoOne(o, o.ecg, o.pend);
-  const base = o.ecg > o.lim * m ? o.lim : Math.floor(o.ecg / m);   // oltre la capienza: i turni «pieni» mostrano il limite, il resto va al primo; altrimenti ripartizione equa
-  let h = '';
-  for (let i = 0; i < m; i++) h += cntTurnoOne(o, i === 0 ? o.ecg - base * (m - 1) : base, i === m - 1 ? o.pend : null);   // la conferma compare una sola volta, dopo l'ultimo
-  return h;
+  const pcs = o.lim && o.parts && o.parts.length > 1 ? o.parts : [o.ecg];
+  return pcs.map((e, i) => cntTurnoOne(o, e, i === pcs.length - 1 ? o.pend : null)).join('');   // la conferma compare una sola volta, dopo l'ultimo turno
 }
 function cntTurnoOne(o, ecg, pend) {
   const parts = []; let bar = '';

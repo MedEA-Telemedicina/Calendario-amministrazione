@@ -2042,7 +2042,7 @@ async function saveDoctorModal() {
 // ═══════════ CONTEGGI MENSILI ═══════════
 // File esami del mese -> salvato (già aggregato) su Supabase in `conteggi_mesi`.
 // Turno conteggiato = medico in turno nel calendario "Medici in Turno" con almeno 1 esame refertato quel giorno.
-const cnt = { ym: null, rec: null, loaded: false, loading: false, err: '', shifts: null, shiftsErr: '', shiftsLoading: false, req: 0, scelte: {}, scelteMeta: {}, scelteErr: '', saving: 0, syncing: false };
+const cnt = { ym: null, rec: null, loaded: false, loading: false, err: '', shifts: null, shiftsErr: '', shiftsLoading: false, req: 0, scelte: {}, scelteMeta: {}, scelteErr: '', saving: 0, syncing: false, shiftsPrev: [], prevDati: null };
 const pad2 = n => String(n).padStart(2, '0');
 const WD = ['D', 'L', 'M', 'M', 'G', 'V', 'S'];
 function ymLabel(ym) { const [y, m] = ym.split('-').map(Number); const s = new Date(y, m - 1, 1).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' }); return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -2108,7 +2108,7 @@ function cntAnalyze(rows, ym) {
   if (!rows || rows.length < 2) throw new Error('Il file è vuoto.');
   const hdr = rows[0].map(h => normTxt(h).replace(/[^a-z]/g, ''));
   const iT = hdr.indexOf('tipologia'), iS = hdr.indexOf('stato'), iM = hdr.indexOf('medico'),
-        iR = hdr.indexOf('datarefertazione'), iQ = hdr.indexOf('datarichiesta'),
+        iR = hdr.indexOf('datarefertazione'), iQ = hdr.indexOf('datarichiesta') >= 0 ? hdr.indexOf('datarichiesta') : hdr.indexOf('dataesecuzione'),
         iI = hdr.indexOf('id'), iC = hdr.indexOf('cliente'), iP = hdr.indexOf('paziente');
   const miss = [['TIPOLOGIA', iT], ['STATO', iS], ['MEDICO', iM], ['DATA REFERTAZIONE', iR]].filter(x => x[1] < 0).map(x => x[0]);
   if (miss.length) throw new Error('Colonne mancanti nel file: ' + miss.join(', ') + '. Il file non sembra l\'esportazione degli esami.');
@@ -2239,7 +2239,7 @@ function cntShiftsFromItems(items, ym) {
 async function cntLoadShifts(my) {
   cnt.shiftsLoading = true; cnt.shiftsErr = ''; cnt.shifts = null;
   try {
-    const [y, m] = cnt.ym.split('-').map(Number), tMin = new Date(y, m - 1, 1), tMax = new Date(y, m, 1);
+    const [y, m] = cnt.ym.split('-').map(Number), tMin = new Date(y, m - 1, 0), tMax = new Date(y, m, 1);   // tMin = ultimo giorno del mese precedente (serve per i referti dei primi giorni)
     if (typeof gapi === 'undefined' || !gapi.client || !gapi.client.getToken || !gapi.client.getToken())
       throw new Error('Accesso a Google non attivo: i turni non sono leggibili.');
     const cal = CALENDARS[1];                          // calendario "Medici in Turno"
@@ -2251,11 +2251,12 @@ async function cntLoadShifts(my) {
       items = items.concat(r.result.items || []); pageToken = r.result.nextPageToken;
     } while (pageToken);
     const out = cntShiftsFromItems(items, cnt.ym);
+    const pym = ymAdd(cnt.ym, -1), pLast = pym + '-' + pad2(ymDays(pym)), prev = cntShiftsFromItems(items, pym).filter(e => e.date === pLast);
     if (my !== cnt.req) return;
     // solo le anomalie: eventi attivi il cui titolo non contiene alcun medico riconoscibile
     cnt.shiftsDiag = { raw: items.length, titles: items.filter(e => e.status !== 'cancelled' && !cntParseShiftTitle(e.summary).length)
       .map(e => (e.summary || '(senza titolo)') + (e.start && (e.start.date || e.start.dateTime) ? '  [' + (e.start.date || e.start.dateTime).slice(0, 10) + ']' : '')) };
-    cnt.shifts = out;
+    cnt.shifts = out; cnt.shiftsPrev = prev;
   } catch (e) {
     if (my !== cnt.req) return;
     cnt.shiftsErr = e.result && e.result.error ? e.result.error.message : (e.message || String(e));
@@ -2522,6 +2523,45 @@ function cntConvModalHtml(C, bench, GT) {
   return h;
 }
 
+// ═══ ASSEGNAZIONE PRESUNTA DEI REFERTI HOLTER AI TURNI ═══
+// Il file non riporta la data di assegnazione: il medico ha 24 ore per refertare, quindi un esame refertato il giorno R
+// può essere stato assegnato il giorno R (stesso giorno) oppure il giorno R-1; mai prima della data di esecuzione/richiesta.
+// Ogni turno holter ha una capienza (Holter 10hc+10hp, Holter 16 = 16hc, completo = holter inclusi nelle tariffe del medico) con
+// tolleranza di +1 per tipo: gli esami si assegnano ai turni nei quali stanno, così nessun turno supera il limite.
+const CNT_HOLTER_T = ['HOLTER CARDIACO', 'HOLTER PRESSORIO', 'HOLTER CARDIACO 12D'];
+const CNT_HCAP = { holter: { hc: 10, hp: 10 }, h16: { hc: 16 } };
+const CNT_TOLL = 1;
+const cntHCls = t => t === 'HOLTER PRESSORIO' ? 'hp' : 'hc';        // il 12D vale come holter cardiaco
+const cntDayAdd = (day, n) => { const x = new Date(Date.UTC(+day.slice(0, 4), +day.slice(5, 7) - 1, +day.slice(8, 10) + n)); return x.getUTCFullYear() + '-' + pad2(x.getUTCMonth() + 1) + '-' + pad2(x.getUTCDate()); };
+function cntHolterCap(ev, d) {
+  if (ev.kind === 'h16' || ev.kind === 'holter') return CNT_HCAP[ev.kind];
+  if (ev.kind === 'std') { const c = {}; if (d.tcHc) c.hc = d.tcHc; if (d.tcHp) c.hp = d.tcHp; return c.hc || c.hp ? c : null; }
+  return null;
+}
+const cntShiftLbl = ev => ev.kind === 'h16' ? 'Holter 16' : ev.kind === 'holter' ? 'Holter' : 'completo';
+// units: [{ day, t, c, min }] -> assegna u.to (giorno del turno), u.sh (turno), u.flag ('' ok · 'P' turno del mese precedente · 'X' oltre capienza · 'F' nessun turno nelle 24h)
+function cntAllocHolter(units, evs, pevs, pUsed, d) {
+  const sh = [];
+  evs.forEach(ev => { const cap = cntHolterCap(ev, d); if (cap) sh.push({ date: ev.date, kind: ev.kind, cap, used: { hc: 0, hp: 0 }, prev: false }); });
+  pevs.forEach(ev => { const cap = cntHolterCap(ev, d); if (cap) sh.push({ date: ev.date, kind: ev.kind, cap, used: { hc: pUsed.hc, hp: pUsed.hp }, prev: true }); });
+  const win = u => [u.day, cntDayAdd(u.day, -1)].filter(wd => !u.min || wd >= u.min);
+  [0, CNT_TOLL].forEach(tol => units.forEach(u => {              // 1° giro: entro la capienza · 2° giro: con la tolleranza di +1
+    if (u.sh) return;
+    for (const wd of win(u)) {
+      const s = sh.find(x => x.date === wd && x.cap[u.c] != null && x.used[u.c] < x.cap[u.c] + tol);
+      if (s) { s.used[u.c]++; u.sh = s; u.to = s.date; return; }
+    }
+  }));
+  units.forEach(u => {
+    if (u.sh) return;
+    const pick = win(u).map(wd => sh.find(x => x.date === wd && !x.prev && x.cap[u.c] != null)).find(Boolean);
+    if (pick) { pick.used[u.c]++; pick.over = true; u.sh = pick; u.to = pick.date; u.flag = 'X'; }   // turno già pieno: resta nel turno, ma segnalato
+    else { u.to = u.day; u.flag = 'F'; }
+  });
+  units.forEach(u => { if (u.sh && u.sh.prev && u.flag !== 'X') u.flag = 'P'; });
+  return { units, sh };
+}
+
 function cntCompute() {
   const dati = cnt.rec.dati, matchers = doctors.map(cntMatcher);
   const byDoc = new Map(), unmatched = [], inactive = [], oreBy = new Map();
@@ -2533,7 +2573,7 @@ function cntCompute() {
   const exBy = new Map();
   Object.entries(dati.esami || {}).forEach(([name, list]) => {
     const d = cntMatch(name, matchers); if (!d) return;
-    (exBy.get(d.id) || exBy.set(d.id, []).get(d.id)).push(...list);
+    (exBy.get(d.id) || exBy.set(d.id, []).get(d.id)).push(...list.map(e => e.slice()));
   });
   Object.entries(dati.doctors || {}).forEach(([name, days]) => {
     let n = 0; Object.values(days).forEach(t => Object.entries(t).forEach(([k, v]) => { if (!cntIgnorato(k)) n += v; }));
@@ -2555,6 +2595,51 @@ function cntCompute() {
     if (o) (shiftsBy.get(o.id) || shiftsBy.set(o.id, []).get(o.id)).push(ev);
     else { const z = shiftNoOwner[ev.doctor] || (shiftNoOwner[ev.doctor] = { n: 0, ex: ev.title }); z.n++; }
   });
+  // ── Holter: assegnazione presunta al turno (24 ore, capienza del turno, confine di mese) ──
+  let hMoved = 0, hOver = 0, hPrev = 0, hOut = 0;
+  const holterWarn = new Map();
+  if (cnt.shifts) {
+    const pym = ymAdd(cnt.ym, -1), pLast = pym + '-' + pad2(ymDays(pym));
+    const prevBy = new Map(), prevUsed = new Map();
+    (cnt.shiftsPrev || []).forEach(ev => { const k = nameKey(ev.doctor); if (!(k in own)) own[k] = cntOwner(k, matchers); const o = own[k]; if (o) (prevBy.get(o.id) || prevBy.set(o.id, []).get(o.id)).push(ev); });
+    if (cnt.prevDati) Object.entries(cnt.prevDati.doctors || {}).forEach(([name, dd0]) => {     // holter già refertati l'ultimo giorno del mese prima = capienza già usata da quel turno (stima)
+      const dd = cntMatch(name, matchers), z = dd0 && dd0[pLast]; if (!dd || !z) return;
+      const e = prevUsed.get(dd.id) || prevUsed.set(dd.id, { hc: 0, hp: 0 }).get(dd.id);
+      Object.entries(z).forEach(([t, v]) => { if (CNT_HOLTER_T.includes(t)) e[cntHCls(t)] += v; });
+    });
+    byDoc.forEach((days, id) => {
+      const d = doctors.find(x => x.id === id); if (!d) return;
+      const evs = shiftsBy.get(id) || [], pevs = prevBy.get(id) || [];
+      if (!evs.some(ev => cntHolterCap(ev, d)) && !pevs.some(ev => cntHolterCap(ev, d))) return;   // nessun turno holter: resta la regola generale
+      const cntDays = {}; let nH = 0;
+      Object.keys(days).forEach(day => CNT_HOLTER_T.forEach(t => { if (days[day][t]) { cntDays[day + '|' + t] = days[day][t]; nH += days[day][t]; delete days[day][t]; } }));
+      Object.keys(days).forEach(day => { if (!Object.keys(days[day]).length) delete days[day]; });
+      if (!nH) return;
+      const L = exBy.get(id), units = [];
+      const hx = L ? L.filter(e => CNT_HOLTER_T.includes(e[1]) && /^\d{4}-\d{2}-\d{2}/.test(e[6] || '')) : [];
+      if (hx.length === nH) hx.sort((p, q) => String(p[6]).localeCompare(String(q[6]))).forEach(e => {     // dal dettaglio esame per esame: si usa anche la data di esecuzione come limite inferiore
+        const day = e[6].slice(0, 10), mn = String(e[5] || '').slice(0, 10);
+        units.push({ day, t: e[1], c: cntHCls(e[1]), min: /^\d{4}-\d{2}-\d{2}$/.test(mn) && mn <= day ? mn : '', e, sh: null, to: null, flag: '' });
+      });
+      else Object.keys(cntDays).sort().forEach(k => { const [day, t] = k.split('|'); for (let i = 0; i < cntDays[k]; i++) units.push({ day, t, c: cntHCls(t), min: '', sh: null, to: null, flag: '' }); });
+      const A = cntAllocHolter(units, evs, pevs, prevUsed.get(id) || { hc: 0, hp: 0 }, d), msgs = [], fuori = {};
+      let np = 0;
+      A.units.forEach(u => {
+        if (u.e) { u.e[7] = u.to !== u.day ? u.to : ''; u.e[8] = u.flag || 'A'; }
+        if (u.flag === 'P') { hPrev++; np++; return; }       // assegnato al turno del mese precedente: non si conteggia in questo mese
+        const dst = days[u.to] || (days[u.to] = {}); dst[u.t] = (dst[u.t] || 0) + 1;
+        if (u.to !== u.day) hMoved++;
+        if (u.flag === 'X') hOver++;
+        if (u.flag === 'F') { hOut++; fuori[u.day] = (fuori[u.day] || 0) + 1; }
+      });
+      A.sh.filter(x => x.over).forEach(x => ['hc', 'hp'].forEach(c => {
+        if (x.cap[c] != null && x.used[c] > x.cap[c] + CNT_TOLL) msgs.push('Turno ' + cntShiftLbl(x) + ' del ' + cntDM(x.date) + ': ' + x.used[c] + (c === 'hc' ? ' holter cardiaci' : ' holter pressori') + ' refertati su ' + x.cap[c] + ' previsti dal turno (oltre il limite, tolleranza +' + CNT_TOLL + ')');
+      }));
+      Object.entries(fuori).sort().forEach(([day, n]) => msgs.push(n + (n === 1 ? ' holter refertato' : ' holter refertati') + ' il ' + cntDM(day) + ' senza un turno holter assegnato nelle 24 ore precedenti: ' + (n === 1 ? 'lasciato' : 'lasciati') + ' nel giorno di refertazione'));
+      if (np) msgs.push(np + (np === 1 ? ' holter refertato' : ' holter refertati') + ' a inizio mese, assegnat' + (np === 1 ? 'o' : 'i') + ' al turno del ' + cntDM(pLast) + ' (mese precedente): non conteggiat' + (np === 1 ? 'o' : 'i') + ' in questo mese');
+      if (msgs.length) holterWarn.set(id, msgs);
+    });
+  }
   // Giorno di assegnazione: un medico in turno il giorno X può refertare l'esame il giorno dopo. Se nel giorno di refertazione NON è in turno
   // ma lo era il giorno prima, gli esami di quel giorno si contano nel giorno di turno (la data richiesta non si usa: può essere molto precedente).
   let moved = 0;
@@ -2577,7 +2662,7 @@ function cntCompute() {
           z[et.length && et.every(ev => ev.time === 'mat') ? 'mat' : 'pom'] += (o[day].mat || 0) + (o[day].pom || 0); delete o[day];
         }
         const L = exBy.get(id);                                    // dettaglio esami: [7] = giorno di conteggio
-        if (L) exBy.set(id, L.map(e => (e[6] || '').slice(0, 10) === day && !e[7] ? e.slice(0, 7).concat([to]) : e));
+        if (L) exBy.set(id, L.map(e => (e[6] || '').slice(0, 10) === day && !e[7] && !e[8] ? e.slice(0, 7).concat([to]) : e));
       });
     });
   }
@@ -2598,7 +2683,7 @@ function cntCompute() {
       Object.entries(tp).forEach(([t, v]) => types[t] = (types[t] || 0) + v);
     });
     // turni
-    let inCal = 0, ok = 0, centsT = 0, senzaEsami = 0; const brk = {}, warn = new Set(), sv = [];
+    let inCal = 0, ok = 0, centsT = 0, senzaEsami = 0; const brk = {}, warn = new Set(holterWarn.get(d.id) || []), sv = [];
     const evs = shiftsBy.get(d.id) || [], ecgEv = {}, stdDay = {}, ore = oreBy.get(d.id) || {};
     evs.forEach(ev => {
       if (ev.kind === 'ecg') ecgEv[ev.date] = (ecgEv[ev.date] || 0) + 1;
@@ -2695,7 +2780,7 @@ function cntCompute() {
     return { d, pend: pendAll.filter(q => q.key.startsWith(d.id + '|')), inattivo: !d.attivo, exList: exBy.get(d.id) || [], cells, esami, inCal, ok, senzaEsami, centsT, centsE, brk, warn: [...warn], typeRows, hasCons, cal: cntCal(evs), conv, convG };
   });
   const convTot = cntConvTotals(rows), convGrp = cntConvGrpTotals(rows);
-  return { rows, unmatched, inactive, T, shiftNoOwner, bench, convTot, convGrp, pend: pendAll, moved };
+  return { rows, unmatched, inactive, T, shiftNoOwner, bench, convTot, convGrp, pend: pendAll, moved, hMoved, hOver, hPrev, hOut };
 }
 
 // ── rendering ──
@@ -2817,7 +2902,7 @@ function cntExamDetailHtml(D) {
     + '<div class="c-pills"><button type="button" class="c-pill active" data-dt="">Tutte <b>' + L.length.toLocaleString('it-IT') + '</b></button>'
     + Object.entries(by).sort((a, b) => b[1] - a[1]).map(([t, n]) => '<button type="button" class="c-pill" data-dt="' + escHtml(t) + '">' + dot(t) + escHtml(t) + ' <b>' + n.toLocaleString('it-IT') + '</b></button>').join('') + '</div>'
     + '<div class="c-scroll" style="margin-top:0"><table class="c-tb c-left c-mx"><thead><tr><th>ID</th><th>Tipologia</th><th>Stato</th><th>Cliente</th><th>Paziente</th><th>Data richiesta</th><th>Data refertazione</th></tr></thead><tbody>'
-    + L.map((e, i) => '<tr data-i="' + i + '"><td class="mut">' + td(e[0]) + '</td><td><b>' + dot(e[1]) + escHtml(e[1]) + '</b></td><td>' + td(e[2]) + '</td><td>' + td(e[3]) + '</td><td>' + td(e[4]) + '</td><td>' + (cntFmtDT(e[5]) || '<span class="mut">–</span>') + '</td><td>' + (cntFmtDT(e[6]) || '<span class="mut">–</span>') + (e[7] ? '<br><span class="mut">↩ conteggiato il ' + cntDM(e[7]) + '</span>' : '') + '</td></tr>').join('')
+    + L.map((e, i) => '<tr data-i="' + i + '"><td class="mut">' + td(e[0]) + '</td><td><b>' + dot(e[1]) + escHtml(e[1]) + '</b></td><td>' + td(e[2]) + '</td><td>' + td(e[3]) + '</td><td>' + td(e[4]) + '</td><td>' + (cntFmtDT(e[5]) || '<span class="mut">–</span>') + '</td><td>' + (cntFmtDT(e[6]) || '<span class="mut">–</span>') + (e[8] === 'P' ? '<br><span class="mut">↩ turno del ' + cntDM(e[7]) + ' (mese precedente): non conteggiato</span>' : e[7] ? '<br><span class="mut">↩ conteggiato il ' + cntDM(e[7]) + '</span>' : '') + (e[8] === 'X' ? '<br><span class="mut">⚠ oltre la capienza del turno</span>' : e[8] === 'F' ? '<br><span class="mut">⚠ nessun turno holter nelle 24 ore precedenti</span>' : '') + '</td></tr>').join('')
     + '</tbody></table></div><div class="c-note" id="det-empty" style="display:none;padding:22px">Nessun esame corrisponde alla ricerca.</div>';
 }
 function cntDetExport() {
@@ -3077,6 +3162,9 @@ function cntRender() {
     + '<button class="r-btn ghost" data-cnt="del">🗑 Elimina e ricarica</button></div></div>';
   if (ign.spostati) h += '<div class="c-warn c-info">ℹ️ <span><b>' + ign.spostati + '</b> ' + (ign.spostati === 1 ? 'esame refertato' : 'esami refertati') + ' il giorno dopo la richiesta ' + (ign.spostati === 1 ? 'è stato conteggiato' : 'sono stati conteggiati') + ' nel giorno di assegnazione (data richiesta). Nel «Dettaglio esami» sono indicati con ↩.</span></div>';
   if (R.moved) h += '<div class="c-warn c-info">ℹ️ <span><b>' + R.moved + '</b> ' + (R.moved === 1 ? 'esame refertato' : 'esami refertati') + ' in un giorno senza turno ' + (R.moved === 1 ? 'è stato conteggiato' : 'sono stati conteggiati') + ' nel giorno di turno precedente del medico (giorno di assegnazione). Nel «Dettaglio esami» sono indicati con ↩.</span></div>';
+  if (R.hMoved) h += '<div class="c-warn c-info">ℹ️ <span><b>' + R.hMoved + '</b> holter ' + (R.hMoved === 1 ? 'refertato è stato assegnato' : 'refertati sono stati assegnati') + ' al turno del giorno precedente alla refertazione (finestra di 24 ore dall\'assegnazione, nel rispetto della capienza del turno). Nel «Dettaglio esami» sono indicati con ↩.</span></div>';
+  if (R.hPrev) h += '<div class="c-warn c-info">ℹ️ <span><b>' + R.hPrev + '</b> holter ' + (R.hPrev === 1 ? 'refertato' : 'refertati') + ' a inizio mese ' + (R.hPrev === 1 ? 'appartiene' : 'appartengono') + ' al turno dell\'ultimo giorno del mese precedente: non ' + (R.hPrev === 1 ? 'è conteggiato' : 'sono conteggiati') + ' in questo mese.</span></div>';
+  if (R.hOver || R.hOut) h += '<div class="c-warn">⚠ <span>Holter oltre la capienza del turno: <b>' + R.hOver + '</b> · refertati senza un turno holter nelle 24 ore precedenti: <b>' + R.hOut + '</b>. Il dettaglio è nell\'avviso del singolo medico.</span></div>';
   if (cnt.scelteErr) h += '<div class="c-warn">⚠ <span>Le scelte sui turni aggiuntivi <b>non possono essere salvate né condivise</b>: tabella <b>conteggi_scelte</b> non trovata su Supabase. Esegui lo script <b>supabase_persistenza.sql</b> nel SQL Editor e ricarica la pagina.</span></div>';
   if (cnt.shiftsLoading) h += '<div class="c-warn c-info">⏳ Lettura dei turni dal calendario…</div>';
   else if (cnt.shiftsErr) h += '<div class="c-warn">Turni non disponibili (' + escHtml(cnt.shiftsErr) + ') — sono mostrati solo gli esami, senza turni né compensi. <button class="r-btn ghost" data-cnt="shifts">↻ Riprova</button></div>';
@@ -3125,7 +3213,7 @@ function cntRender() {
 // ── caricamento dati / azioni ──
 async function cntLoad() {
   const my = ++cnt.req;
-  cnt.loading = true; cnt.err = ''; cnt.rec = null; cnt.scelte = {}; cnt.scelteMeta = {}; cnt.scelteErr = ''; cnt.shifts = null; cnt.shiftsErr = ''; cnt.shiftsLoading = false; cnt.loaded = false;
+  cnt.loading = true; cnt.err = ''; cnt.rec = null; cnt.scelte = {}; cnt.scelteMeta = {}; cnt.scelteErr = ''; cnt.shifts = null; cnt.shiftsPrev = []; cnt.prevDati = null; cnt.shiftsErr = ''; cnt.shiftsLoading = false; cnt.loaded = false;
   cntRender();
   try {
     const { data, error } = await getSb().from('conteggi_mesi').select('*').eq('mese', cnt.ym).maybeSingle();
@@ -3135,6 +3223,7 @@ async function cntLoad() {
     if (cnt.rec) {
       await cntLoadScelte(my); if (my !== cnt.req) return;
       await cntLoadPesi(); if (my !== cnt.req) return;
+      try { const pr = await getSb().from('conteggi_mesi').select('dati').eq('mese', ymAdd(cnt.ym, -1)).maybeSingle(); if (my !== cnt.req) return; cnt.prevDati = pr && pr.data ? pr.data.dati : null; } catch (e) { cnt.prevDati = null; }   // facoltativo: serve solo a stimare la capienza del turno dell'ultimo giorno del mese prima
       if (!cnt.scelteErr) await cntMigrateLocal(cnt.ym);
     }
   } catch (e) { if (my !== cnt.req) return; cnt.err = e.message || String(e); }

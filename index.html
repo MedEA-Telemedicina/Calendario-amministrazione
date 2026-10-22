@@ -2525,7 +2525,8 @@ function cntConvModalHtml(C, bench, GT) {
 
 // ═══ ASSEGNAZIONE PRESUNTA DEI REFERTI HOLTER AI TURNI ═══
 // Il file non riporta la data di assegnazione: il medico ha 24 ore per refertare, quindi un esame refertato il giorno R
-// può essere stato assegnato il giorno R (stesso giorno) oppure il giorno R-1; mai prima della data di esecuzione/richiesta.
+// può essere stato assegnato il giorno R-1 oppure il giorno R; mai prima della data di esecuzione/richiesta.
+// Con turni consecutivi si completa prima il turno più vecchio e poi il successivo.
 // Ogni turno holter ha una capienza (Holter 10hc+10hp, Holter 16 = 16hc, completo = holter inclusi nelle tariffe del medico) con
 // tolleranza di +1 per tipo: gli esami si assegnano ai turni nei quali stanno, così nessun turno supera il limite.
 const CNT_HOLTER_T = ['HOLTER CARDIACO', 'HOLTER PRESSORIO', 'HOLTER CARDIACO 12D'];
@@ -2544,7 +2545,7 @@ function cntAllocHolter(units, evs, pevs, pUsed, d) {
   const sh = [];
   evs.forEach(ev => { const cap = cntHolterCap(ev, d); if (cap) sh.push({ date: ev.date, kind: ev.kind, cap, used: { hc: 0, hp: 0 }, prev: false }); });
   pevs.forEach(ev => { const cap = cntHolterCap(ev, d); if (cap) sh.push({ date: ev.date, kind: ev.kind, cap, used: { hc: pUsed.hc, hp: pUsed.hp }, prev: true }); });
-  const win = u => [u.day, cntDayAdd(u.day, -1)].filter(wd => !u.min || wd >= u.min);
+  const win = u => [cntDayAdd(u.day, -1), u.day].filter(wd => !u.min || wd >= u.min);      // dal turno più vecchio: in turni consecutivi si completa prima il precedente
   [0, CNT_TOLL].forEach(tol => units.forEach(u => {              // 1° giro: entro la capienza · 2° giro: con la tolleranza di +1
     if (u.sh) return;
     for (const wd of win(u)) {
@@ -2554,7 +2555,7 @@ function cntAllocHolter(units, evs, pevs, pUsed, d) {
   }));
   units.forEach(u => {
     if (u.sh) return;
-    const pick = win(u).map(wd => sh.find(x => x.date === wd && !x.prev && x.cap[u.c] != null)).find(Boolean);
+    const pick = win(u).slice().reverse().map(wd => sh.find(x => x.date === wd && !x.prev && x.cap[u.c] != null)).find(Boolean);
     if (pick) { pick.used[u.c]++; pick.over = true; u.sh = pick; u.to = pick.date; u.flag = 'X'; }   // turno già pieno: resta nel turno, ma segnalato
     else { u.to = u.day; u.flag = 'F'; }
   });

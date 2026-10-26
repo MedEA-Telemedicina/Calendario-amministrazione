@@ -2508,9 +2508,8 @@ function cntConvExport() {
     ...CA.list.map(r => [cntShort[r.t] || r.t, r.n, r.pay, r2(r.c / r.pay / 100), r2(r.c / 100)]),
     ['Totale', CA.n, CA.pay, '', r2(CA.c / 100)]], 1);
   const MX = cntMixAgg(R.convTot, CA);
-  if (MX.list.length) add('Turni + consuntivo', [['Tipologia', 'Esami coperti dal turno', 'Costo turni (€)', 'Esami a consuntivo', 'Costo consuntivo (€)', 'Esami totali', 'Costo totale (€)', 'Costo medio per esame (€)'],
-    ...MX.list.map(a => [cntShort[a.t] || a.t, r2(a.cov), r2(a.cT / 100), a.pay, r2(a.cC / 100), r2(a.n), r2(a.c / 100), r2(a.c / a.n / 100)]),
-    ['Totale', r2(MX.tot.cov), r2(MX.tot.cT / 100), MX.tot.pay, r2(MX.tot.cC / 100), r2(MX.tot.n), r2(MX.tot.c / 100), r2(MX.tot.c / MX.tot.n / 100)]], 1);
+  if (MX.list.length) add('Turni + consuntivo', [['Tipologia', 'Esami totali', 'Costo medio per esame (€)'],
+    ...MX.list.map(a => [cntShort[a.t] || a.t, r2(a.n), r2(a.c / a.n / 100)])], 1);
   add('Pesi usati', [['Tipologia', 'Peso'], ...tps.map(t => [cntShort[t] || t, CNT_PESI[t]])], 1);
   XLSX.writeFile(wb, 'riepilogo_turni_' + D.ym + '.xlsx');
   toast('Excel scaricato', 'ok');
@@ -2573,15 +2572,12 @@ function cntMixSummaryHtml(C, rows) {
   const dash = '<span class="mut">–</span>';
   let h = '<div class="c-sec" style="margin-top:16px">Complessivo turni + consuntivo — costo medio per esame</div>'
     + '<div class="r-usub" style="margin:4px 0 6px">Costo medio <b>ponderato</b> per tipologia: (costo dei turni attribuito + costo a consuntivo) ÷ (esami coperti dal turno + esami a consuntivo). Ogni costo pesa in base al numero di esami a cui si applica, quindi non è la semplice media delle due tariffe.</div>'
-    + '<div style="overflow-x:auto"><table class="c-tb"><thead><tr><th>Tipologia</th><th>Esami coperti dal turno</th><th>Costo turni</th><th>Esami a consuntivo</th><th>Costo consuntivo</th><th>Esami totali</th><th>Costo totale</th><th>Costo medio per esame</th></tr></thead><tbody>';
+    + '<div style="overflow-x:auto"><table class="c-tb"><thead><tr><th>Tipologia</th><th>Esami totali</th><th>Costo medio per esame</th></tr></thead><tbody>';
   M.list.forEach(a => {
     h += '<tr><td style="text-align:left"><b>' + dot(a.t) + escHtml(cntShort[a.t] || a.t) + '</b></td>'
-      + '<td>' + (a.cov ? nf(a.cov) : dash) + '</td><td>' + (a.cT ? fmtEuro(a.cT / 100) : dash) + '</td>'
-      + '<td>' + (a.pay ? a.pay.toLocaleString('it-IT') : dash) + '</td><td>' + (a.cC ? fmtEuro(a.cC / 100) : dash) + '</td>'
-      + '<td>' + nf(a.n) + '</td><td>' + fmtEuro(a.c / 100) + '</td><td>' + avgCell(a.c, a.n) + '</td></tr>';
+      + '<td>' + nf(a.n) + '</td><td>' + avgCell(a.c, a.n) + '</td></tr>';
   });
-  const t = M.tot;
-  h += '</tbody><tfoot><tr><td style="text-align:left">Totale</td><td>' + nf(t.cov) + '</td><td>' + fmtEuro(t.cT / 100) + '</td><td>' + t.pay.toLocaleString('it-IT') + '</td><td>' + fmtEuro(t.cC / 100) + '</td><td>' + nf(t.n) + '</td><td>' + fmtEuro(t.c / 100) + '</td><td>' + avgCell(t.c, t.n) + '</td></tr></tfoot></table></div>';
+  h += '</tbody></table></div>';
   return h;
 }
 function cntConvModalHtml(C, bench, GT, R) {

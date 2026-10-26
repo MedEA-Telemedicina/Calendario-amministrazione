@@ -2505,11 +2505,55 @@ function cntConvExport() {
       return [cntShort[r.t] || r.t, r.w, r.n, r2(r.cov), ok ? r2(cost) : '', r2(r.c / 100), bm != null ? r2(bm) : '', ok && bm != null ? r2(bm - cost) : '', r.cCons ? r2(r.cCons / 100) : '']; })], 1);
   add('Per medico', [['Medico', 'Turni', 'Compenso turni (€)', '1 unità di peso (€)', ...tps.flatMap(t => [cntShort[t] + ' – € per referto', cntShort[t] + ' – risparmio per esame (€)'])],
     ...C.perDoc.slice().sort((a, b) => b.centsT - a.centsT).map(r => [r.nome, r.turni, r2(r.centsT / 100), r2(r.unit / 100), ...tps.flatMap(t => { const c = r.unit * CNT_PESI[t] / 100; return [r2(c), bench[t] != null ? r2(bench[t] - c) : '']; })])], 1);
+  const CA = cntConsAgg(R.rows);
+  if (CA.list.length) add('Consuntivo', [['Tipologia', 'Esami refertati', 'Inclusi nel turno', 'A consuntivo', 'Importo a referto medio (€)', 'Compenso a consuntivo (€)'],
+    ...CA.list.map(r => [cntShort[r.t] || r.t, r.n, r.inc, r.pay, r2(r.c / r.pay / 100), r2(r.c / 100)]),
+    ['Totale', CA.n, CA.inc, CA.pay, '', r2(CA.c / 100)], [],
+    ['Medico', 'Turni', 'Compenso turni (€)', 'Esami a consuntivo', 'Compenso a consuntivo (€)', 'Totale (€)'],
+    ...CA.perDoc.map(d => [d.nome, d.turni, r2(d.centsT / 100), d.pay, r2(d.centsC / 100), r2((d.centsT + d.centsC) / 100)])], 1);
   add('Pesi usati', [['Tipologia', 'Peso'], ...tps.map(t => [cntShort[t] || t, CNT_PESI[t]])], 1);
   XLSX.writeFile(wb, 'riepilogo_turni_' + D.ym + '.xlsx');
   toast('Excel scaricato', 'ok');
 }
-function cntConvModalHtml(C, bench, GT) {
+// ── riepilogo a CONSUNTIVO: esami pagati a prestazione (fuori dal calcolo dei turni), aggregati su tutti i medici ──
+function cntConsAgg(rows) {
+  const m = {}, perDoc = []; let n = 0, inc = 0, pay = 0, c = 0;
+  rows.forEach(x => {
+    let dn = 0, dc = 0;
+    x.typeRows.forEach(r => {
+      if (r.prezzo == null || !r.pay) return;
+      const a = m[r.t] || (m[r.t] = { t: r.t, n: 0, inc: 0, pay: 0, c: 0, min: Infinity, max: 0 });
+      a.n += r.n; a.inc += r.inc; a.pay += r.pay; a.c += r.c; a.min = Math.min(a.min, r.prezzo); a.max = Math.max(a.max, r.prezzo);
+      dn += r.pay; dc += r.c;
+    });
+    if (dc) perDoc.push({ nome: x.d.nome, turni: x.ok, centsT: x.centsT, pay: dn, centsC: dc });
+  });
+  const list = Object.values(m).sort((a, b) => b.c - a.c);
+  list.forEach(a => { n += a.n; inc += a.inc; pay += a.pay; c += a.c; });
+  perDoc.sort((a, b) => b.centsC - a.centsC);
+  return { list, perDoc, n, inc, pay, c };
+}
+function cntConsSummaryHtml(rows, T) {
+  const A = cntConsAgg(rows || []); if (!A.list.length) return '';
+  const dot = t => '<span class="c-dot" style="background:' + avColor(t) + '"></span>';
+  let h = '<div class="c-sec" style="margin-top:16px">Riepilogo a consuntivo — esami pagati a prestazione</div>'
+    + '<div class="r-usub" style="margin:4px 0 6px">Esami dei medici pagati (in tutto o in parte) a consuntivo: sono scorporati dal calcolo dei turni e compensati all\'importo a referto previsto da contratto. Gli esami «inclusi nel turno» non vengono pagati a parte.</div>'
+    + '<div style="overflow-x:auto"><table class="c-tb"><thead><tr><th>Tipologia</th><th>Esami refertati</th><th>Inclusi nel turno</th><th>A consuntivo</th><th>Importo a referto</th><th>Compenso a consuntivo</th></tr></thead><tbody>';
+  A.list.forEach(r => {
+    const avg = r.c / r.pay / 100, range = r.max - r.min > 0.005;
+    h += '<tr><td style="text-align:left"><b>' + dot(r.t) + escHtml(cntShort[r.t] || r.t) + '</b></td><td>' + r.n.toLocaleString('it-IT') + '</td>'
+      + '<td>' + (r.inc ? r.inc.toLocaleString('it-IT') : '<span class="mut">–</span>') + '</td><td><b>' + r.pay.toLocaleString('it-IT') + '</b></td>'
+      + '<td>' + fmtEuro(avg) + (range ? '<small style="display:block;color:#9aa5b1">da ' + fmtEuro(r.min) + ' a ' + fmtEuro(r.max) + '</small>' : '') + '</td>'
+      + '<td><b>' + fmtEuro(r.c / 100) + '</b></td></tr>';
+  });
+  h += '</tbody><tfoot><tr><td style="text-align:left">Totale</td><td>' + A.n.toLocaleString('it-IT') + '</td><td>' + A.inc.toLocaleString('it-IT') + '</td><td>' + A.pay.toLocaleString('it-IT') + '</td><td></td><td>' + fmtEuro(A.c / 100) + '</td></tr></tfoot></table></div>';
+  h += '<details class="c-det" style="margin-top:10px"><summary><b>Per medico</b> · ' + A.perDoc.length + ' medici · ' + fmtEuro(A.c / 100) + '</summary><div style="overflow-x:auto"><table class="c-tb"><thead><tr><th>Medico</th><th>Turni</th><th>Compenso turni</th><th>Esami a consuntivo</th><th>Compenso a consuntivo</th><th>Totale</th></tr></thead><tbody>'
+    + A.perDoc.map(d => '<tr><td style="text-align:left">' + escHtml(d.nome) + '</td><td>' + (d.turni || '<span class="mut">–</span>') + '</td><td>' + (d.centsT ? fmtEuro(d.centsT / 100) : '<span class="mut">–</span>') + '</td><td>' + d.pay.toLocaleString('it-IT') + '</td><td><b>' + fmtEuro(d.centsC / 100) + '</b></td><td><b>' + fmtEuro((d.centsT + d.centsC) / 100) + '</b></td></tr>').join('')
+    + '</tbody></table></div></details>';
+  if (T) h += '<div class="c-grand" style="margin-top:10px"><span>Turni ' + fmtEuro(T.centsT / 100) + ' + Esami a consuntivo ' + fmtEuro(T.centsE / 100) + '</span><b>Totale ' + fmtEuro((T.centsT + T.centsE) / 100) + '</b></div>';
+  return h;
+}
+function cntConvModalHtml(C, bench, GT, R) {
   let h = '<div class="r-usub" style="margin-bottom:10px">Per ogni medico: <b>compenso dei turni ÷ somma pesata degli esami</b> = valore di 1 unità di peso; il costo di un referto è il peso moltiplicato per quel valore. '
     + 'Pesi: <b>' + cntPesiTxt() + '</b>. Gli esami pagati a consuntivo sono scorporati; gli altri tipi di esame non rientrano nel calcolo. '
     + 'Il «consuntivo medio» è la media delle tariffe a consuntivo dei medici in elenco, usata solo come termine di paragone.</div>'
@@ -2524,6 +2568,7 @@ function cntConvModalHtml(C, bench, GT) {
         + cntGrpMatrix(GT[G.g].perDoc.sort((a, b) => b.centsT - a.centsT).map(d => ({ l: d.nome, turni: d.turni, centsT: d.centsT, covTot: d.list.reduce((a, r) => a + r.cov, 0), list: d.list })), bench, true)
         + '</div></details>').join('')
       + '<div style="height:14px"></div>' : '')
+    + cntConsSummaryHtml(R && R.rows, R && R.T)
     + '<div class="c-sec">Complessivo (' + C.turni + ' turni · ' + fmtEuro(C.centsT / 100) + ')</div>' + cntConvTable(C.list, bench, C)
     + '<div class="c-sec" style="margin-top:16px">Per medico — costo per referto</div><div style="overflow-x:auto"><table class="c-tb"><thead><tr><th>Medico</th><th>Turni</th><th>Compenso turni</th><th>1 unità di peso</th>'
     + Object.keys(CNT_PESI).map(t => '<th>' + escHtml(cntShort[t]) + '<br><span style="font-weight:500">€ per referto · risparmio per esame</span></th>').join('') + '</tr></thead><tbody>'
@@ -3238,7 +3283,7 @@ function cntRender() {
   cnt.pendMap = {}; R.pend.forEach(q => { cnt.pendMap[q.key] = q; });
   if (hasShifts && T.pend) h += '<div class="c-warn">⚠ <span><b>' + T.pend + '</b> ' + (T.pend === 1 ? 'giorno con ECG oltre' : 'giorni con ECG oltre') + ' la capienza dei turni in calendario: i turni aggiuntivi <b>non sono ancora conteggiati</b> e vanno confermati.</span><button class="r-btn primary" type="button" data-cnt="extra" data-queue="1">Rivedi e conferma</button></div>';
   if (hasShifts && R.convTot.list.length) {
-    cnt.convHtml = cntConvModalHtml(R.convTot, R.bench, R.convGrp); cnt.convData = { R, ym: cnt.ym };
+    cnt.convHtml = cntConvModalHtml(R.convTot, R.bench, R.convGrp, R); cnt.convData = { R, ym: cnt.ym };
     h += '<div style="margin:12px 0"><button class="r-btn primary" data-cnt="conv">📊 Riepilogo dei turni</button></div>';
   } else cnt.convHtml = '';
   const withData = R.rows.filter(x => x.esami || x.inCal), without = R.rows.filter(x => !x.esami && !x.inCal);

@@ -830,6 +830,7 @@
         <div class="r-tabs" id="r-tabs" role="tablist">
           <span class="r-ind" id="r-ind"></span>
           <button class="r-tab active" id="sub-tab-conteggi" data-tab="conteggi" role="tab">🧮 Conteggi</button>
+          <button class="r-tab" id="sub-tab-riepilogo" data-tab="riepilogo" role="tab">📊 Riepilogo turni</button>
           <button class="r-tab" id="sub-tab-medici" data-tab="medici" role="tab">👨‍⚕️ Medici <span class="cnt" id="cnt-medici">–</span></button>
           <button class="r-tab" id="sub-tab-account" data-tab="account" role="tab">👤 Account</button>
         </div>
@@ -852,6 +853,18 @@
           <input class="r-input c-search" id="cnt-search" type="search" placeholder="🔍 Cerca medico…" autocomplete="off">
         </div>
         <div id="cnt-body"></div>
+      </section>
+
+      <!-- ── Riepilogo turni ── -->
+      <section class="r-sub" id="sub-view-riepilogo">
+        <div class="c-nav">
+          <button class="c-arrow" data-cnt="prev" type="button" title="Mese precedente">‹</button>
+          <div class="c-month" id="riep-month">–</div>
+          <button class="c-arrow" data-cnt="next" type="button" title="Mese successivo">›</button>
+          <span class="r-spacer"></span>
+          <button class="r-btn primary" type="button" id="conv-xlsx">⬇ Esporta Excel</button>
+        </div>
+        <div class="r-panel" id="riep-body"></div>
       </section>
 
       <!-- ── Medici ── -->
@@ -947,15 +960,6 @@
       <div class="r-modal-h"><h3 id="extra-title">⚠ Conferma turno ECG aggiuntivo</h3><button class="r-x" type="button" data-close="extra" aria-label="Chiudi">✕</button></div>
       <div class="r-modal-b" id="extra-body"></div>
       <div class="r-modal-f"><button class="r-btn ghost" type="button" data-close="extra">Decidi più tardi</button></div>
-    </div>
-  </div>
-
-  <!-- ═══ MODALE RIEPILOGO TURNI ═══ -->
-  <div class="r-modal-bg" id="conv-modal">
-    <div class="r-modal" style="max-width:920px" role="dialog" aria-modal="true" aria-labelledby="conv-title">
-      <div class="r-modal-h"><h3 id="conv-title">📊 Riepilogo dei turni</h3><button class="r-x" type="button" data-close="conv" aria-label="Chiudi">✕</button></div>
-      <div class="r-modal-b" id="conv-body"></div>
-      <div class="r-modal-f"><button class="r-btn primary" type="button" id="conv-xlsx">⬇ Esporta Excel</button><button class="r-btn ghost" type="button" data-close="conv">Chiudi</button></div>
     </div>
   </div>
 
@@ -1624,13 +1628,13 @@ function moveIndicator() {
   ind.style.transform = 'translateX(' + act.offsetLeft + 'px)';
 }
 function switchSubTab(tab) {
-  ['conteggi', 'medici', 'account'].forEach(t => {
+  ['conteggi', 'riepilogo', 'medici', 'account'].forEach(t => {
     byId('sub-view-' + t).classList.toggle('active', t === tab);
     byId('sub-tab-' + t).classList.toggle('active', t === tab);
   });
   moveIndicator();
   if (tab === 'account' && isAdmin() && !usersLoaded) loadUsers();   // caricamento solo quando serve
-  if (tab === 'conteggi') cntOnShow();
+  if (tab === 'conteggi' || tab === 'riepilogo') cntOnShow();
 }
 
 // ── accesso ──
@@ -2506,11 +2510,9 @@ function cntConvExport() {
   add('Per medico', [['Medico', 'Turni', 'Compenso turni (€)', '1 unità di peso (€)', ...tps.flatMap(t => [cntShort[t] + ' – € per referto', cntShort[t] + ' – risparmio per esame (€)'])],
     ...C.perDoc.slice().sort((a, b) => b.centsT - a.centsT).map(r => [r.nome, r.turni, r2(r.centsT / 100), r2(r.unit / 100), ...tps.flatMap(t => { const c = r.unit * CNT_PESI[t] / 100; return [r2(c), bench[t] != null ? r2(bench[t] - c) : '']; })])], 1);
   const CA = cntConsAgg(R.rows);
-  if (CA.list.length) add('Consuntivo', [['Tipologia', 'Esami refertati', 'Inclusi nel turno', 'A consuntivo', 'Importo a referto medio (€)', 'Compenso a consuntivo (€)'],
+  if (CA.list.length) add('Consuntivo', [['Tipologia', 'Esami refertati', 'Inclusi nel turno', 'A consuntivo', 'Importo medio a referto (€)', 'Compenso a consuntivo (€)'],
     ...CA.list.map(r => [cntShort[r.t] || r.t, r.n, r.inc, r.pay, r2(r.c / r.pay / 100), r2(r.c / 100)]),
-    ['Totale', CA.n, CA.inc, CA.pay, '', r2(CA.c / 100)], [],
-    ['Medico', 'Turni', 'Compenso turni (€)', 'Esami a consuntivo', 'Compenso a consuntivo (€)', 'Totale (€)'],
-    ...CA.perDoc.map(d => [d.nome, d.turni, r2(d.centsT / 100), d.pay, r2(d.centsC / 100), r2((d.centsT + d.centsC) / 100)])], 1);
+    ['Totale', CA.n, CA.inc, CA.pay, '', r2(CA.c / 100)]], 1);
   add('Pesi usati', [['Tipologia', 'Peso'], ...tps.map(t => [cntShort[t] || t, CNT_PESI[t]])], 1);
   XLSX.writeFile(wb, 'riepilogo_turni_' + D.ym + '.xlsx');
   toast('Excel scaricato', 'ok');
@@ -2538,7 +2540,7 @@ function cntConsSummaryHtml(rows, T) {
   const dot = t => '<span class="c-dot" style="background:' + avColor(t) + '"></span>';
   let h = '<div class="c-sec" style="margin-top:16px">Riepilogo a consuntivo — esami pagati a prestazione</div>'
     + '<div class="r-usub" style="margin:4px 0 6px">Esami dei medici pagati (in tutto o in parte) a consuntivo: sono scorporati dal calcolo dei turni e compensati all\'importo a referto previsto da contratto. Gli esami «inclusi nel turno» non vengono pagati a parte.</div>'
-    + '<div style="overflow-x:auto"><table class="c-tb"><thead><tr><th>Tipologia</th><th>Esami refertati</th><th>Inclusi nel turno</th><th>A consuntivo</th><th>Importo a referto</th><th>Compenso a consuntivo</th></tr></thead><tbody>';
+    + '<div style="overflow-x:auto"><table class="c-tb"><thead><tr><th>Tipologia</th><th>Esami refertati</th><th>Inclusi nel turno</th><th>A consuntivo</th><th>Importo medio a referto</th><th>Compenso a consuntivo</th></tr></thead><tbody>';
   A.list.forEach(r => {
     const avg = r.c / r.pay / 100, range = r.max - r.min > 0.005;
     h += '<tr><td style="text-align:left"><b>' + dot(r.t) + escHtml(cntShort[r.t] || r.t) + '</b></td><td>' + r.n.toLocaleString('it-IT') + '</td>'
@@ -2547,9 +2549,6 @@ function cntConsSummaryHtml(rows, T) {
       + '<td><b>' + fmtEuro(r.c / 100) + '</b></td></tr>';
   });
   h += '</tbody><tfoot><tr><td style="text-align:left">Totale</td><td>' + A.n.toLocaleString('it-IT') + '</td><td>' + A.inc.toLocaleString('it-IT') + '</td><td>' + A.pay.toLocaleString('it-IT') + '</td><td></td><td>' + fmtEuro(A.c / 100) + '</td></tr></tfoot></table></div>';
-  h += '<details class="c-det" style="margin-top:10px"><summary><b>Per medico</b> · ' + A.perDoc.length + ' medici · ' + fmtEuro(A.c / 100) + '</summary><div style="overflow-x:auto"><table class="c-tb"><thead><tr><th>Medico</th><th>Turni</th><th>Compenso turni</th><th>Esami a consuntivo</th><th>Compenso a consuntivo</th><th>Totale</th></tr></thead><tbody>'
-    + A.perDoc.map(d => '<tr><td style="text-align:left">' + escHtml(d.nome) + '</td><td>' + (d.turni || '<span class="mut">–</span>') + '</td><td>' + (d.centsT ? fmtEuro(d.centsT / 100) : '<span class="mut">–</span>') + '</td><td>' + d.pay.toLocaleString('it-IT') + '</td><td><b>' + fmtEuro(d.centsC / 100) + '</b></td><td><b>' + fmtEuro((d.centsT + d.centsC) / 100) + '</b></td></tr>').join('')
-    + '</tbody></table></div></details>';
   if (T) h += '<div class="c-grand" style="margin-top:10px"><span>Turni ' + fmtEuro(T.centsT / 100) + ' + Esami a consuntivo ' + fmtEuro(T.centsE / 100) + '</span><b>Totale ' + fmtEuro((T.centsT + T.centsE) / 100) + '</b></div>';
   return h;
 }
@@ -3223,7 +3222,16 @@ async function cntAnswerExtra(n) {
     toast('Scelta NON salvata: ' + (e.message || e), 'err');
   } finally { cnt.saving--; }
 }
-function cntRender() {
+// pagina «Riepilogo turni»: mostra l'HTML preparato da cntRenderMain (cnt.convHtml)
+function cntRiepRender() {
+  const b = byId('riep-body'); if (!b) return;
+  setTxt('riep-month', cnt.ym ? ymLabel(cnt.ym) : '–');
+  b.innerHTML = cnt.loading ? '<div class="c-note">Caricamento…</div>'
+    : cnt.convHtml ? cnt.convHtml
+    : '<div class="c-note" style="padding:18px">Nessun riepilogo disponibile per questo mese: servono il file degli esami caricato e almeno un turno valorizzato nel calendario.</div>';
+}
+function cntRender() { cnt.convHtml = ''; cnt.convData = null; cntRenderMain(); cntRiepRender(); }
+function cntRenderMain() {
   const body = byId('cnt-body'); if (!body || !cnt.ym) return;
   setTxt('cnt-month', ymLabel(cnt.ym));
   if (cnt.loading) { body.innerHTML = '<div class="r-panel c-note">Caricamento…</div>'; return; }
@@ -3284,8 +3292,7 @@ function cntRender() {
   if (hasShifts && T.pend) h += '<div class="c-warn">⚠ <span><b>' + T.pend + '</b> ' + (T.pend === 1 ? 'giorno con ECG oltre' : 'giorni con ECG oltre') + ' la capienza dei turni in calendario: i turni aggiuntivi <b>non sono ancora conteggiati</b> e vanno confermati.</span><button class="r-btn primary" type="button" data-cnt="extra" data-queue="1">Rivedi e conferma</button></div>';
   if (hasShifts && R.convTot.list.length) {
     cnt.convHtml = cntConvModalHtml(R.convTot, R.bench, R.convGrp, R); cnt.convData = { R, ym: cnt.ym };
-    h += '<div style="margin:12px 0"><button class="r-btn primary" data-cnt="conv">📊 Riepilogo dei turni</button></div>';
-  } else cnt.convHtml = '';
+  }
   const withData = R.rows.filter(x => x.esami || x.inCal), without = R.rows.filter(x => !x.esami && !x.inCal);
   h += '<div class="c-docs">' + withData.map(x => cntDocBlock(x, hasShifts, R.bench)).join('') + '</div>';
   if (without.length) h += '<details class="c-det"' + (without.some(x => cntIsAtt(x.d.id)) ? ' open' : '') + '><summary>Medici attivi senza esami né turni nel mese (' + without.length + ')</summary><div class="c-wolist">' + without.map(x => '<span class="c-wo" data-n="' + escHtml(nameKey(x.d.nome)) + '" data-att="' + (cntIsAtt(x.d.id) ? 1 : 0) + '"><span>' + escHtml(x.d.nome) + '</span>' + cntAttHtml(x.d.id) + '</span>').join('') + '</div></details>';
@@ -3497,7 +3504,6 @@ async function maybeImportLegacy() {
       else if (a === 'del') cntDelete(); else if (a === 'reload') cntLoad();
       else if (a === 'expand' || a === 'collapse') document.querySelectorAll('#cnt-body .c-doc').forEach(e => { e.open = a === 'expand'; });
       else if (a === 'detail') { e.preventDefault(); const D = (cnt.det || {})[b.dataset.id]; if (D) { byId('det-title').textContent = '🔎 Dettaglio esami · ' + D.nome + ' · ' + ymLabel(cnt.ym); cnt.detCur = D; cnt.detF = { q: '', t: '' }; byId('det-body').innerHTML = cntExamDetailHtml(D); cntDetFilter(); byId('det-xlsx').style.display = D.has && D.list.length ? '' : 'none'; openModal('det-modal'); } }
-      else if (a === 'conv') { byId('conv-body').innerHTML = cnt.convHtml || ''; openModal('conv-modal'); }
       else if (a === 'sav') { const w = b.closest('.c-grpwrap'), on = w.classList.toggle('sav-off'); (cnt.savOpen = cnt.savOpen || {})[b.dataset.id] = !on; }
       else if (a === 'extra') { e.preventDefault(); const k = b.dataset.queue ? ((Object.values(cnt.pendMap || {}).find(x => !x.decided) || {}).key) : b.dataset.key; if (k) cntOpenExtra(k, !!b.dataset.queue); }
       else if (a === 'shifts') { const my = ++cnt.req; cnt.shiftsLoading = true; cntRender(); cntLoadShifts(my).then(() => { if (my === cnt.req) cntRender(); }); }
@@ -3507,11 +3513,13 @@ async function maybeImportLegacy() {
     byId('det-xlsx').addEventListener('click', cntDetExport);
     byId('det-body').addEventListener('input', e => { if (e.target.id === 'det-q') { cnt.detF.q = e.target.value; cntDetFilter(); } });
     byId('det-body').addEventListener('click', e => { const b = e.target.closest('[data-dt]'); if (b) { cnt.detF.t = b.dataset.dt; cntDetFilter(); } });
-    byId('conv-modal').addEventListener('click', e => {
+    byId('sub-view-riepilogo').addEventListener('click', e => {
+      const n = e.target.closest('[data-cnt]');
+      if (n && (n.dataset.cnt === 'prev' || n.dataset.cnt === 'next')) { cntGo(n.dataset.cnt === 'prev' ? -1 : 1); return; }
       const b = e.target.closest('[data-pesi]'); if (!b) return;
       if (b.dataset.pesi === 'reset') Object.assign(CNT_PESI, CNT_PESI_DEF);
-      else document.querySelectorAll('#conv-body .cw-in').forEach(i => { const v = parseFloat(String(i.value).replace(',', '.')); if (v > 0) CNT_PESI[i.dataset.t] = v; });
-      cntRender(); byId('conv-body').innerHTML = cnt.convHtml || '';
+      else document.querySelectorAll('#riep-body .cw-in').forEach(i => { const v = parseFloat(String(i.value).replace(',', '.')); if (v > 0) CNT_PESI[i.dataset.t] = v; });
+      cntRender();
       cntSavePesi().then(ok => toast(ok ? 'Pesi salvati e condivisi con tutti gli utenti' : 'Pesi NON salvati sul database (esegui supabase_persistenza.sql): validi solo su questo schermo', ok ? 'ok' : 'err'));
     });
     byId('cnt-search').addEventListener('input', e => { cnt.q = e.target.value; cntApplyFilter(); });
@@ -3574,10 +3582,10 @@ async function maybeImportLegacy() {
   // chiusura modali: pulsanti ✕/Annulla, click sullo sfondo, tasto Esc
   document.addEventListener('click', e => {
     const c = e.target.closest('[data-close]');
-    if (c) { c.dataset.close === 'doc' ? closeDoctorModal() : c.dataset.close === 'conv' ? closeModal('conv-modal') : c.dataset.close === 'det' ? closeModal('det-modal') : c.dataset.close === 'extra' ? closeModal('extra-modal') : closeUserModal(); return; }
+    if (c) { c.dataset.close === 'doc' ? closeDoctorModal() : c.dataset.close === 'det' ? closeModal('det-modal') : c.dataset.close === 'extra' ? closeModal('extra-modal') : closeUserModal(); return; }
     if (e.target.classList && e.target.classList.contains('r-modal-bg')) closeModal(e.target.id);
   });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDoctorModal(); closeUserModal(); closeModal('conv-modal'); closeModal('det-modal'); closeModal('extra-modal'); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDoctorModal(); closeUserModal(); closeModal('det-modal'); closeModal('extra-modal'); } });
 })();
 
 // ─── UI HELPERS ───────────────────────────────────────────────

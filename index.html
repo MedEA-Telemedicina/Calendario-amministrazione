@@ -2358,11 +2358,11 @@ function cntConv(typeRows, centsT, nTurni) {
 // i turni Holter / Holter 16 solo gli holter (ECG, pressorio, 12D), completo e domenica ricevono tutto.
 // Se in un giorno più turni possono ricevere lo stesso esame, la quota è divisa in parti uguali.
 const CNT_GRP = [
-  { g: 'holter',   l: 'Turno Holter',    ks: ['turno_holter'] },
+  { g: 'holter',   l: 'Turno Holter 10HC/10HP', ks: ['turno_holter'] },
   { g: 'h16',      l: 'Turno Holter 16', ks: ['turno_16hc'] },
   { g: 'completo', l: 'Turno completo',  ks: ['turno_completo'] },
   { g: 'ecg',      l: 'Turno ECG',       ks: ['turno_ecg_75', 'turno_ecg_100'] },
-  { g: 'domenica', l: 'Turno domenica',  ks: ['turno_domenica'] }
+  { g: 'domenica', l: 'Turno ECG domenica', ks: ['turno_domenica'] }
 ];
 // Turni Holter: il compenso del turno è ripartito sugli holter refertati, fino alla capienza del turno.
 // Turno Holter (10 hc + 10 hp): importi di riferimento 14 € per hc e 6 € per hp (l'holter 12D vale come hc) = 200 € a turno pieno.
@@ -2457,17 +2457,17 @@ function cntConvTable(list, bench, tot) {
   let h = '<div style="overflow-x:auto">';
   if (tot.unit) h += '<div class="r-usub" style="margin:4px 0 8px">Compenso turni <b>' + fmtEuro(tot.centsT / 100) + '</b> ÷ <b>' + tot.units.toLocaleString('it-IT') + '</b> unità di peso = <b>' + fmtEuro(tot.unit / 100) + '</b> per unità</div>';
   h += '<table class="c-tb"><thead><tr><th>Tipologia</th><th>Peso</th><th>Esami refertati</th><th>Coperti dal turno</th><th>€ per referto</th><th>Costo attribuito</th>'
-    + '<th>Consuntivo medio (riferimento)</th><th>Risparmio per esame</th>' + (hasCons ? '<th>A consuntivo (scorporato)</th>' : '') + '</tr></thead><tbody>';
+    + '<th class="c-sav">Consuntivo medio (riferimento)</th><th class="c-sav">Risparmio per esame</th>' + (hasCons ? '<th>A consuntivo (scorporato)</th>' : '') + '</tr></thead><tbody>';
   list.forEach(r => {
     const bm = bench[r.t], d = bm != null && r.cov && r.c ? bm - r.c / r.cov / 100 : null;
     h += '<tr><td>' + escHtml(cntShort[r.t] || r.t) + '</td><td>' + (r.w == null ? '<span class="mut">fisso</span>' : r.w) + '</td><td>' + r.n.toLocaleString('it-IT') + '</td><td>' + r.cov.toLocaleString('it-IT') + '</td>'
       + '<td>' + cntEuroRef(r) + '</td><td>' + (r.c ? fmtEuro(r.c / 100) : '<span class="mut">—</span>') + '</td>'
-      + '<td>' + (bm != null ? fmtEuro(bm) : '<span class="mut">—</span>') + '</td><td>' + cntDiffEx(d) + '</td>'
+      + '<td class="c-sav">' + (bm != null ? fmtEuro(bm) : '<span class="mut">—</span>') + '</td><td class="c-sav">' + cntDiffEx(d) + '</td>'
       + (hasCons ? '<td>' + (r.cCons ? fmtEuro(r.cCons / 100) : '<span class="mut">—</span>') + '</td>' : '') + '</tr>';
   });
   const cov = list.reduce((a, r) => a + r.cov, 0), bs = cntBenchSaving(list, bench);
   h += '</tbody><tfoot><tr><td>Totale</td><td></td><td>' + list.reduce((a, r) => a + r.n, 0).toLocaleString('it-IT') + '</td><td>' + cov.toLocaleString('it-IT') + '</td>'
-    + '<td></td><td>' + fmtEuro((fisso ? list.reduce((a, r) => a + r.c, 0) : tot.centsT) / 100) + '</td><td></td><td></td>'
+    + '<td></td><td>' + fmtEuro((fisso ? list.reduce((a, r) => a + r.c, 0) : tot.centsT) / 100) + '</td><td class="c-sav"></td><td class="c-sav"></td>'
     + (hasCons ? '<td>' + fmtEuro(list.reduce((a, r) => a + r.cCons, 0) / 100) + '</td>' : '') + '</tr></tfoot></table></div>';
   return h;
 }
@@ -2503,16 +2503,10 @@ function cntConvExport() {
   add('Per tipo di turno', [['Tipo di turno', 'Turni', 'Compenso turni (€)', ...hdr], ...gl.map(G => { const g = R.convGrp[G.g]; return [G.l, g.turni, r2(g.centsT / 100), ...cellsOf(g.list)]; })], 1);
   const dd = []; gl.forEach(G => R.convGrp[G.g].perDoc.slice().sort((a, b) => b.centsT - a.centsT).forEach(d => dd.push([G.l, d.nome, d.turni, r2(d.centsT / 100), ...cellsOf(d.list)])));
   add('Per medico e tipo di turno', [['Tipo di turno', 'Medico', 'Turni', 'Compenso turni (€)', ...hdr], ...dd], 2);
-  const C = R.convTot;
-  add('Complessivo', [['Tipologia', 'Peso', 'Esami refertati', 'Coperti dal turno', '€ per referto', 'Costo attribuito (€)', 'Consuntivo medio (€)', 'Risparmio per esame (€)', 'A consuntivo, scorporato (€)'],
-    ...C.list.map(r => { const ok = r.cov && r.c, cost = ok ? r.c / r.cov / 100 : null, bm = bench[r.t];
-      return [cntShort[r.t] || r.t, r.w, r.n, r2(r.cov), ok ? r2(cost) : '', r2(r.c / 100), bm != null ? r2(bm) : '', ok && bm != null ? r2(bm - cost) : '', r.cCons ? r2(r.cCons / 100) : '']; })], 1);
-  add('Per medico', [['Medico', 'Turni', 'Compenso turni (€)', '1 unità di peso (€)', ...tps.flatMap(t => [cntShort[t] + ' – € per referto', cntShort[t] + ' – risparmio per esame (€)'])],
-    ...C.perDoc.slice().sort((a, b) => b.centsT - a.centsT).map(r => [r.nome, r.turni, r2(r.centsT / 100), r2(r.unit / 100), ...tps.flatMap(t => { const c = r.unit * CNT_PESI[t] / 100; return [r2(c), bench[t] != null ? r2(bench[t] - c) : '']; })])], 1);
   const CA = cntConsAgg(R.rows);
-  if (CA.list.length) add('Consuntivo', [['Tipologia', 'Esami refertati', 'Inclusi nel turno', 'A consuntivo', 'Importo medio a referto (€)', 'Compenso a consuntivo (€)'],
-    ...CA.list.map(r => [cntShort[r.t] || r.t, r.n, r.inc, r.pay, r2(r.c / r.pay / 100), r2(r.c / 100)]),
-    ['Totale', CA.n, CA.inc, CA.pay, '', r2(CA.c / 100)]], 1);
+  if (CA.list.length) add('Consuntivo', [['Tipologia', 'Esami refertati', 'A consuntivo', 'Importo medio a referto (€)', 'Compenso a consuntivo (€)'],
+    ...CA.list.map(r => [cntShort[r.t] || r.t, r.n, r.pay, r2(r.c / r.pay / 100), r2(r.c / 100)]),
+    ['Totale', CA.n, CA.pay, '', r2(CA.c / 100)]], 1);
   add('Pesi usati', [['Tipologia', 'Peso'], ...tps.map(t => [cntShort[t] || t, CNT_PESI[t]])], 1);
   XLSX.writeFile(wb, 'riepilogo_turni_' + D.ym + '.xlsx');
   toast('Excel scaricato', 'ok');
@@ -2539,19 +2533,22 @@ function cntConsSummaryHtml(rows, T) {
   const A = cntConsAgg(rows || []); if (!A.list.length) return '';
   const dot = t => '<span class="c-dot" style="background:' + avColor(t) + '"></span>';
   let h = '<div class="c-sec" style="margin-top:16px">Riepilogo a consuntivo — esami pagati a prestazione</div>'
-    + '<div class="r-usub" style="margin:4px 0 6px">Esami dei medici pagati (in tutto o in parte) a consuntivo: sono scorporati dal calcolo dei turni e compensati all\'importo a referto previsto da contratto. Gli esami «inclusi nel turno» non vengono pagati a parte.</div>'
-    + '<div style="overflow-x:auto"><table class="c-tb"><thead><tr><th>Tipologia</th><th>Esami refertati</th><th>Inclusi nel turno</th><th>A consuntivo</th><th>Importo medio a referto</th><th>Compenso a consuntivo</th></tr></thead><tbody>';
+    + '<div class="r-usub" style="margin:4px 0 6px">Esami dei medici pagati (in tutto o in parte) a consuntivo: sono scorporati dal calcolo dei turni e compensati all\'importo a referto previsto da contratto. Gli esami già inclusi nel turno non vengono pagati a parte e non sono riportati qui.</div>'
+    + '<div style="overflow-x:auto"><table class="c-tb"><thead><tr><th>Tipologia</th><th>Esami refertati</th><th>A consuntivo</th><th>Importo medio a referto</th><th>Compenso a consuntivo</th></tr></thead><tbody>';
   A.list.forEach(r => {
     const avg = r.c / r.pay / 100, range = r.max - r.min > 0.005;
     h += '<tr><td style="text-align:left"><b>' + dot(r.t) + escHtml(cntShort[r.t] || r.t) + '</b></td><td>' + r.n.toLocaleString('it-IT') + '</td>'
-      + '<td>' + (r.inc ? r.inc.toLocaleString('it-IT') : '<span class="mut">–</span>') + '</td><td><b>' + r.pay.toLocaleString('it-IT') + '</b></td>'
+      + '<td><b>' + r.pay.toLocaleString('it-IT') + '</b></td>'
       + '<td>' + fmtEuro(avg) + (range ? '<small style="display:block;color:#9aa5b1">da ' + fmtEuro(r.min) + ' a ' + fmtEuro(r.max) + '</small>' : '') + '</td>'
       + '<td><b>' + fmtEuro(r.c / 100) + '</b></td></tr>';
   });
-  h += '</tbody><tfoot><tr><td style="text-align:left">Totale</td><td>' + A.n.toLocaleString('it-IT') + '</td><td>' + A.inc.toLocaleString('it-IT') + '</td><td>' + A.pay.toLocaleString('it-IT') + '</td><td></td><td>' + fmtEuro(A.c / 100) + '</td></tr></tfoot></table></div>';
+  h += '</tbody><tfoot><tr><td style="text-align:left">Totale</td><td>' + A.n.toLocaleString('it-IT') + '</td><td>' + A.pay.toLocaleString('it-IT') + '</td><td></td><td>' + fmtEuro(A.c / 100) + '</td></tr></tfoot></table></div>';
   if (T) h += '<div class="c-grand" style="margin-top:10px"><span>Turni ' + fmtEuro(T.centsT / 100) + ' + Esami a consuntivo ' + fmtEuro(T.centsE / 100) + '</span><b>Totale ' + fmtEuro((T.centsT + T.centsE) / 100) + '</b></div>';
   return h;
 }
+const CNT_EYE = '<button type="button" class="c-eye" data-cnt="sav" data-id="riep" title="Mostra / nascondi il risparmio" aria-label="Mostra o nascondi il risparmio">'
+  + '<svg class="e-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>'
+  + '<svg class="e-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.9 10.9 0 0 1 12 19C5 19 1 12 1 12a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.1 9.1 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg></button>';
 function cntConvModalHtml(C, bench, GT, R) {
   let h = '<div class="r-usub" style="margin-bottom:10px">Per ogni medico: <b>compenso dei turni ÷ somma pesata degli esami</b> = valore di 1 unità di peso; il costo di un referto è il peso moltiplicato per quel valore. '
     + 'Pesi: <b>' + cntPesiTxt() + '</b>. Gli esami pagati a consuntivo sono scorporati; gli altri tipi di esame non rientrano nel calcolo. '
@@ -2559,22 +2556,16 @@ function cntConvModalHtml(C, bench, GT, R) {
     + '<details class="c-det" style="margin-bottom:12px"><summary>⚙ Modifica i pesi delle tipologie</summary><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">'
     + Object.keys(CNT_PESI).map(t => '<label style="font-size:12px;font-weight:700;color:#3b4a5c">' + escHtml(cntShort[t] || t) + '<br><input type="number" class="r-input cw-in" data-t="' + escHtml(t) + '" min="0.01" step="0.01" value="' + CNT_PESI[t] + '" style="width:90px"></label>').join('')
     + '<button class="r-btn primary" type="button" data-pesi="save">Applica</button><button class="r-btn ghost" type="button" data-pesi="reset">Ripristina</button></div></details>'
-    + (GT && Object.keys(GT).length ? '<div class="c-sec">Per tipologia di turno — costo per referto</div><div class="r-usub" style="margin:4px 0 6px">Gli esami di ogni giorno sono attribuiti ai turni di quel giorno (turno ECG → solo ECG; Holter / Holter 16 → solo holter; completo e domenica → tutti); se più turni possono riceverli la quota è divisa in parti uguali. Nei turni Holter il compenso del turno è diviso per gli holter refertati, entro la capienza: <b>Holter (10 hc + 10 hp)</b> 14 € per hc e 6 € per hp a turno pieno; <b>Holter 16 hc</b> 12,50 € per hc con 16 refertati. Meno esami vengono refertati, più sale in proporzione l\'importo del singolo referto.</div>'
+    + (GT && Object.keys(GT).length ? '<div class="c-grpwrap' + (cnt.savOpen && cnt.savOpen.riep ? '' : ' sav-off') + '"><div class="c-sec c-sech">Per tipologia di turno — costo per referto' + CNT_EYE + '</div><div class="r-usub" style="margin:4px 0 6px">Gli esami di ogni giorno sono attribuiti ai turni di quel giorno (turno ECG → solo ECG; Holter / Holter 16 → solo holter; completo e domenica → tutti); se più turni possono riceverli la quota è divisa in parti uguali. Nei turni Holter il compenso del turno è diviso per gli holter refertati, entro la capienza: <b>Holter (10 hc + 10 hp)</b> 14 € per hc e 6 € per hp a turno pieno; <b>Holter 16 hc</b> 12,50 € per hc con 16 refertati. Meno esami vengono refertati, più sale in proporzione l\'importo del singolo referto.</div>'
       + cntGrpMatrix(CNT_GRP.map(G => GT[G.g]).filter(Boolean), bench, false)
       + CNT_GRP.filter(G => GT[G.g]).map(G => '<details class="c-det" style="margin-top:10px"><summary><b>' + escHtml(G.l) + '</b> · ' + GT[G.g].turni + ' turni · ' + fmtEuro(GT[G.g].centsT / 100) + '</summary><div>'
         + '<div class="c-sec" style="margin-top:6px">Complessivo</div>' + cntConvTable(GT[G.g].list, bench, { centsT: GT[G.g].centsT, unit: 0, units: 0 })
         + '<div class="c-sec" style="margin-top:12px">Per medico</div>'
         + cntGrpMatrix(GT[G.g].perDoc.sort((a, b) => b.centsT - a.centsT).map(d => ({ l: d.nome, turni: d.turni, centsT: d.centsT, covTot: d.list.reduce((a, r) => a + r.cov, 0), list: d.list })), bench, true)
         + '</div></details>').join('')
-      + '<div style="height:14px"></div>' : '')
+      + '</div><div style="height:14px"></div>' : '')
     + cntConsSummaryHtml(R && R.rows, R && R.T)
-    + '<div class="c-sec">Complessivo (' + C.turni + ' turni · ' + fmtEuro(C.centsT / 100) + ')</div>' + cntConvTable(C.list, bench, C)
-    + '<div class="c-sec" style="margin-top:16px">Per medico — costo per referto</div><div style="overflow-x:auto"><table class="c-tb"><thead><tr><th>Medico</th><th>Turni</th><th>Compenso turni</th><th>1 unità di peso</th>'
-    + Object.keys(CNT_PESI).map(t => '<th>' + escHtml(cntShort[t]) + '<br><span style="font-weight:500">€ per referto · risparmio per esame</span></th>').join('') + '</tr></thead><tbody>'
-    + C.perDoc.sort((a, b) => b.centsT - a.centsT).map(r => {
-      return '<tr><td>' + escHtml(r.nome) + '</td><td>' + r.turni + '</td><td>' + fmtEuro(r.centsT / 100) + '</td><td>' + fmtEuro(r.unit / 100) + '</td>'
-        + Object.keys(CNT_PESI).map(t => { const cost = r.unit * CNT_PESI[t] / 100; return '<td><b>' + fmtEuro(cost) + '</b><small style="display:block">' + cntDiffEx(cntSavEx(bench, t, cost)) + '</small></td>'; }).join('') + '</tr>';
-    }).join('') + '</tbody></table></div>';
+    + '';
   return h;
 }
 
@@ -3515,6 +3506,7 @@ async function maybeImportLegacy() {
     byId('det-body').addEventListener('click', e => { const b = e.target.closest('[data-dt]'); if (b) { cnt.detF.t = b.dataset.dt; cntDetFilter(); } });
     byId('sub-view-riepilogo').addEventListener('click', e => {
       const n = e.target.closest('[data-cnt]');
+      if (n && n.dataset.cnt === 'sav') { const w = n.closest('.c-grpwrap'), off = w.classList.toggle('sav-off'); (cnt.savOpen = cnt.savOpen || {}).riep = !off; return; }
       if (n && (n.dataset.cnt === 'prev' || n.dataset.cnt === 'next')) { cntGo(n.dataset.cnt === 'prev' ? -1 : 1); return; }
       const b = e.target.closest('[data-pesi]'); if (!b) return;
       if (b.dataset.pesi === 'reset') Object.assign(CNT_PESI, CNT_PESI_DEF);

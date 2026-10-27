@@ -2507,7 +2507,7 @@ function cntConvExport() {
   if (CA.list.length) add('Consuntivo', [['Tipologia', 'Esami refertati', 'A consuntivo', 'Importo medio a referto (€)', 'Compenso a consuntivo (€)'],
     ...CA.list.map(r => [cntShort[r.t] || r.t, r.n, r.pay, r2(r.c / r.pay / 100), r2(r.c / 100)]),
     ['Totale', CA.n, CA.pay, '', r2(CA.c / 100)]], 1);
-  const MX = cntMixAgg(R.convTot, CA);
+  const MX = cntMixAgg(R.convGrp, CA);
   if (MX.list.length) add('Turni + consuntivo', [['Tipologia', 'Esami totali', 'Costo medio per esame (€)'],
     ...MX.list.map(a => [cntShort[a.t] || a.t, r2(a.n), r2(a.c / a.n / 100)])], 1);
   add('Pesi usati', [['Tipologia', 'Peso'], ...tps.map(t => [cntShort[t] || t, CNT_PESI[t]])], 1);
@@ -2555,17 +2555,18 @@ const CNT_EYE = '<button type="button" class="c-eye" data-cnt="sav" data-id="rie
 // ── COMPLESSIVO turni + consuntivo: costo medio PONDERATO per tipologia di esame ──
 // costo medio = (costo turni attribuito + costo a consuntivo) ÷ (esami coperti dal turno + esami a consuntivo)
 // (non la media semplice delle tariffe: pesa ogni costo per il numero di esami a cui si applica)
-function cntMixAgg(C, A) {
+function cntMixAgg(GT, A) {
   const m = {}, get = t => m[t] || (m[t] = { t, cov: 0, cT: 0, pay: 0, cC: 0 });
-  ((C && C.list) || []).forEach(r => { if (r.cov && r.c) { const a = get(r.t); a.cov += r.cov; a.cT += r.c; } });
+  // parte turni: stesse quote (esami e costo) della tabella «Per tipologia di turno», sommate su tutti i tipi di turno
+  Object.values(GT || {}).forEach(g => g.list.forEach(r => { if (r.cov && r.c) { const a = get(r.t); a.cov += r.cov; a.cT += r.c; } }));
   A.list.forEach(r => { const a = get(r.t); a.pay += r.pay; a.cC += r.c; });
   const list = Object.values(m).map(a => { a.n = a.cov + a.pay; a.c = a.cT + a.cC; return a; }).filter(a => a.n).sort((x, y) => y.n - x.n);
   const tot = { cov: 0, cT: 0, pay: 0, cC: 0, n: 0, c: 0 };
   list.forEach(a => { Object.keys(tot).forEach(k => { tot[k] += a[k]; }); });
   return { list, tot };
 }
-function cntMixSummaryHtml(C, rows) {
-  const M = cntMixAgg(C, cntConsAgg(rows || [])); if (!M.list.length) return '';
+function cntMixSummaryHtml(GT, rows) {
+  const M = cntMixAgg(GT, cntConsAgg(rows || [])); if (!M.list.length) return '';
   const dot = t => '<span class="c-dot" style="background:' + avColor(t) + '"></span>';
   const nf = x => (+x.toFixed(1)).toLocaleString('it-IT');
   const avgCell = (c, n) => '<b>' + fmtEuro(c / n / 100) + '</b><small style="display:block;color:#9aa5b1">' + fmtEuro(c / 100) + ' ÷ ' + nf(n) + '</small>';
@@ -2596,7 +2597,7 @@ function cntConvModalHtml(C, bench, GT, R) {
         + '</div></details>').join('')
       + '</div><div style="height:14px"></div>' : '')
     + cntConsSummaryHtml(R && R.rows, R && R.T)
-    + cntMixSummaryHtml(C, R && R.rows);
+    + cntMixSummaryHtml(GT, R && R.rows);
   return h;
 }
 

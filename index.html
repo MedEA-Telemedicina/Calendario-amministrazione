@@ -1935,12 +1935,10 @@ function openDoctorModal(id) {
   openModal('doc-modal');
   setTimeout(() => byId('m-nome').focus(), 60);
 }
-// da «medici non associati» (Conteggi): apre il popup «Nuovo medico» con il nome già nel formato COGNOME N.
+// da «medici non associati» (Conteggi): apre il popup «Nuovo medico» con il nome per esteso, come nel file esami
+// (il calendario, dove compare come COGNOME N., viene associato in automatico dal nome per esteso)
 function cntSuggestName(fileName) {
-  const t = String(fileName || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/[.,]/g, ' ').trim().split(/\s+/).filter(Boolean);
-  if (t.length < 2) return t.join(' ').toUpperCase();
-  const last = t.pop();
-  return (t.join(' ') + ' ' + last[0] + '.').toUpperCase();
+  return String(fileName || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase();
 }
 function cntAddDoctor(fileName) {
   openDoctorModal(null);
@@ -3351,7 +3349,7 @@ function cntRenderMain() {
   const un = R.unmatched.filter(x => x.n > 0).sort((a, b) => b.n - a.n);
   if (un.length) h += '<details class="c-det warn" data-unm><summary>⚠ ' + un.length + ' medici nel file non associati a nessun medico in elenco (' + un.reduce((a, b) => a + b.n, 0).toLocaleString('it-IT') + ' esami)</summary><div>'
     + un.map(x => '<div class="c-unm-row"><span>' + escHtml(x.name) + ' — ' + x.n + '</span><button type="button" class="r-btn c-unm-add" data-cnt="adddoc" data-name="' + escHtml(x.name) + '" title="Aggiungi ai medici e inserisci i prezzi">＋ Aggiungi medico</button></div>').join('')
-    + '<div class="r-usub" style="margin-top:8px">Il nome in elenco deve essere del tipo COGNOME N. (cognome e iniziale del nome come nel file). Il pulsante propone il nome già in questo formato: controllalo prima di salvare.</div></div></details>';
+    + '<div class="r-usub" style="margin-top:8px">Il pulsante propone il nome per esteso, come nel file (COGNOME NOME). Il calendario dei turni, dove compare come COGNOME N., viene associato in automatico.</div></div></details>';
   const wasOpen = {}; body.querySelectorAll('.c-doc').forEach(e => { wasOpen[e.dataset.n] = e.open; });   // un aggiornamento non deve richiudere/riaprire i blocchi
   const unmWasOpen = !!(body.querySelector('[data-unm]') || {}).open;
   body.innerHTML = h;

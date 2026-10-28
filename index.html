@@ -2508,8 +2508,9 @@ function cntConvExport() {
     ...CA.list.map(r => [cntShort[r.t] || r.t, r.n, r.pay, r2(r.c / r.pay / 100), r2(r.c / 100)]),
     ['Totale', CA.n, CA.pay, '', r2(CA.c / 100)]], 1);
   const MX = cntMixAgg(R.convGrp, CA);
-  if (MX.list.length) add('Turni + consuntivo', [['Tipologia', 'Esami totali', 'Costo medio per esame (€)'],
-    ...MX.list.map(a => [cntShort[a.t] || a.t, r2(a.n), r2(a.c / a.n / 100)])], 1);
+  if (MX.list.length || MX.dom.length) add('Turni + consuntivo', [['Tipologia', 'Esami totali', 'Costo medio per esame (€)'],
+    ...MX.list.map(a => [cntShort[a.t] || a.t, r2(a.n), r2(a.c / a.n / 100)]),
+    ...MX.dom.map(a => [(cntShort[a.t] || a.t) + ' domenica', r2(a.n), r2(a.c / a.n / 100)])], 1);
   add('Pesi usati', [['Tipologia', 'Peso'], ...tps.map(t => [cntShort[t] || t, CNT_PESI[t]])], 1);
   XLSX.writeFile(wb, 'riepilogo_turni_' + D.ym + '.xlsx');
   toast('Excel scaricato', 'ok');
@@ -2558,25 +2559,31 @@ const CNT_EYE = '<button type="button" class="c-eye" data-cnt="sav" data-id="rie
 function cntMixAgg(GT, A) {
   const m = {}, get = t => m[t] || (m[t] = { t, cov: 0, cT: 0, pay: 0, cC: 0 });
   // parte turni: stesse quote (esami e costo) della tabella «Per tipologia di turno», sommate su tutti i tipi di turno
-  Object.values(GT || {}).forEach(g => g.list.forEach(r => { if (r.cov && r.c) { const a = get(r.t); a.cov += r.cov; a.cT += r.c; } }));
+  // il turno ECG domenica è un servizio a parte: escluso dal complessivo
+  Object.values(GT || {}).filter(g => g.g !== 'domenica').forEach(g => g.list.forEach(r => { if (r.cov && r.c) { const a = get(r.t); a.cov += r.cov; a.cT += r.c; } }));
   A.list.forEach(r => { const a = get(r.t); a.pay += r.pay; a.cC += r.c; });
   const list = Object.values(m).map(a => { a.n = a.cov + a.pay; a.c = a.cT + a.cC; return a; }).filter(a => a.n).sort((x, y) => y.n - x.n);
   const tot = { cov: 0, cT: 0, pay: 0, cC: 0, n: 0, c: 0 };
   list.forEach(a => { Object.keys(tot).forEach(k => { tot[k] += a[k]; }); });
-  return { list, tot };
+  // righe a parte per il turno ECG domenica (servizio separato, non entra nel complessivo sopra)
+  const dom = ((GT && GT.domenica && GT.domenica.list) || []).filter(r => r.cov && r.c).map(r => ({ t: r.t, dom: true, n: r.cov, c: r.c }));
+  return { list, tot, dom };
 }
 function cntMixSummaryHtml(GT, rows) {
-  const M = cntMixAgg(GT, cntConsAgg(rows || [])); if (!M.list.length) return '';
+  const M = cntMixAgg(GT, cntConsAgg(rows || [])); if (!M.list.length && !M.dom.length) return '';
   const dot = t => '<span class="c-dot" style="background:' + avColor(t) + '"></span>';
   const nf = x => (+x.toFixed(1)).toLocaleString('it-IT');
   const avgCell = (c, n) => '<b>' + fmtEuro(c / n / 100) + '</b><small style="display:block;color:#9aa5b1">' + fmtEuro(c / 100) + ' ÷ ' + nf(n) + '</small>';
   const dash = '<span class="mut">–</span>';
   let h = '<div class="c-sec" style="margin-top:16px">Complessivo turni + consuntivo — costo medio per esame</div>'
-    + '<div class="r-usub" style="margin:4px 0 6px">Costo medio <b>ponderato</b> per tipologia: (costo dei turni attribuito + costo a consuntivo) ÷ (esami coperti dal turno + esami a consuntivo). Ogni costo pesa in base al numero di esami a cui si applica, quindi non è la semplice media delle due tariffe.</div>'
+    + '<div class="r-usub" style="margin:4px 0 6px">Costo medio <b>ponderato</b> per tipologia, escluso il turno ECG domenica (servizio a parte, riportato nella riga dedicata): (costo dei turni attribuito + costo a consuntivo) ÷ (esami coperti dal turno + esami a consuntivo). Ogni costo pesa in base al numero di esami a cui si applica, quindi non è la semplice media delle due tariffe.</div>'
     + '<div style="overflow-x:auto"><table class="c-tb"><thead><tr><th>Tipologia</th><th>Esami totali</th><th>Costo medio per esame</th></tr></thead><tbody>';
   M.list.forEach(a => {
     h += '<tr><td style="text-align:left"><b>' + dot(a.t) + escHtml(cntShort[a.t] || a.t) + '</b></td>'
       + '<td>' + nf(a.n) + '</td><td>' + avgCell(a.c, a.n) + '</td></tr>';
+  });
+  M.dom.forEach(a => {
+    h += '<tr><td style="text-align:left"><b>' + dot(a.t) + escHtml(cntShort[a.t] || a.t) + ' domenica</b></td><td>' + nf(a.n) + '</td><td>' + avgCell(a.c, a.n) + '</td></tr>';
   });
   h += '</tbody></table></div>';
   return h;

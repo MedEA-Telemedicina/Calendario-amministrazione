@@ -506,6 +506,9 @@
   .c-det { background: #fff; border: 1px solid #edf1f6; border-radius: 14px; box-shadow: var(--r-sh); padding: 12px 16px; margin-bottom: 12px; font-size: 13px; color: #3b4a5c; }
   .c-det summary { cursor: pointer; font-weight: 700; } .c-det > div { margin-top: 10px; line-height: 1.7; max-height: 260px; overflow: auto; }
   .c-det.warn { background: #fffaf1; border-color: #fde3b8; }
+  .c-unm-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 3px 0; border-bottom: 1px dashed #f3e2c4; }
+  .c-unm-row:last-of-type { border-bottom: 0; }
+  .c-unm-add { padding: 3px 10px; font-size: 12px; white-space: nowrap; }
   .c-det.warn summary { color: #c25e00; }
   .r-soon { border: 2px dashed #cfd9e6; border-radius: 16px; text-align: center; padding: 44px 20px; color: #7b8794; font-size: 13.5px; line-height: 1.6; }
   .r-soon .big { font-size: 42px; margin-bottom: 8px; }
@@ -1932,6 +1935,17 @@ function openDoctorModal(id) {
   openModal('doc-modal');
   setTimeout(() => byId('m-nome').focus(), 60);
 }
+// da «medici non associati» (Conteggi): apre il popup «Nuovo medico» con il nome già nel formato COGNOME N.
+function cntSuggestName(fileName) {
+  const t = String(fileName || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/[.,]/g, ' ').trim().split(/\s+/).filter(Boolean);
+  if (t.length < 2) return t.join(' ').toUpperCase();
+  const last = t.pop();
+  return (t.join(' ') + ' ' + last[0] + '.').toUpperCase();
+}
+function cntAddDoctor(fileName) {
+  openDoctorModal(null);
+  byId('m-nome').value = cntSuggestName(fileName);
+}
 function closeDoctorModal() { closeModal('doc-modal'); }
 function renderModalVoci() {
   byId('m-voci').innerHTML = GRUPPI.map(g =>
@@ -2034,6 +2048,7 @@ async function saveDoctorModal() {
     if (i >= 0) doctors[i] = doc; else doctors.push(doc);
     doctors.sort(byName);
     closeDoctorModal(); updateStats(); renderDoctors();
+    if (cnt.rec && !cnt.loading) cntRender();   // il nuovo medico viene associato subito agli esami del mese
     toast('Medico salvato', 'ok');
     const c = document.querySelector(`.r-doc[data-id="${id}"]`);
     if (c) { c.classList.add('flash'); c.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
@@ -3334,10 +3349,13 @@ function cntRenderMain() {
   if (ign.dataNonValida) ignTxt.push(ign.dataNonValida + ' senza data di refertazione valida');
   if (ignTxt.length) h += '<details class="c-det"><summary>Righe escluse dal conteggio</summary><div>' + ignTxt.map(escHtml).join('<br>') + '</div></details>';
   const un = R.unmatched.filter(x => x.n > 0).sort((a, b) => b.n - a.n);
-  if (un.length) h += '<details class="c-det warn"><summary>⚠ ' + un.length + ' medici nel file non associati a nessun medico in elenco (' + un.reduce((a, b) => a + b.n, 0).toLocaleString('it-IT') + ' esami)</summary><div>'
-    + un.map(x => escHtml(x.name) + ' — ' + x.n).join('<br>') + '<div class="r-usub" style="margin-top:8px">Il nome in elenco deve essere del tipo COGNOME N. (cognome e iniziale del nome come nel file).</div></div></details>';
+  if (un.length) h += '<details class="c-det warn" data-unm><summary>⚠ ' + un.length + ' medici nel file non associati a nessun medico in elenco (' + un.reduce((a, b) => a + b.n, 0).toLocaleString('it-IT') + ' esami)</summary><div>'
+    + un.map(x => '<div class="c-unm-row"><span>' + escHtml(x.name) + ' — ' + x.n + '</span><button type="button" class="r-btn c-unm-add" data-cnt="adddoc" data-name="' + escHtml(x.name) + '" title="Aggiungi ai medici e inserisci i prezzi">＋ Aggiungi medico</button></div>').join('')
+    + '<div class="r-usub" style="margin-top:8px">Il nome in elenco deve essere del tipo COGNOME N. (cognome e iniziale del nome come nel file). Il pulsante propone il nome già in questo formato: controllalo prima di salvare.</div></div></details>';
   const wasOpen = {}; body.querySelectorAll('.c-doc').forEach(e => { wasOpen[e.dataset.n] = e.open; });   // un aggiornamento non deve richiudere/riaprire i blocchi
+  const unmWasOpen = !!(body.querySelector('[data-unm]') || {}).open;
   body.innerHTML = h;
+  const unmEl = body.querySelector('[data-unm]'); if (unmEl && unmWasOpen) unmEl.open = true;
   body.querySelectorAll('.c-doc').forEach(e => { if (e.dataset.n in wasOpen) e.open = wasOpen[e.dataset.n]; });
   cntApplyFilter();
 }
@@ -3531,6 +3549,7 @@ async function maybeImportLegacy() {
       const b = e.target.closest('[data-cnt]'); if (!b) return;
       const a = b.dataset.cnt;
       if (a === 'prev') cntGo(-1); else if (a === 'next') cntGo(1);
+      else if (a === 'adddoc') { e.preventDefault(); cntAddDoctor(b.dataset.name); }
       else if (a === 'del') cntDelete(); else if (a === 'reload') cntLoad();
       else if (a === 'expand' || a === 'collapse') document.querySelectorAll('#cnt-body .c-doc').forEach(e => { e.open = a === 'expand'; });
       else if (a === 'detail') { e.preventDefault(); const D = (cnt.det || {})[b.dataset.id]; if (D) { byId('det-title').textContent = '🔎 Dettaglio esami · ' + D.nome + ' · ' + ymLabel(cnt.ym); cnt.detCur = D; cnt.detF = { q: '', t: '' }; byId('det-body').innerHTML = cntExamDetailHtml(D); cntDetFilter(); byId('det-xlsx').style.display = D.has && D.list.length ? '' : 'none'; openModal('det-modal'); } }

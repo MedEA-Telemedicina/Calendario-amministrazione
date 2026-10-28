@@ -2520,10 +2520,11 @@ function cntConvExport() {
   if (CA.list.length) add('Consuntivo', [['Tipologia', 'Esami refertati', 'A consuntivo', 'Importo medio a referto (€)', 'Compenso a consuntivo (€)'],
     ...CA.list.map(r => [cntShort[r.t] || r.t, r.n, r.pay, r2(r.c / r.pay / 100), r2(r.c / 100)]),
     ['Totale', CA.n, CA.pay, '', r2(CA.c / 100)]], 1);
-  const MX = cntMixAgg(R.convGrp, CA);
-  if (MX.list.length || MX.dom.length) add('Turni + consuntivo', [['Tipologia', 'Esami totali', 'Costo medio per esame (€)'],
+  const MX = cntMixAgg(R.convGrp, R.rows);
+  if (MX.list.length || MX.dom.length || MX.gov.length) add('Turni + consuntivo', [['Tipologia', 'Esami totali', 'Costo medio per esame (€)'],
     ...MX.list.map(a => [cntShort[a.t] || a.t, r2(a.n), r2(a.c / a.n / 100)]),
-    ...MX.dom.map(a => [(cntShort[a.t] || a.t) + ' domenica', r2(a.n), r2(a.c / a.n / 100)])], 1);
+    ...MX.dom.map(a => [(cntShort[a.t] || a.t) + ' domenica', r2(a.n), r2(a.c / a.n / 100)]),
+    ...MX.gov.map(a => [(cntShort[a.t] || a.t) + ' Govisit', r2(a.n), r2(a.c / a.n / 100)])], 1);
   add('Pesi usati', [['Tipologia', 'Peso'], ...tps.map(t => [cntShort[t] || t, CNT_PESI[t]])], 1);
   XLSX.writeFile(wb, 'riepilogo_turni_' + D.ym + '.xlsx');
   toast('Excel scaricato', 'ok');
@@ -2569,27 +2570,36 @@ const CNT_EYE = '<button type="button" class="c-eye" data-cnt="sav" data-id="rie
 // ── COMPLESSIVO turni + consuntivo: costo medio PONDERATO per tipologia di esame ──
 // costo medio = (costo turni attribuito + costo a consuntivo) ÷ (esami coperti dal turno + esami a consuntivo)
 // (non la media semplice delle tariffe: pesa ogni costo per il numero di esami a cui si applica)
-function cntMixAgg(GT, A) {
-  const m = {}, get = t => m[t] || (m[t] = { t, cov: 0, cT: 0, pay: 0, cC: 0 });
-  // parte turni: stesse quote (esami e costo) della tabella «Per tipologia di turno», sommate su tutti i tipi di turno
-  // il turno ECG domenica è un servizio a parte: escluso dal complessivo
-  Object.values(GT || {}).filter(g => g.g !== 'domenica').forEach(g => g.list.forEach(r => { if (r.cov && r.c) { const a = get(r.t); a.cov += r.cov; a.cT += r.c; } }));
-  A.list.forEach(r => { const a = get(r.t); a.pay += r.pay; a.cC += r.c; });
-  const list = Object.values(m).map(a => { a.n = a.cov + a.pay; a.c = a.cT + a.cC; return a; }).filter(a => a.n).sort((x, y) => y.n - x.n);
+// Govisit è un servizio a parte: i suoi esami non entrano nel complessivo, hanno una riga dedicata
+const cntIsGov = nome => nameKey(nome).split(' ').includes('govisit');
+function cntMixAgg(GT, rows) {
+  rows = rows || [];
+  const get = (o, t) => o[t] || (o[t] = { t, cov: 0, cT: 0, pay: 0, cC: 0 });
+  const addTurni = (o, g, pred) => g.perDoc.forEach(d => { if (!pred(d.nome)) return; d.list.forEach(r => { if (r.cov && r.c) { const a = get(o, r.t); a.cov += r.cov; a.cT += r.c; } }); });
+  const addCons = (o, A) => A.list.forEach(r => { const a = get(o, r.t); a.pay += r.pay; a.cC += r.c; });
+  const fin = o => Object.values(o).map(a => { a.n = a.cov + a.pay; a.c = a.cT + a.cC; return a; }).filter(a => a.n).sort((x, y) => y.n - x.n);
+  const m = {}, gv = {}, dm = {};
+  // parte turni: stesse quote (esami e costo) della tabella «Per tipologia di turno», sommate su tutti i tipi di turno;
+  // il turno ECG domenica è un servizio a parte (riga dedicata), come Govisit
+  Object.values(GT || {}).forEach(g => {
+    if (g.g === 'domenica') addTurni(dm, g, n => !cntIsGov(n));
+    else { addTurni(m, g, n => !cntIsGov(n)); addTurni(gv, g, cntIsGov); }
+  });
+  addCons(m, cntConsAgg(rows.filter(x => !cntIsGov(x.d.nome))));
+  addCons(gv, cntConsAgg(rows.filter(x => cntIsGov(x.d.nome))));
+  const list = fin(m);
   const tot = { cov: 0, cT: 0, pay: 0, cC: 0, n: 0, c: 0 };
   list.forEach(a => { Object.keys(tot).forEach(k => { tot[k] += a[k]; }); });
-  // righe a parte per il turno ECG domenica (servizio separato, non entra nel complessivo sopra)
-  const dom = ((GT && GT.domenica && GT.domenica.list) || []).filter(r => r.cov && r.c).map(r => ({ t: r.t, dom: true, n: r.cov, c: r.c }));
-  return { list, tot, dom };
+  return { list, tot, dom: fin(dm), gov: fin(gv) };
 }
 function cntMixSummaryHtml(GT, rows) {
-  const M = cntMixAgg(GT, cntConsAgg(rows || [])); if (!M.list.length && !M.dom.length) return '';
+  const M = cntMixAgg(GT, rows); if (!M.list.length && !M.dom.length && !M.gov.length) return '';
   const dot = t => '<span class="c-dot" style="background:' + avColor(t) + '"></span>';
   const nf = x => (+x.toFixed(1)).toLocaleString('it-IT');
   const avgCell = (c, n) => '<b>' + fmtEuro(c / n / 100) + '</b><small style="display:block;color:#9aa5b1">' + fmtEuro(c / 100) + ' ÷ ' + nf(n) + '</small>';
   const dash = '<span class="mut">–</span>';
   let h = '<div class="c-sec" style="margin-top:16px">Complessivo turni + consuntivo — costo medio per esame</div>'
-    + '<div class="r-usub" style="margin:4px 0 6px">Costo medio <b>ponderato</b> per tipologia, escluso il turno ECG domenica (servizio a parte, riportato nella riga dedicata): (costo dei turni attribuito + costo a consuntivo) ÷ (esami coperti dal turno + esami a consuntivo). Ogni costo pesa in base al numero di esami a cui si applica, quindi non è la semplice media delle due tariffe.</div>'
+    + '<div class="r-usub" style="margin:4px 0 6px">Costo medio <b>ponderato</b> per tipologia, esclusi il turno ECG domenica e Govisit (servizi a parte, riportati nelle righe dedicate): (costo dei turni attribuito + costo a consuntivo) ÷ (esami coperti dal turno + esami a consuntivo). Ogni costo pesa in base al numero di esami a cui si applica, quindi non è la semplice media delle due tariffe.</div>'
     + '<div style="overflow-x:auto"><table class="c-tb"><thead><tr><th>Tipologia</th><th>Esami totali</th><th>Costo medio per esame</th></tr></thead><tbody>';
   M.list.forEach(a => {
     h += '<tr><td style="text-align:left"><b>' + dot(a.t) + escHtml(cntShort[a.t] || a.t) + '</b></td>'
@@ -2597,6 +2607,9 @@ function cntMixSummaryHtml(GT, rows) {
   });
   M.dom.forEach(a => {
     h += '<tr><td style="text-align:left"><b>' + dot(a.t) + escHtml(cntShort[a.t] || a.t) + ' domenica</b></td><td>' + nf(a.n) + '</td><td>' + avgCell(a.c, a.n) + '</td></tr>';
+  });
+  M.gov.forEach(a => {
+    h += '<tr><td style="text-align:left"><b>' + dot(a.t) + escHtml(cntShort[a.t] || a.t) + ' Govisit</b></td><td>' + nf(a.n) + '</td><td>' + avgCell(a.c, a.n) + '</td></tr>';
   });
   h += '</tbody></table></div>';
   return h;

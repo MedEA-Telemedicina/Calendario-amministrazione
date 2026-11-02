@@ -525,6 +525,18 @@
     .c-fi { width: 100%; }
   }
 
+  /* ═══════════ PERFORMANCE ═══════════ */
+  .pf-h { font-size: 15px; font-weight: 800; color: #1f2933; margin: 0 2px 2px; }
+  .pf-sub { font-size: 12.5px; color: #7b8794; margin: 0 2px 6px; }
+  .c-tb.c-pf th, .c-tb.c-pf td { white-space: nowrap; }
+  .c-tb.c-pf th.dist, .c-tb.c-pf td.dist { text-align: left; min-width: 170px; }
+  .pf-dist { display: flex; height: 10px; border-radius: 6px; overflow: hidden; background: #e6ebf2; }
+  .pf-dist i { display: block; height: 100%; }
+  .pf-leg { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: #5b6b7f; margin: 12px 2px 0; }
+  .pf-leg i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  .pf-ok.good { color: #188038; } .pf-ok.mid { color: #c25e00; } .pf-ok.bad { color: #d93025; }
+  .pf-ok { font-weight: 800; }
+
   /* ═══════════ MEDICI: TOOLBAR + CARD ═══════════ */
   .r-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
   .r-search { position: relative; flex: 1 1 240px; max-width: 420px; }
@@ -835,6 +847,7 @@
           <button class="r-tab active" id="sub-tab-conteggi" data-tab="conteggi" role="tab">🧮 Conteggi</button>
           <button class="r-tab" id="sub-tab-riepilogo" data-tab="riepilogo" role="tab">📊 Riepilogo turni</button>
           <button class="r-tab" id="sub-tab-medici" data-tab="medici" role="tab">👨‍⚕️ Medici <span class="cnt" id="cnt-medici">–</span></button>
+          <button class="r-tab" id="sub-tab-performance" data-tab="performance" role="tab">⏱️ Performance</button>
           <button class="r-tab" id="sub-tab-account" data-tab="account" role="tab">👤 Account</button>
         </div>
         <div class="r-user"><span class="r-avatar" id="r-user-av"></span><span id="r-user-name"></span></div>
@@ -888,6 +901,18 @@
         </div>
         <div class="r-banner" id="rend-status"></div>
         <div id="doc-list"></div>
+      </section>
+
+      <!-- ── Performance ── -->
+      <section class="r-sub" id="sub-view-performance">
+        <div class="c-nav">
+          <button class="c-arrow" data-cnt="prev" type="button" title="Mese precedente">‹</button>
+          <div class="c-month" id="perf-month">–</div>
+          <button class="c-arrow" data-cnt="next" type="button" title="Mese successivo">›</button>
+          <span class="r-spacer"></span>
+          <button class="r-btn primary" type="button" id="perf-xlsx">⬇ Esporta Excel</button>
+        </div>
+        <div id="perf-body"></div>
       </section>
 
       <!-- ── Account ── -->
@@ -1631,13 +1656,13 @@ function moveIndicator() {
   ind.style.transform = 'translateX(' + act.offsetLeft + 'px)';
 }
 function switchSubTab(tab) {
-  ['conteggi', 'riepilogo', 'medici', 'account'].forEach(t => {
+  ['conteggi', 'riepilogo', 'medici', 'performance', 'account'].forEach(t => {
     byId('sub-view-' + t).classList.toggle('active', t === tab);
     byId('sub-tab-' + t).classList.toggle('active', t === tab);
   });
   moveIndicator();
   if (tab === 'account' && isAdmin() && !usersLoaded) loadUsers();   // caricamento solo quando serve
-  if (tab === 'conteggi' || tab === 'riepilogo') cntOnShow();
+  if (tab === 'conteggi' || tab === 'riepilogo' || tab === 'performance') cntOnShow();
 }
 
 // ── accesso ──
@@ -3286,7 +3311,7 @@ function cntRiepRender() {
     : cnt.convHtml ? cnt.convHtml
     : '<div class="c-note" style="padding:18px">Nessun riepilogo disponibile per questo mese: servono il file degli esami caricato e almeno un turno valorizzato nel calendario.</div>';
 }
-function cntRender() { cnt.convHtml = ''; cnt.convData = null; cntRenderMain(); cntRiepRender(); }
+function cntRender() { cnt.convHtml = ''; cnt.convData = null; cntRenderMain(); cntRiepRender(); cntPerfRender(); }
 function cntRenderMain() {
   const body = byId('cnt-body'); if (!body || !cnt.ym) return;
   setTxt('cnt-month', ymLabel(cnt.ym));
@@ -3369,6 +3394,112 @@ function cntRenderMain() {
   const unmEl = body.querySelector('[data-unm]'); if (unmEl && unmWasOpen) unmEl.open = true;
   body.querySelectorAll('.c-doc').forEach(e => { if (e.dataset.n in wasOpen) e.open = wasOpen[e.dataset.n]; });
   cntApplyFilter();
+}
+
+// ═══════════ PERFORMANCE: tempo tra data richiesta e data refertazione ═══════════
+// La data di assegnazione al medico non è nel file: la STIMIAMO con l'orario di servizio (CNT_H_INI–CNT_H_FINE, 08:30–20:30).
+//  • richiesta in orario di servizio → assegnazione presunta = momento della richiesta
+//  • richiesta di notte (prima delle 08:30 o dopo le 20:30) → assegnazione presunta = prima apertura utile (08:30)
+// «Assegnazione presunta → referto» è quindi il tempo di lavorazione, senza l'attesa notturna.
+const CNT_PERF_SOGLIE = { 'ECG': 30 };            // minuti entro cui l'esame è «nei tempi», per tipologia
+const CNT_PERF_SOGLIA_DEF = 24 * 60;              // per tutte le altre tipologie (holter, ecc.): 24 ore
+const CNT_PERF_OLTRE = 48 * 60;                   // soglia «in ritardo»
+const CNT_PERF_BUCKETS = [
+  { l: '≤ 30 min', max: 30, c: '#34a853' }, { l: '30 min – 2 h', max: 120, c: '#9ccc65' },
+  { l: '2 – 24 h', max: 1440, c: '#fbbc04' }, { l: '24 – 48 h', max: CNT_PERF_OLTRE, c: '#fb8c00' }, { l: 'oltre 48 h', max: Infinity, c: '#d93025' }
+];
+const cntPerfSoglia = t => CNT_PERF_SOGLIE[t] || CNT_PERF_SOGLIA_DEF;
+const cntPerfTs = s => { const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) / 60000 : null; };
+function cntPerfAssign(tq) {
+  const day = Math.floor(tq / 1440) * 1440, mod = tq - day;
+  if (mod < CNT_H_INI) return day + CNT_H_INI;
+  if (mod >= CNT_H_FINE) return day + 1440 + CNT_H_INI;
+  return tq;
+}
+function cntPerfPct(arr, p) {
+  if (!arr.length) return null;
+  const a = arr.slice().sort((x, y) => x - y), i = (a.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i);
+  return a[lo] + (a[hi] - a[lo]) * (i - lo);
+}
+function cntPerfFmt(m) {
+  if (m == null) return '–';
+  if (m < 1) return '< 1 min';
+  if (m < 90) return Math.round(m) + ' min';
+  if (m < 48 * 60) return (m / 60).toLocaleString('it-IT', { maximumFractionDigits: 1 }) + ' h';
+  return (m / 1440).toLocaleString('it-IT', { maximumFractionDigits: 1 }) + ' gg';
+}
+function cntPerfCompute() {
+  const D = cnt.rec && cnt.rec.dati; if (!D || !D.esami) return { noDetail: true };
+  const out = { items: [], neg: 0, noTime: 0 };
+  Object.entries(D.esami).forEach(([med, L]) => L.forEach(e => {
+    const tq = cntPerfTs(e[5]), tr = cntPerfTs(e[6]);
+    if (tq == null || tr == null) { out.noTime++; return; }
+    if (tr < tq) { out.neg++; return; }              // referto precedente alla richiesta: dato incoerente, escluso
+    out.items.push({ m: med, t: e[1], tot: tr - tq, lav: tr - Math.min(cntPerfAssign(tq), tr) });
+  }));
+  return out;
+}
+function cntPerfStats(items) {
+  const n = items.length, tot = items.map(x => x.tot), lav = items.map(x => x.lav);
+  const ok = items.filter(x => x.lav <= cntPerfSoglia(x.t)).length, late = items.filter(x => x.lav > CNT_PERF_OLTRE).length;
+  const bk = CNT_PERF_BUCKETS.map(() => 0);
+  lav.forEach(v => { bk[CNT_PERF_BUCKETS.findIndex(b => v <= b.max)]++; });
+  return { n, medTot: cntPerfPct(tot, .5), medLav: cntPerfPct(lav, .5), p90: cntPerfPct(lav, .9), ok, okPct: n ? ok * 100 / n : null, late, bk };
+}
+function cntPerfGroups(items, key) {
+  const by = {}; items.forEach(x => (by[x[key]] || (by[x[key]] = [])).push(x));
+  return Object.entries(by).map(([k, l]) => Object.assign({ k }, cntPerfStats(l))).sort((a, b) => b.n - a.n);
+}
+const cntPerfOkHtml = p => p == null ? '–' : '<span class="pf-ok ' + (p >= 90 ? 'good' : p >= 70 ? 'mid' : 'bad') + '">' + p.toLocaleString('it-IT', { maximumFractionDigits: 0 }) + '%</span>';
+const cntPerfBarHtml = g => '<div class="pf-dist" title="' + escHtml(CNT_PERF_BUCKETS.map((b, i) => b.l + ': ' + g.bk[i]).join(' · ')) + '">'
+  + g.bk.map((v, i) => v ? '<i style="width:' + (v * 100 / g.n) + '%;background:' + CNT_PERF_BUCKETS[i].c + '"></i>' : '').join('') + '</div>';
+function cntPerfTable(rows, label, isType) {
+  const dot = t => '<span class="c-dot" style="background:' + avColor(t) + '"></span>';
+  return '<div class="c-scroll"><table class="c-tb c-pf"><thead><tr><th>' + label + '</th><th>Esami</th><th title="Dalla data richiesta alla data refertazione">Richiesta → referto</th>'
+    + '<th title="Dall\'assegnazione presunta alla data refertazione">Assegnazione presunta → referto</th><th title="Il 90% degli esami è lavorato entro questo tempo">90° percentile</th><th>Nei tempi</th><th>Oltre 48 h</th><th class="dist">Distribuzione</th></tr></thead><tbody>'
+    + rows.map(g => '<tr><td><b>' + (isType ? dot(g.k) + escHtml(cntShort[g.k] || g.k) : escHtml(g.k)) + '</b></td><td>' + g.n.toLocaleString('it-IT') + '</td><td>' + cntPerfFmt(g.medTot) + '</td><td><b>' + cntPerfFmt(g.medLav) + '</b></td><td>' + cntPerfFmt(g.p90)
+      + '</td><td>' + cntPerfOkHtml(g.okPct) + '</td><td>' + (g.late ? '<b style="color:#d93025">' + g.late.toLocaleString('it-IT') + '</b>' : '<span class="mut">0</span>') + '</td><td class="dist">' + cntPerfBarHtml(g) + '</td></tr>').join('')
+    + '</tbody></table></div>';
+}
+function cntPerfRender() {
+  const b = byId('perf-body'); if (!b) return;
+  setTxt('perf-month', cnt.ym ? ymLabel(cnt.ym) : '–');
+  const msg = t => { b.innerHTML = '<div class="r-panel c-note" style="padding:26px">' + t + '</div>'; cnt.perf = null; };
+  if (cnt.loading) return msg('Caricamento…');
+  if (cnt.err) return msg('Errore nel caricamento: ' + escHtml(cnt.err));
+  if (!cnt.rec) return msg('Nessun file degli esami per ' + escHtml(ymLabel(cnt.ym)) + '. Caricalo dalla scheda <b>Conteggi</b>.');
+  const P = cntPerfCompute();
+  if (P.noDetail) return msg('Il dettaglio dei singoli esami non è disponibile per questo mese: il file è stato caricato prima di questa funzione. Nella scheda <b>Conteggi</b> usa «Elimina e ricarica» e carica di nuovo il file.');
+  if (!P.items.length) return msg('Nel file non ci sono esami con <b>data richiesta</b> e <b>data refertazione</b> complete di orario: non posso calcolare i tempi.');
+  const all = cntPerfStats(P.items), byT = cntPerfGroups(P.items, 't');
+  if (cnt.perfT && !byT.some(g => g.k === cnt.perfT)) cnt.perfT = '';
+  const sel = cnt.perfT ? P.items.filter(x => x.t === cnt.perfT) : P.items, byM = cntPerfGroups(sel, 'm');
+  cnt.perf = { all, byT, byM, P };
+  const chip = (v, l, cls) => '<div class="c-chip' + (cls ? ' ' + cls : '') + '"><b>' + v + '</b><span>' + l + '</span></div>';
+  let h = '<div class="c-chips">' + chip(all.n.toLocaleString('it-IT'), 'esami analizzati')
+    + chip(cntPerfFmt(all.medTot), 'mediana richiesta → referto') + chip(cntPerfFmt(all.medLav), 'mediana assegnazione presunta → referto', 'tot')
+    + chip(all.okPct.toLocaleString('it-IT', { maximumFractionDigits: 0 }) + '%', 'esami nei tempi (ECG ≤ 30 min, altri ≤ 24 h)')
+    + chip(all.late.toLocaleString('it-IT'), 'esami oltre 48 h') + '</div>';
+  h += '<details class="c-det"><summary>ℹ️ Come sono calcolati i tempi</summary><div>La <b>data di assegnazione</b> al medico non è presente nel file, quindi è <b>presunta</b>: se la richiesta arriva in orario di servizio (08:30–20:30) coincide con la richiesta; se arriva di notte, coincide con la prima apertura utile (08:30 del mattino). '
+    + '«Assegnazione presunta → referto» è quindi il tempo di lavorazione, senza l\'attesa notturna. Si usa la <b>mediana</b> (metà degli esami è più veloce, metà più lenta) perché pochi casi molto vecchi falserebbero la media. «Nei tempi»: ECG entro 30 minuti, tutte le altre tipologie entro 24 ore.'
+    + (P.neg || P.noTime ? '<br><br>Esclusi dal calcolo: ' + [P.neg ? P.neg + ' con data refertazione precedente alla richiesta' : '', P.noTime ? P.noTime + ' senza data/ora completa' : ''].filter(Boolean).join(' · ') + '.' : '') + '</div></details>';
+  h += '<div class="r-panel"><div class="pf-h">Per tipologia</div><div class="pf-sub">Tempi di refertazione per tipo di esame.</div>' + cntPerfTable(byT, 'Tipologia', true)
+    + '<div class="pf-leg">' + CNT_PERF_BUCKETS.map(x => '<span><i style="background:' + x.c + '"></i>' + x.l + '</span>').join('') + '</div></div>';
+  h += '<div class="r-panel"><div class="pf-h">Per medico</div><div class="pf-sub">Filtra per tipologia per confrontare medici sullo stesso tipo di esame.</div>'
+    + '<div class="c-pills"><button type="button" class="c-pill' + (cnt.perfT ? '' : ' active') + '" data-pt="">Tutte <b>' + all.n.toLocaleString('it-IT') + '</b></button>'
+    + byT.map(g => '<button type="button" class="c-pill' + (cnt.perfT === g.k ? ' active' : '') + '" data-pt="' + escHtml(g.k) + '"><span class="c-dot" style="background:' + avColor(g.k) + '"></span>' + escHtml(cntShort[g.k] || g.k) + ' <b>' + g.n.toLocaleString('it-IT') + '</b></button>').join('') + '</div>'
+    + cntPerfTable(byM, 'Medico', false) + '</div>';
+  b.innerHTML = h;
+}
+function cntPerfExport() {
+  const C = cnt.perf; if (!C) { toast('Nessun dato da esportare', 'err'); return; }
+  const r1 = x => x == null ? '' : Math.round(x * 10) / 10;
+  const hdr = ['Esami', 'Mediana richiesta→referto (min)', 'Mediana assegnazione presunta→referto (min)', '90° percentile (min)', 'Nei tempi (%)', 'Oltre 48 h'];
+  const row = g => [g.k, g.n, r1(g.medTot), r1(g.medLav), r1(g.p90), r1(g.okPct), g.late];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Tipologia', ...hdr], ...C.byT.map(row)]), 'Per tipologia');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Medico', ...hdr], ...cntPerfGroups(C.P.items, 'm').map(row)]), 'Per medico');
+  XLSX.writeFile(wb, 'performance_' + cnt.ym + '.xlsx');
 }
 
 // ── caricamento dati / azioni ──
@@ -3633,6 +3764,12 @@ async function maybeImportLegacy() {
       cntRender();
       cntSavePesi().then(ok => toast(ok ? 'Pesi salvati e condivisi con tutti gli utenti' : 'Pesi NON salvati sul database (esegui supabase_persistenza.sql): validi solo su questo schermo', ok ? 'ok' : 'err'));
     });
+    byId('sub-view-performance').addEventListener('click', e => {
+      const n = e.target.closest('[data-cnt]');
+      if (n && (n.dataset.cnt === 'prev' || n.dataset.cnt === 'next')) { cntGo(n.dataset.cnt === 'prev' ? -1 : 1); return; }
+      const p = e.target.closest('[data-pt]'); if (p) { cnt.perfT = p.dataset.pt; cntPerfRender(); }
+    });
+    byId('perf-xlsx').addEventListener('click', cntPerfExport);
     byId('cnt-search').addEventListener('input', e => { cnt.q = e.target.value; cntApplyFilter(); });
     root.addEventListener('change', e => {
       if (e.target.dataset && e.target.dataset.att) cntToggleAtt(e.target.dataset.att, e.target.checked);

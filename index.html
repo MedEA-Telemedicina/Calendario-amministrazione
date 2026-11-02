@@ -2059,7 +2059,7 @@ async function saveDoctorModal() {
 // ═══════════ CONTEGGI MENSILI ═══════════
 // File esami del mese -> salvato (già aggregato) su Supabase in `conteggi_mesi`.
 // Turno conteggiato = medico in turno nel calendario "Medici in Turno" con almeno 1 esame refertato quel giorno.
-const cnt = { ym: null, rec: null, loaded: false, loading: false, err: '', shifts: null, shiftsErr: '', shiftsLoading: false, req: 0, scelte: {}, scelteMeta: {}, scelteErr: '', saving: 0, syncing: false, shiftsPrev: [], prevDati: null };
+const cnt = { ym: null, rec: null, loaded: false, loading: false, err: '', shifts: null, shiftsErr: '', shiftsLoading: false, req: 0, scelte: {}, scelteMeta: {}, scelteErr: '', saving: 0, syncing: false, shiftsPrev: [], prevDati: null, fileMeta: null };
 const pad2 = n => String(n).padStart(2, '0');
 const WD = ['D', 'L', 'M', 'M', 'G', 'V', 'S'];
 function ymLabel(ym) { const [y, m] = ym.split('-').map(Number); const s = new Date(y, m - 1, 1).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' }); return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -3311,7 +3311,7 @@ function cntRenderMain() {
   let h = '<div class="r-panel c-file"><div class="c-fi"><span class="c-fico">📄</span><div><div class="c-fname">' + escHtml(r.nome_file || 'file') + '</div><div class="r-usub">'
     + (r.righe_totali || 0).toLocaleString('it-IT') + ' righe · ' + (r.righe_conteggiate || 0).toLocaleString('it-IT') + ' esami refertati conteggiati · caricato il '
     + (r.caricato_il ? new Date(r.caricato_il).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '–') + (r.caricato_da ? ' da ' + escHtml(r.caricato_da) : '') + '</div></div></div>'
-    + '<div class="c-btns"><button class="r-btn ghost" data-cnt="expand">Espandi tutti</button><button class="r-btn ghost" data-cnt="collapse">Comprimi tutti</button>'
+    + '<div class="c-btns">' + (cnt.fileMeta ? '<button class="r-btn primary" data-cnt="dlfile" title="Scarica il file Excel originale caricato per questo mese">⬇ Scarica Excel</button>' : '<span class="r-usub" title="Elimina e ricarica il file per renderlo scaricabile">File originale non salvato</span>') + '<button class="r-btn ghost" data-cnt="expand">Espandi tutti</button><button class="r-btn ghost" data-cnt="collapse">Comprimi tutti</button>'
     + '<button class="r-btn ghost" data-cnt="del">🗑 Elimina e ricarica</button></div></div>';
   // note sull'assegnazione degli esami ai turni: un'unica riga compatta, dettagli a richiesta
   const nts = [], pl = (n, a, b) => n === 1 ? a : b;
@@ -3374,7 +3374,7 @@ function cntRenderMain() {
 // ── caricamento dati / azioni ──
 async function cntLoad() {
   const my = ++cnt.req;
-  cnt.loading = true; cnt.err = ''; cnt.rec = null; cnt.scelte = {}; cnt.scelteMeta = {}; cnt.scelteErr = ''; cnt.shifts = null; cnt.shiftsPrev = []; cnt.prevDati = null; cnt.shiftsErr = ''; cnt.shiftsLoading = false; cnt.loaded = false;
+  cnt.loading = true; cnt.err = ''; cnt.rec = null; cnt.scelte = {}; cnt.scelteMeta = {}; cnt.scelteErr = ''; cnt.shifts = null; cnt.shiftsPrev = []; cnt.prevDati = null; cnt.shiftsErr = ''; cnt.shiftsLoading = false; cnt.loaded = false; cnt.fileMeta = null;
   cntRender();
   try {
     const { data, error } = await getSb().from('conteggi_mesi').select('*').eq('mese', cnt.ym).maybeSingle();
@@ -3386,6 +3386,7 @@ async function cntLoad() {
       await cntLoadPesi(); if (my !== cnt.req) return;
       try { const pr = await getSb().from('conteggi_mesi').select('dati').eq('mese', ymAdd(cnt.ym, -1)).maybeSingle(); if (my !== cnt.req) return; cnt.prevDati = pr && pr.data ? pr.data.dati : null; } catch (e) { cnt.prevDati = null; }   // facoltativo: serve solo a stimare la capienza del turno dell'ultimo giorno del mese prima
       if (!cnt.scelteErr) await cntMigrateLocal(cnt.ym);
+      await cntLoadFileMeta(my); if (my !== cnt.req) return;
     }
   } catch (e) { if (my !== cnt.req) return; cnt.err = e.message || String(e); }
   cnt.loading = false; cntRender(); cntSubscribe();
@@ -3411,6 +3412,7 @@ async function cntUpload(file) {
     if (error) throw error;
     cnt.rec = Object.assign({ caricato_il: new Date().toISOString() }, payload);
     toast('Conteggi di ' + ymLabel(ym) + ' salvati', 'ok');
+    await cntSaveFile(file, ym);
     const my = ++cnt.req; cnt.shifts = null; cnt.shiftsErr = ''; cnt.shiftsLoading = true; cntRender();
     await cntLoadShifts(my); if (my === cnt.req) cntRender();
   } catch (e) {
@@ -3418,20 +3420,67 @@ async function cntUpload(file) {
     say(e.message || String(e));
   }
 }
+// ── file Excel originale del mese (tabella conteggi_file: salvato in base64, letto solo al click su «Scarica Excel») ──
+const fileTblMissing = er => /conteggi_file|42P01|does not exist|schema cache/i.test((er && (er.message || er.code)) || '');
+function cntBufToB64(buf) {
+  const u8 = new Uint8Array(buf), CH = 0x8000; let bin = '';
+  for (let i = 0; i < u8.length; i += CH) bin += String.fromCharCode.apply(null, u8.subarray(i, i + CH));
+  return btoa(bin);
+}
+async function cntLoadFileMeta(my) {
+  try {
+    const { data, error } = await getSb().from('conteggi_file').select('mese,nome_file,dimensione,caricato_il').eq('mese', cnt.ym).maybeSingle();
+    if (my !== undefined && my !== cnt.req) return;
+    cnt.fileMeta = !error && data ? data : null;
+  } catch (e) { cnt.fileMeta = null; }
+}
+async function cntSaveFile(file, ym) {
+  try {
+    const buf = await file.arrayBuffer();
+    const row = { mese: ym, nome_file: file.name, mime: file.type || '', dimensione: buf.byteLength, contenuto: cntBufToB64(buf), caricato_da: displayName(currentUser.email), caricato_il: new Date().toISOString() };
+    const { error } = await getSb().from('conteggi_file').upsert(row, { onConflict: 'mese' });
+    if (error) throw error;
+    if (ym === cnt.ym) { cnt.fileMeta = { mese: ym, nome_file: row.nome_file, dimensione: row.dimensione, caricato_il: row.caricato_il }; cntRender(); }
+  } catch (e) {
+    toast(fileTblMissing(e)
+      ? 'File Excel originale NON salvato: manca la tabella conteggi_file su Supabase (esegui supabase_conteggi_file.sql)'
+      : 'File Excel originale NON salvato: ' + (e.message || e), 'err');
+  }
+}
+async function cntDownloadFile(btn) {
+  const ym = cnt.ym; if (!ym) return;
+  const old = btn ? btn.textContent : ''; if (btn) { btn.disabled = true; btn.textContent = 'Download…'; }
+  try {
+    const { data, error } = await getSb().from('conteggi_file').select('nome_file,mime,contenuto').eq('mese', ym).maybeSingle();
+    if (error) throw error;
+    if (!data || !data.contenuto) { cnt.fileMeta = null; cntRender(); toast('File originale non disponibile per questo mese: ricaricalo', 'err'); return; }
+    const bin = atob(data.contenuto), u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    const blob = new Blob([u8], { type: data.mime || 'application/octet-stream' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = data.nome_file || ('esami_' + ym + '.xlsx');
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast('File Excel scaricato', 'ok');
+  } catch (e) { toast('Download non riuscito: ' + (e.message || e), 'err'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = old; } }
+}
 async function cntDelete() {
   if (!cnt.rec || !confirm('Eliminare i conteggi di ' + ymLabel(cnt.ym) + ' salvati? Verranno azzerate anche le scelte sui turni aggiuntivi (doppio/triplo turno) per tutti gli utenti. Potrai ricaricare il file.')) return;
   const ym = cnt.ym;
   // prima azzero le scelte del mese (doppi/tripli turni), poi elimino il file: così dopo il ricaricamento si riparte da zero
   const rs = await getSb().from('conteggi_scelte').delete().eq('mese', ym);
   if (rs.error && !scelteMissing(rs.error.message || rs.error.code)) { toast('Errore nell\'azzeramento delle scelte: ' + rs.error.message, 'err'); return; }
+  const rf = await getSb().from('conteggi_file').delete().eq('mese', ym);   // file originale (tabella facoltativa)
+  if (rf.error && !fileTblMissing(rf.error)) { toast('Errore nell\'eliminazione del file originale: ' + rf.error.message, 'err'); return; }
   const { error } = await getSb().from('conteggi_mesi').delete().eq('mese', ym);
   if (error) { toast('Errore: ' + error.message, 'err'); return; }
   try { localStorage.removeItem('cnt_extra_' + ym); } catch (e) {}
   cnt.scelte = {}; cnt.scelteMeta = {};
-  cnt.req++; cnt.rec = null; cnt.shifts = null; cnt.shiftsErr = ''; cnt.shiftsLoading = false;
+  cnt.req++; cnt.rec = null; cnt.fileMeta = null; cnt.shifts = null; cnt.shiftsErr = ''; cnt.shiftsLoading = false;
   toast('Conteggi eliminati', 'ok'); cntRender();
 }
-function cntReset() { cntUnsubscribe(); cnt.scelte = {}; cnt.scelteMeta = {}; cnt.scelteErr = ''; cnt.req++; cnt.ym = null; cnt.rec = null; cnt.loaded = false; cnt.loading = false; cnt.err = ''; cnt.shifts = null; cnt.shiftsErr = ''; cnt.shiftsLoading = false; }
+function cntReset() { cnt.fileMeta = null; cntUnsubscribe(); cnt.scelte = {}; cnt.scelteMeta = {}; cnt.scelteErr = ''; cnt.req++; cnt.ym = null; cnt.rec = null; cnt.loaded = false; cnt.loading = false; cnt.err = ''; cnt.shifts = null; cnt.shiftsErr = ''; cnt.shiftsLoading = false; }
 
 // ── export Excel della lista medici ──
 function exportDoctorsExcel() {
@@ -3562,6 +3611,7 @@ async function maybeImportLegacy() {
       if (a === 'prev') cntGo(-1); else if (a === 'next') cntGo(1);
       else if (a === 'adddoc') { e.preventDefault(); cntAddDoctor(b.dataset.name); }
       else if (a === 'del') cntDelete(); else if (a === 'reload') cntLoad();
+      else if (a === 'dlfile') cntDownloadFile(b);
       else if (a === 'expand' || a === 'collapse') document.querySelectorAll('#cnt-body .c-doc').forEach(e => { e.open = a === 'expand'; });
       else if (a === 'detail') { e.preventDefault(); const D = (cnt.det || {})[b.dataset.id]; if (D) { byId('det-title').textContent = '🔎 Dettaglio esami · ' + D.nome + ' · ' + ymLabel(cnt.ym); cnt.detCur = D; cnt.detF = { q: '', t: '' }; byId('det-body').innerHTML = cntExamDetailHtml(D); cntDetFilter(); byId('det-xlsx').style.display = D.has && D.list.length ? '' : 'none'; openModal('det-modal'); } }
       else if (a === 'sav') { const w = b.closest('.c-grpwrap'), on = w.classList.toggle('sav-off'); (cnt.savOpen = cnt.savOpen || {})[b.dataset.id] = !on; }

@@ -536,6 +536,17 @@
   .pf-leg i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
   .pf-ok.good { color: #188038; } .pf-ok.mid { color: #c25e00; } .pf-ok.bad { color: #d93025; }
   .pf-ok { font-weight: 800; }
+  .pf-late { font: inherit; font-weight: 800; color: #d93025; background: #fdecea; border: 1px solid #f5c2bd; border-radius: 999px; padding: 2px 12px; cursor: pointer; }
+  .pf-late:hover { background: #fbd5d1; }
+  .pf-tabs { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0 14px; }
+  .pf-tab { display: inline-flex; align-items: center; gap: 9px; font: inherit; font-size: 14.5px; font-weight: 800; color: #1f2933; background: #fff; border: 2px solid #d5dde8; border-radius: 14px; padding: 10px 16px; cursor: pointer; transition: background .15s, border-color .15s, color .15s, box-shadow .15s; }
+  .pf-tab .c-dot { width: 11px; height: 11px; }
+  .pf-tab em { font-style: normal; font-size: 12px; font-weight: 800; background: rgba(15,23,42,.08); border-radius: 999px; padding: 2px 9px; }
+  .pf-tab:hover { border-color: #1a73e8; color: #1a73e8; }
+  .pf-tab.active { background: #1a73e8; border-color: #1a73e8; color: #fff; box-shadow: 0 4px 14px rgba(26,115,232,.32); }
+  .pf-tab.active em { background: rgba(255,255,255,.25); color: #fff; }
+  .pf-sum { font-size: 13px; color: #5b6b7f; margin: 2px 2px 10px; }
+  .pf-sum b { color: #1f2933; }
 
   /* ═══════════ MEDICI: TOOLBAR + CARD ═══════════ */
   .r-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
@@ -979,6 +990,15 @@
       <div class="r-modal-h"><h3 id="det-title">🔎 Dettaglio esami</h3><button class="r-x" type="button" data-close="det" aria-label="Chiudi">✕</button></div>
       <div class="r-modal-b" id="det-body"></div>
       <div class="r-modal-f"><button class="r-btn primary" type="button" id="det-xlsx">⬇ Esporta Excel</button><button class="r-btn ghost" type="button" data-close="det">Chiudi</button></div>
+    </div>
+  </div>
+
+  <!-- ═══ MODALE PERFORMANCE: ESAMI FUORI TEMPO ═══ -->
+  <div class="r-modal-bg" id="pf-modal">
+    <div class="r-modal" style="max-width:1000px" role="dialog" aria-modal="true" aria-labelledby="pf-title">
+      <div class="r-modal-h"><h3 id="pf-title">⏱️ Esami fuori tempo</h3><button class="r-x" type="button" data-close="pf" aria-label="Chiudi">✕</button></div>
+      <div class="r-modal-b" id="pf-body"></div>
+      <div class="r-modal-f"><button class="r-btn primary" type="button" id="pf-xlsx">⬇ Esporta Excel</button><button class="r-btn ghost" type="button" data-close="pf">Chiudi</button></div>
     </div>
   </div>
 
@@ -3408,8 +3428,8 @@ function cntRenderMain() {
 //     Se la richiesta arriva durante il turno, l'assegnazione coincide con la richiesta.
 //  2) senza un turno utile (o turni non disponibili): orario di servizio 08:30–20:30; una richiesta notturna vale assegnata alle 08:30.
 // «Assegnazione presunta → referto» è quindi il tempo di lavorazione, senza l'attesa notturna.
-// Tempi di refertazione da contratto (minuti): ECG 15 min · holter e spirometria 24 h · polisonnografia 48 h
-const CNT_PERF_SOGLIE = { 'ECG': 15, 'SPIROMETRIA': 24 * 60, 'POLISONNOGRAFIA': 48 * 60 };
+// Tempi di refertazione da contratto (minuti): ECG 15 min · holter (anche 12 derivazioni) e spirometria 24 h · polisonnografia 48 h
+const CNT_PERF_SOGLIE = { 'ECG': 15, 'HOLTER CARDIACO': 24 * 60, 'HOLTER PRESSORIO': 24 * 60, 'HOLTER CARDIACO 12D': 24 * 60, 'SPIROMETRIA': 24 * 60, 'POLISONNOGRAFIA': 48 * 60 };
 const CNT_PERF_SOGLIA_DEF = 24 * 60;              // holter (cardiaco, pressorio, 12D) e tutte le altre tipologie: 24 ore
 // Fasce RELATIVE al limite di contratto della tipologia (così ECG, holter e polisonno sono confrontabili)
 const CNT_PERF_BUCKETS = [
@@ -3421,7 +3441,7 @@ const CNT_PERF_BUCKETS = [
 // tipologie escluse dalla scheda Performance
 const CNT_PERF_ESCLUSE = ['DERMATOLOGIA', 'TRIAGE', 'RETINOGRAFIA', 'NUTRIZIONE'];   // «BIA nutrizione» (anche scritta «BIA» da sola)
 const cntPerfEsclusa = t => { const u = String(t).toUpperCase(); return /\bBIA\b/.test(u) || CNT_PERF_ESCLUSE.some(x => u.includes(x)); };
-const cntPerfSoglia = t => CNT_PERF_SOGLIE[t] || CNT_PERF_SOGLIA_DEF;
+const cntPerfSoglia = t => CNT_PERF_SOGLIE[t] || (/12\s*(D\b|DERIV)/i.test(String(t)) ? 24 * 60 : CNT_PERF_SOGLIA_DEF);   // qualsiasi tipologia «12D / 12 derivazioni»: 24 h
 const cntPerfTs = s => { const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) / 60000 : null; };
 function cntPerfAssign(tq) {
   const day = Math.floor(tq / 1440) * 1440, mod = tq - day;
@@ -3474,7 +3494,7 @@ function cntPerfCompute() {
     if (tr < tq) { out.neg++; return; }              // referto precedente alla richiesta: dato incoerente, escluso
     let ta = wins ? cntPerfAssignShift(wins, tq, tr) : null;
     if (ta != null) out.nT++; else { ta = Math.min(cntPerfAssign(tq), tr); out.nS++; }
-    out.items.push({ m: med, t: e[1], tot: tr - tq, lav: tr - ta });
+    out.items.push({ m: med, t: e[1], tot: tr - tq, lav: tr - ta, id: e[0], pz: e[4], cl: e[3], rq: e[5], rf: e[6] });
   }); });
   return out;
 }
@@ -3498,7 +3518,7 @@ function cntPerfTable(rows, label, isType) {
   const dot = t => '<span class="c-dot" style="background:' + avColor(t) + '"></span>';
   return '<div class="c-scroll"><table class="c-tb c-pf"><thead><tr><th>' + label + '</th><th>Esami</th><th title="Dalla data richiesta alla data refertazione">Richiesta → referto</th>'
     + '<th title="Tempo di lavorazione (da assegnazione presunta) entro il limite di contratto">Nei tempi di contratto</th><th title="Esami oltre il limite di contratto della propria tipologia">Fuori tempo</th><th class="dist">Distribuzione</th></tr></thead><tbody>'
-    + rows.map(g => '<tr><td><b>' + (isType ? dot(g.k) + escHtml(cntShort[g.k] || g.k) : escHtml(g.k)) + '</b></td><td>' + g.n.toLocaleString('it-IT') + '</td><td>' + cntPerfFmt(g.medTot) + '</td><td>' + cntPerfOkHtml(g.okPct) + '</td><td>' + (g.late ? '<b style="color:#d93025">' + g.late.toLocaleString('it-IT') + '</b>' : '<span class="mut">0</span>') + '</td><td class="dist">' + cntPerfBarHtml(g) + '</td></tr>').join('')
+    + rows.map(g => '<tr><td><b>' + (isType ? dot(g.k) + escHtml(cntShort[g.k] || g.k) : escHtml(g.k)) + '</b></td><td>' + g.n.toLocaleString('it-IT') + '</td><td>' + cntPerfFmt(g.medTot) + '</td><td>' + cntPerfOkHtml(g.okPct) + '</td><td>' + (g.late ? '<button type="button" class="pf-late" data-pfk="' + (isType ? 't' : 'm') + '" data-pfv="' + escHtml(g.k) + '" title="Mostra gli esami fuori tempo">' + g.late.toLocaleString('it-IT') + '</button>' : '<span class="mut">0</span>') + '</td><td class="dist">' + cntPerfBarHtml(g) + '</td></tr>').join('')
     + '</tbody></table></div>';
 }
 function cntPerfRender() {
@@ -3512,7 +3532,7 @@ function cntPerfRender() {
   if (P.noDetail) return msg('Il dettaglio dei singoli esami non è disponibile per questo mese: il file è stato caricato prima di questa funzione. Nella scheda <b>Conteggi</b> usa «Elimina e ricarica» e carica di nuovo il file.');
   if (!P.items.length) return msg('Nel file non ci sono esami con <b>data richiesta</b> e <b>data refertazione</b> complete di orario: non posso calcolare i tempi.');
   const all = cntPerfStats(P.items), byT = cntPerfGroups(P.items, 't');
-  if (cnt.perfT && !byT.some(g => g.k === cnt.perfT)) cnt.perfT = '';
+  if (!cnt.perfT || !byT.some(g => g.k === cnt.perfT)) cnt.perfT = byT[0].k;   // sempre una categoria selezionata (la più numerosa di default)
   const sel = cnt.perfT ? P.items.filter(x => x.t === cnt.perfT) : P.items, byM = cntPerfGroups(sel, 'm');
   cnt.perf = { all, byT, byM, P };
   const chip = (v, l, cls) => '<div class="c-chip' + (cls ? ' ' + cls : '') + '"><b>' + v + '</b><span>' + l + '</span></div>';
@@ -3524,15 +3544,51 @@ function cntPerfRender() {
     + 'Senza un turno utile (o se i turni non sono disponibili) si usa l\'orario di servizio 08:30–20:30: una richiesta notturna vale assegnata alle 08:30. '
     + 'Esami assegnati dal turno: <b>' + P.nT.toLocaleString('it-IT') + '</b> · da orario di servizio: <b>' + P.nS.toLocaleString('it-IT') + '</b>' + (cnt.shiftsLoading ? ' (turni in caricamento…)' : !P.shifts ? ' (turni non disponibili: collega Google)' : '') + '. '
     + '«Assegnazione presunta → referto» è quindi il tempo di lavorazione. Si usa la <b>mediana</b> (metà degli esami è più veloce, metà più lenta) perché pochi casi molto vecchi falserebbero la media. '
-    + 'Le barre mostrano come si distribuiscono gli esami rispetto al <b>limite della propria tipologia</b> (es. per l\'ECG 15 min, per la polisonnografia 48 h), quindi i colori hanno lo stesso significato per tutte le righe. Limiti di contratto: <b>ECG 15 minuti</b>, <b>holter e spirometria 24 ore</b>, <b>polisonnografia 48 ore</b>. «Nei tempi di contratto» conta dall\'assegnazione presunta; «Fuori tempo» = esami oltre il limite della propria tipologia.'
+    + 'Le barre mostrano come si distribuiscono gli esami rispetto al <b>limite della propria tipologia</b> (es. per l\'ECG 15 min, per la polisonnografia 48 h), quindi i colori hanno lo stesso significato per tutte le righe. Limiti di contratto: <b>ECG 15 minuti</b>, <b>holter (12 derivazioni incluso) e spirometria 24 ore</b>, <b>polisonnografia 48 ore</b>. «Nei tempi di contratto» conta dall\'assegnazione presunta; «Fuori tempo» = esami oltre il limite della propria tipologia.'
     + (P.neg || P.noTime ? '<br><br>Esclusi dal calcolo: ' + [P.neg ? P.neg + ' con data refertazione precedente alla richiesta' : '', P.noTime ? P.noTime + ' senza data/ora completa' : ''].filter(Boolean).join(' · ') + '.' : '') + '</div></details>';
   h += '<div class="r-panel"><div class="pf-h">Per tipologia</div><div class="pf-sub">Tempi di refertazione per tipo di esame.</div>' + cntPerfTable(byT, 'Tipologia', true)
     + '<div class="pf-leg">' + CNT_PERF_BUCKETS.map(x => '<span><i style="background:' + x.c + '"></i>' + x.l + '</span>').join('') + '</div></div>';
-  h += '<div class="r-panel"><div class="pf-h">Per medico</div><div class="pf-sub">Filtra per tipologia per confrontare medici sullo stesso tipo di esame.</div>'
-    + '<div class="c-pills"><button type="button" class="c-pill' + (cnt.perfT ? '' : ' active') + '" data-pt="">Tutte <b>' + all.n.toLocaleString('it-IT') + '</b></button>'
-    + byT.map(g => '<button type="button" class="c-pill' + (cnt.perfT === g.k ? ' active' : '') + '" data-pt="' + escHtml(g.k) + '"><span class="c-dot" style="background:' + avColor(g.k) + '"></span>' + escHtml(cntShort[g.k] || g.k) + ' <b>' + g.n.toLocaleString('it-IT') + '</b></button>').join('') + '</div>'
+  h += '<div class="r-panel"><div class="pf-h">Per medico</div><div class="pf-sub">Scegli una categoria per confrontare i medici sullo stesso tipo di esame.</div>'
+    + '<div class="pf-tabs" role="tablist">' + byT.map(g => '<button type="button" role="tab" class="pf-tab' + (cnt.perfT === g.k ? ' active' : '') + '" data-pt="' + escHtml(g.k) + '"><span class="c-dot" style="background:' + avColor(g.k) + '"></span>' + escHtml(cntShort[g.k] || g.k) + '<em>' + g.n.toLocaleString('it-IT') + '</em></button>').join('') + '</div>'
     + cntPerfTable(byM, 'Medico', false) + '</div>';
   b.innerHTML = h;
+}
+function cntPerfFmtLong(m) {
+  m = Math.round(m); const d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60), mi = m % 60;
+  return d ? d + ' g ' + h + ' h ' + mi + ' min' : h ? h + ' h ' + mi + ' min' : mi + ' min';
+}
+// elenco esami fuori tempo (oltre il limite di contratto) di una tipologia ('t') o di un medico ('m', con l'eventuale filtro tipologia attivo)
+function cntPerfOpen(kind, val) {
+  const C = cnt.perf; if (!C) return;
+  const items = C.P.items.filter(x => x.lav > cntPerfSoglia(x.t) && (kind === 't' ? x.t === val : x.m === val && (!cnt.perfT || x.t === cnt.perfT))).sort((a, b) => b.tot - a.tot);
+  cnt.pfCur = { kind, val, items };
+  const tip = t => cntShort[t] || t;
+  byId('pf-title').textContent = '⏱️ Esami fuori tempo · ' + (kind === 't' ? tip(val) : val + (cnt.perfT ? ' · ' + tip(cnt.perfT) : '')) + ' · ' + ymLabel(cnt.ym);
+  const dot = t => '<span class="c-dot" style="background:' + avColor(t) + '"></span>', td = v => v ? escHtml(v) : '<span class="mut">–</span>';
+  byId('pf-body').innerHTML = !items.length ? '<div class="c-note" style="padding:24px">Nessun esame fuori tempo.</div>'
+    : '<div class="pf-sum"><b>' + items.length.toLocaleString('it-IT') + '</b> esami fuori tempo · tempo massimo <b>' + cntPerfFmtLong(items[0].tot) + '</b> · mediana <b>' + cntPerfFmtLong(cntPerfPct(items.map(x => x.tot), .5)) + '</b></div>'
+    + '<div class="c-dsearch"><input class="r-input" id="pf-q" type="search" placeholder="🔍 Cerca per ID, medico, cliente o paziente…" autocomplete="off"><span class="r-usub" id="pf-cnt"></span></div>'
+    + '<div class="c-scroll" style="margin-top:0"><table class="c-tb c-left c-pf"><thead><tr><th>ID</th><th>Tipologia</th><th>Medico</th><th>Cliente</th><th>Paziente</th><th>Data richiesta</th><th>Data refertazione</th><th>Richiesta → referto</th><th>Limite</th></tr></thead><tbody>'
+    + items.map(x => '<tr data-s="' + escHtml(nameKey([x.id, x.m, x.cl, x.pz].join(' '))) + '"><td class="mut">' + td(x.id) + '</td><td><b>' + dot(x.t) + escHtml(tip(x.t)) + '</b></td><td>' + escHtml(x.m) + '</td><td>' + td(x.cl) + '</td><td>' + td(x.pz)
+      + '</td><td>' + (cntFmtDT(x.rq) || '–') + '</td><td>' + (cntFmtDT(x.rf) || '–') + '</td><td><b style="color:#d93025">' + cntPerfFmtLong(x.tot) + '</b></td><td class="mut">' + cntPerfFmtLong(cntPerfSoglia(x.t)) + '</td></tr>').join('')
+    + '</tbody></table></div><div class="c-note" id="pf-empty" style="display:none;padding:22px">Nessun esame corrisponde alla ricerca.</div>';
+  openModal('pf-modal'); if (items.length) cntPerfFilter('');
+}
+function cntPerfFilter(q) {
+  q = nameKey(q || ''); let n = 0; const rows = document.querySelectorAll('#pf-body tbody tr');
+  rows.forEach(tr => { const ok = !q || tr.dataset.s.includes(q); tr.hidden = !ok; if (ok) n++; });
+  setTxt('pf-cnt', n === rows.length ? rows.length.toLocaleString('it-IT') + ' esami' : n.toLocaleString('it-IT') + ' di ' + rows.length.toLocaleString('it-IT') + ' esami');
+  const em = byId('pf-empty'); if (em) em.style.display = n ? 'none' : 'block';
+}
+function cntPerfLateExport() {
+  const D = cnt.pfCur; if (!D || !D.items.length) { toast('Nessun esame da esportare', 'err'); return; }
+  const q = nameKey((byId('pf-q') || {}).value || ''), rows = D.items.filter(x => !q || nameKey([x.id, x.m, x.cl, x.pz].join(' ')).includes(q));
+  const aoa = [['ID', 'TIPOLOGIA', 'MEDICO', 'CLIENTE', 'PAZIENTE', 'DATA RICHIESTA', 'DATA REFERTAZIONE', 'RICHIESTA→REFERTO (min)', 'LIMITE CONTRATTO (min)'],
+    ...rows.map(x => [x.id, x.t, x.m, x.cl, x.pz, cntFmtDT(x.rq), cntFmtDT(x.rf), Math.round(x.tot), cntPerfSoglia(x.t)])];
+  const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = [{ wch: 12 }, { wch: 24 }, { wch: 22 }, { wch: 24 }, { wch: 26 }, { wch: 17 }, { wch: 19 }, { wch: 22 }, { wch: 22 }];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Fuori tempo');
+  XLSX.writeFile(wb, 'esami_fuori_tempo_' + String(D.val).replace(/[^A-Za-z0-9]+/g, '_') + '_' + cnt.ym + '.xlsx');
+  toast('Excel scaricato (' + rows.length + ' esami)', 'ok');
 }
 function cntPerfExport() {
   const C = cnt.perf; if (!C) { toast('Nessun dato da esportare', 'err'); return; }
@@ -3812,9 +3868,12 @@ async function maybeImportLegacy() {
     byId('sub-view-performance').addEventListener('click', e => {
       const n = e.target.closest('[data-cnt]');
       if (n && (n.dataset.cnt === 'prev' || n.dataset.cnt === 'next')) { cntGo(n.dataset.cnt === 'prev' ? -1 : 1); return; }
+      const l = e.target.closest('[data-pfk]'); if (l) { cntPerfOpen(l.dataset.pfk, l.dataset.pfv); return; }
       const p = e.target.closest('[data-pt]'); if (p) { cnt.perfT = p.dataset.pt; cntPerfRender(); }
     });
     byId('perf-xlsx').addEventListener('click', cntPerfExport);
+    byId('pf-modal').addEventListener('input', e => { if (e.target.id === 'pf-q') cntPerfFilter(e.target.value); });
+    byId('pf-xlsx').addEventListener('click', cntPerfLateExport);
     byId('cnt-search').addEventListener('input', e => { cnt.q = e.target.value; cntApplyFilter(); });
     root.addEventListener('change', e => {
       if (e.target.dataset && e.target.dataset.att) cntToggleAtt(e.target.dataset.att, e.target.checked);
@@ -3875,10 +3934,10 @@ async function maybeImportLegacy() {
   // chiusura modali: pulsanti ✕/Annulla, click sullo sfondo, tasto Esc
   document.addEventListener('click', e => {
     const c = e.target.closest('[data-close]');
-    if (c) { c.dataset.close === 'doc' ? closeDoctorModal() : c.dataset.close === 'det' ? closeModal('det-modal') : c.dataset.close === 'extra' ? closeModal('extra-modal') : closeUserModal(); return; }
+    if (c) { c.dataset.close === 'doc' ? closeDoctorModal() : c.dataset.close === 'det' ? closeModal('det-modal') : c.dataset.close === 'pf' ? closeModal('pf-modal') : c.dataset.close === 'extra' ? closeModal('extra-modal') : closeUserModal(); return; }
     if (e.target.classList && e.target.classList.contains('r-modal-bg')) closeModal(e.target.id);
   });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDoctorModal(); closeUserModal(); closeModal('det-modal'); closeModal('extra-modal'); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDoctorModal(); closeUserModal(); closeModal('det-modal'); closeModal('pf-modal'); closeModal('extra-modal'); } });
 })();
 
 // ─── UI HELPERS ───────────────────────────────────────────────

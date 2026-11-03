@@ -623,6 +623,8 @@
   .r-modal-h h3 { font-size: 18px; font-weight: 800; color: #1f2933; }
   .r-x { border: none; background: #f0f3f7; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 13px; color: #5b6b7f; transition: background .15s; flex-shrink: 0; }
   .r-x:hover { background: #e2e8f0; }
+  .r-modal.r-modal-xl { max-width: min(1600px, 98vw); max-height: 95vh; }   /* popup con tabelle larghe: si chiudono solo con la ✕ */
+  .r-modal-bg.lock { padding: 10px; }
   .r-modal-b { padding: 0 24px 10px; overflow-y: auto; flex: 1; overscroll-behavior: contain; }
   .r-modal-f { padding: 14px 24px 20px; border-top: 1px solid #eef1f5; display: flex; justify-content: flex-end; gap: 10px; }
   .r-statusrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #f6f8fb; border-radius: 13px; padding: 11px 14px; margin-top: 14px; font-size: 13.5px; }
@@ -985,20 +987,20 @@
   </div>
 
   <!-- ═══ MODALE DETTAGLIO ESAMI (per medico) ═══ -->
-  <div class="r-modal-bg" id="det-modal">
-    <div class="r-modal" style="max-width:920px" role="dialog" aria-modal="true" aria-labelledby="det-title">
+  <div class="r-modal-bg lock" id="det-modal">
+    <div class="r-modal r-modal-xl" role="dialog" aria-modal="true" aria-labelledby="det-title">
       <div class="r-modal-h"><h3 id="det-title">🔎 Dettaglio esami</h3><button class="r-x" type="button" data-close="det" aria-label="Chiudi">✕</button></div>
       <div class="r-modal-b" id="det-body"></div>
-      <div class="r-modal-f"><button class="r-btn primary" type="button" id="det-xlsx">⬇ Esporta Excel</button><button class="r-btn ghost" type="button" data-close="det">Chiudi</button></div>
+      <div class="r-modal-f"><button class="r-btn primary" type="button" id="det-xlsx">⬇ Esporta Excel</button></div>
     </div>
   </div>
 
   <!-- ═══ MODALE PERFORMANCE: ESAMI FUORI TEMPO ═══ -->
-  <div class="r-modal-bg" id="pf-modal">
-    <div class="r-modal" style="max-width:1000px" role="dialog" aria-modal="true" aria-labelledby="pf-title">
+  <div class="r-modal-bg lock" id="pf-modal">
+    <div class="r-modal r-modal-xl" role="dialog" aria-modal="true" aria-labelledby="pf-title">
       <div class="r-modal-h"><h3 id="pf-title">⏱️ Esami fuori tempo</h3><button class="r-x" type="button" data-close="pf" aria-label="Chiudi">✕</button></div>
       <div class="r-modal-b" id="pf-body"></div>
-      <div class="r-modal-f"><button class="r-btn primary" type="button" id="pf-xlsx">⬇ Esporta Excel</button><button class="r-btn ghost" type="button" data-close="pf">Chiudi</button></div>
+      <div class="r-modal-f"><button class="r-btn primary" type="button" id="pf-xlsx">⬇ Esporta Excel</button></div>
     </div>
   </div>
 
@@ -3456,7 +3458,7 @@ function cntPerfShiftWin() {
   cnt.shifts.concat(cnt.shiftsPrev || []).forEach(ev => {
     const k = nameKey(ev.doctor); if (!(k in own)) own[k] = cntOwner(k, ms);
     const o = own[k]; if (!o) return;
-    const w = ev.time === 'pom' ? [CNT_H_SPLIT, CNT_H_FINE] : ev.time === 'mat' ? [CNT_H_INI, CNT_H_SPLIT] : [CNT_H_INI, CNT_H_FINE];
+    const w = ev.time === 'pom' ? [CNT_H_SPLIT, CNT_H_FINE, ev.kind] : ev.time === 'mat' ? [CNT_H_INI, CNT_H_SPLIT, ev.kind] : [CNT_H_INI, CNT_H_FINE, ev.kind];
     ((by[o.id] || (by[o.id] = {}))[ev.date] || (by[o.id][ev.date] = [])).push(w);
   });
   return by;
@@ -3470,6 +3472,18 @@ function cntPerfAssignShift(wins, tq, tr) {
     if (best != null) return best <= tr ? best : null;
   }
   return null;
+}
+// Domenica = giorno bonus (non lavorativo) per tutti gli esami tranne l'ECG: se tra i due istanti cade una domenica in cui il medico NON è in turno
+// (un turno solo-ECG non conta per gli altri esami), quelle 24 ore non si contano. La domenica del referto non si scala (quel giorno il medico ha lavorato).
+function cntPerfSunday(a, b, wins) {
+  let x = 0;
+  for (let d = Math.floor(a / 1440); d < Math.floor(b / 1440); d++) {
+    if ((d + 4) % 7 !== 0) continue;                                   // 01/01/1970 = giovedì → domenica = (giorni + 4) % 7 === 0
+    const ws = wins && wins[new Date(d * 86400000).toISOString().slice(0, 10)];
+    if (ws && ws.some(w => w[2] !== 'ecg')) continue;                  // turno non-ECG in quella domenica: il medico lavora
+    x += Math.max(0, Math.min(b, (d + 1) * 1440) - Math.max(a, d * 1440));
+  }
+  return x;
 }
 function cntPerfPct(arr, p) {
   if (!arr.length) return null;
@@ -3485,7 +3499,7 @@ function cntPerfFmt(m) {
 }
 function cntPerfCompute() {
   const D = cnt.rec && cnt.rec.dati; if (!D || !D.esami) return { noDetail: true };
-  const out = { items: [], neg: 0, noTime: 0, nT: 0, nS: 0, shifts: !!cnt.shifts };
+  const out = { items: [], neg: 0, noTime: 0, nT: 0, nS: 0, nDom: 0, shifts: !!cnt.shifts };
   const SW = cntPerfShiftWin(), ms = doctors.map(cntMatcher);
   Object.entries(D.esami).forEach(([med, L]) => { const dd = SW ? cntMatch(med, ms) : null, wins = dd ? SW[dd.id] : null; L.forEach(e => {
     if (cntPerfEsclusa(e[1])) return;
@@ -3494,7 +3508,10 @@ function cntPerfCompute() {
     if (tr < tq) { out.neg++; return; }              // referto precedente alla richiesta: dato incoerente, escluso
     let ta = wins ? cntPerfAssignShift(wins, tq, tr) : null;
     if (ta != null) out.nT++; else { ta = Math.min(cntPerfAssign(tq), tr); out.nS++; }
-    out.items.push({ m: med, t: e[1], tot: tr - tq, lav: tr - ta, id: e[0], pz: e[4], cl: e[3], rq: e[5], rf: e[6] });
+    const ecg = /^ECG\b/i.test(String(e[1]));                         // ECG: la domenica si lavora, nessuno sconto
+    const sTot = ecg ? 0 : cntPerfSunday(tq, tr, wins), sLav = ecg ? 0 : cntPerfSunday(ta, tr, wins);
+    if (sTot) out.nDom++;
+    out.items.push({ m: med, t: e[1], tot: tr - tq - sTot, lav: tr - ta - sLav, dom: sTot, id: e[0], pz: e[4], cl: e[3], rq: e[5], rf: e[6] });
   }); });
   return out;
 }
@@ -3542,6 +3559,7 @@ function cntPerfRender() {
     + chip(all.late.toLocaleString('it-IT'), 'esami fuori tempo') + '</div>';
   h += '<details class="c-det"><summary>ℹ️ Come sono calcolati i tempi</summary><div>La <b>data di assegnazione</b> al medico non è presente nel file, quindi è <b>presunta</b>. Per i medici in turno nel calendario «Medici in Turno» <b>non può essere precedente all\'inizio del turno</b> (mattina 08:30–14:30, pomeriggio 14:30–20:30, completo/holter 08:30–20:30): per un medico di pomeriggio, una richiesta alle 12:00 vale assegnata alle 14:30; se la richiesta arriva durante il turno, coincide con la richiesta. '
     + 'Senza un turno utile (o se i turni non sono disponibili) si usa l\'orario di servizio 08:30–20:30: una richiesta notturna vale assegnata alle 08:30. '
+    + 'La <b>domenica è un giorno bonus (non lavorativo)</b> per tutti gli esami <b>tranne l\'ECG</b>: se tra richiesta e referto cade una domenica in cui il medico non è in turno (un turno solo-ECG non conta), quelle 24 ore vengono sottratte dai tempi (esami interessati: <b>' + P.nDom.toLocaleString('it-IT') + '</b>). '
     + 'Esami assegnati dal turno: <b>' + P.nT.toLocaleString('it-IT') + '</b> · da orario di servizio: <b>' + P.nS.toLocaleString('it-IT') + '</b>' + (cnt.shiftsLoading ? ' (turni in caricamento…)' : !P.shifts ? ' (turni non disponibili: collega Google)' : '') + '. '
     + '«Assegnazione presunta → referto» è quindi il tempo di lavorazione. Si usa la <b>mediana</b> (metà degli esami è più veloce, metà più lenta) perché pochi casi molto vecchi falserebbero la media. '
     + 'Le barre mostrano come si distribuiscono gli esami rispetto al <b>limite della propria tipologia</b> (es. per l\'ECG 15 min, per la polisonnografia 48 h), quindi i colori hanno lo stesso significato per tutte le righe. Limiti di contratto: <b>ECG 15 minuti</b>, <b>holter (12 derivazioni incluso) e spirometria 24 ore</b>, <b>polisonnografia 48 ore</b>. «Nei tempi di contratto» conta dall\'assegnazione presunta; «Fuori tempo» = esami oltre il limite della propria tipologia.'
@@ -3570,7 +3588,7 @@ function cntPerfOpen(kind, val) {
     + '<div class="c-dsearch"><input class="r-input" id="pf-q" type="search" placeholder="🔍 Cerca per ID, medico, cliente o paziente…" autocomplete="off"><span class="r-usub" id="pf-cnt"></span></div>'
     + '<div class="c-scroll" style="margin-top:0"><table class="c-tb c-left c-pf"><thead><tr><th>ID</th><th>Tipologia</th><th>Medico</th><th>Cliente</th><th>Paziente</th><th>Data richiesta</th><th>Data refertazione</th><th>Richiesta → referto</th><th>Limite</th></tr></thead><tbody>'
     + items.map(x => '<tr data-s="' + escHtml(nameKey([x.id, x.m, x.cl, x.pz].join(' '))) + '"><td class="mut">' + td(x.id) + '</td><td><b>' + dot(x.t) + escHtml(tip(x.t)) + '</b></td><td>' + escHtml(x.m) + '</td><td>' + td(x.cl) + '</td><td>' + td(x.pz)
-      + '</td><td>' + (cntFmtDT(x.rq) || '–') + '</td><td>' + (cntFmtDT(x.rf) || '–') + '</td><td><b style="color:#d93025">' + cntPerfFmtLong(x.tot) + '</b></td><td class="mut">' + cntPerfFmtLong(cntPerfSoglia(x.t)) + '</td></tr>').join('')
+      + '</td><td>' + (cntFmtDT(x.rq) || '–') + '</td><td>' + (cntFmtDT(x.rf) || '–') + '</td><td><b style="color:#d93025">' + cntPerfFmtLong(x.tot) + '</b>' + (x.dom ? '<br><span class="mut">al netto di ' + cntPerfFmtLong(x.dom) + ' di domenica non lavorativa</span>' : '') + '</td><td class="mut">' + cntPerfFmtLong(cntPerfSoglia(x.t)) + '</td></tr>').join('')
     + '</tbody></table></div><div class="c-note" id="pf-empty" style="display:none;padding:22px">Nessun esame corrisponde alla ricerca.</div>';
   openModal('pf-modal'); if (items.length) cntPerfFilter('');
 }
@@ -3583,8 +3601,8 @@ function cntPerfFilter(q) {
 function cntPerfLateExport() {
   const D = cnt.pfCur; if (!D || !D.items.length) { toast('Nessun esame da esportare', 'err'); return; }
   const q = nameKey((byId('pf-q') || {}).value || ''), rows = D.items.filter(x => !q || nameKey([x.id, x.m, x.cl, x.pz].join(' ')).includes(q));
-  const aoa = [['ID', 'TIPOLOGIA', 'MEDICO', 'CLIENTE', 'PAZIENTE', 'DATA RICHIESTA', 'DATA REFERTAZIONE', 'RICHIESTA→REFERTO (min)', 'LIMITE CONTRATTO (min)'],
-    ...rows.map(x => [x.id, x.t, x.m, x.cl, x.pz, cntFmtDT(x.rq), cntFmtDT(x.rf), Math.round(x.tot), cntPerfSoglia(x.t)])];
+  const aoa = [['ID', 'TIPOLOGIA', 'MEDICO', 'CLIENTE', 'PAZIENTE', 'DATA RICHIESTA', 'DATA REFERTAZIONE', 'RICHIESTA→REFERTO al netto domenica (min)', 'LIMITE CONTRATTO (min)', 'DOMENICA ESCLUSA (min)'],
+    ...rows.map(x => [x.id, x.t, x.m, x.cl, x.pz, cntFmtDT(x.rq), cntFmtDT(x.rf), Math.round(x.tot), cntPerfSoglia(x.t), Math.round(x.dom || 0)])];
   const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = [{ wch: 12 }, { wch: 24 }, { wch: 22 }, { wch: 24 }, { wch: 26 }, { wch: 17 }, { wch: 19 }, { wch: 22 }, { wch: 22 }];
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Fuori tempo');
   XLSX.writeFile(wb, 'esami_fuori_tempo_' + String(D.val).replace(/[^A-Za-z0-9]+/g, '_') + '_' + cnt.ym + '.xlsx');
@@ -3935,9 +3953,9 @@ async function maybeImportLegacy() {
   document.addEventListener('click', e => {
     const c = e.target.closest('[data-close]');
     if (c) { c.dataset.close === 'doc' ? closeDoctorModal() : c.dataset.close === 'det' ? closeModal('det-modal') : c.dataset.close === 'pf' ? closeModal('pf-modal') : c.dataset.close === 'extra' ? closeModal('extra-modal') : closeUserModal(); return; }
-    if (e.target.classList && e.target.classList.contains('r-modal-bg')) closeModal(e.target.id);
+    if (e.target.classList && e.target.classList.contains('r-modal-bg') && !e.target.classList.contains('lock')) closeModal(e.target.id);   // i popup «lock» si chiudono solo con la ✕
   });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDoctorModal(); closeUserModal(); closeModal('det-modal'); closeModal('pf-modal'); closeModal('extra-modal'); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDoctorModal(); closeUserModal(); closeModal('extra-modal'); } });   // Esc non chiude i popup «lock» (dettaglio esami, fuori tempo)
 })();
 
 // ─── UI HELPERS ───────────────────────────────────────────────

@@ -536,30 +536,30 @@
   .pf-skg .r-sk { height: 120px; }
 
   /* hero: gauge + KPI */
-  .pf-hero { display: grid; grid-template-columns: minmax(290px, 370px) 1fr; gap: 16px; }
-  .pf-gcard { --g1: #0f3d91; --g2: #3d8bf5; position: relative; overflow: hidden; display: flex; align-items: center; gap: 22px; padding: 22px 24px; border-radius: 22px; color: #fff; background: linear-gradient(135deg, var(--g1), var(--g2)); box-shadow: 0 12px 30px rgba(15,23,42,.18); }
-  .pf-gcard::after { content: ''; position: absolute; right: -46px; top: -46px; width: 170px; height: 170px; border-radius: 50%; background: rgba(255,255,255,.10); pointer-events: none; }
+  .pf-hero { display: grid; grid-template-columns: minmax(230px, 290px) 1fr; gap: 10px; }
+  .pf-gcard { --g1: #0f3d91; --g2: #3d8bf5; position: relative; overflow: hidden; display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: 16px; color: #fff; background: linear-gradient(135deg, var(--g1), var(--g2)); box-shadow: 0 6px 16px rgba(15,23,42,.16); }
+  .pf-gcard::after { content: ''; position: absolute; right: -30px; top: -30px; width: 100px; height: 100px; border-radius: 50%; background: rgba(255,255,255,.10); pointer-events: none; }
   .pf-gcard.good { --g1: #0b6b3a; --g2: #27ae60; } .pf-gcard.mid { --g1: #b45309; --g2: #f59e0b; } .pf-gcard.bad { --g1: #a31d14; --g2: #ef5350; }
-  .pf-gauge { position: relative; width: 122px; height: 122px; flex: none; }
+  .pf-gauge { position: relative; width: 66px; height: 66px; flex: none; }
   .pf-gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-  .pf-gauge circle { fill: none; stroke-width: 11; }
+  .pf-gauge circle { fill: none; stroke-width: 12; }
   .pf-gauge .bg { stroke: rgba(255,255,255,.24); }
   .pf-gauge .fg { stroke: #fff; stroke-linecap: round; transition: stroke-dasharray 1.1s cubic-bezier(.2,.8,.2,1); }
-  .pf-gval { position: absolute; inset: 0; display: flex; align-items: baseline; justify-content: center; padding-top: 38px; font-variant-numeric: tabular-nums; }
-  .pf-gval b { font-size: 34px; font-weight: 800; letter-spacing: -1px; } .pf-gval i { font-style: normal; font-size: 16px; font-weight: 700; margin-left: 2px; opacity: .85; }
+  .pf-gval { position: absolute; inset: 0; display: flex; align-items: baseline; justify-content: center; padding-top: 20px; font-variant-numeric: tabular-nums; }
+  .pf-gval b { font-size: 19px; font-weight: 800; letter-spacing: -.5px; } .pf-gval i { font-style: normal; font-size: 10px; font-weight: 700; margin-left: 2px; opacity: .85; }
   .pf-gtxt { position: relative; z-index: 1; min-width: 0; }
-  .pf-gk { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; opacity: .85; }
-  .pf-gs { font-size: 22px; font-weight: 800; letter-spacing: -.3px; margin: 2px 0 6px; }
-  .pf-gsub { font-size: 12.5px; line-height: 1.6; opacity: .92; }
-  .pf-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
-  .pf-kpi { display: flex; align-items: flex-start; gap: 12px; background: #fff; border: 1px solid #edf1f6; border-radius: 18px; padding: 16px; box-shadow: var(--r-sh); transition: transform .2s, box-shadow .2s; }
-  .pf-kpi:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(16,24,40,.12); }
-  .pf-kico { width: 42px; height: 42px; flex: none; border-radius: 14px; display: grid; place-items: center; font-size: 20px; background: #eef4ff; }
+  .pf-gk { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; opacity: .85; }
+  .pf-gs { font-size: 15px; font-weight: 800; letter-spacing: -.2px; margin: 1px 0 2px; }
+  .pf-gsub { font-size: 11.5px; line-height: 1.45; opacity: .92; }
+  .pf-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .pf-kpi { display: flex; align-items: flex-start; gap: 10px; background: #fff; border: 1px solid #edf1f6; border-radius: 14px; padding: 10px 12px; box-shadow: var(--r-sh); transition: transform .2s, box-shadow .2s; }
+  .pf-kpi:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(16,24,40,.1); }
+  .pf-kico { width: 30px; height: 30px; flex: none; border-radius: 10px; display: grid; place-items: center; font-size: 15px; background: #eef4ff; }
   .pf-kpi.red .pf-kico { background: #fdecea; } .pf-kpi.green .pf-kico { background: #e6f4ea; } .pf-kpi.amber .pf-kico { background: #fff2e0; }
-  .pf-kpi b { display: block; font-size: 24px; font-weight: 800; letter-spacing: -.5px; color: #1f2933; line-height: 1.15; font-variant-numeric: tabular-nums; }
+  .pf-kpi b { display: block; font-size: 17px; font-weight: 800; letter-spacing: -.3px; color: #1f2933; line-height: 1.15; font-variant-numeric: tabular-nums; }
   .pf-kpi.red b { color: #d93025; } .pf-kpi.green b { color: #188038; }
-  .pf-kpi .lbl { display: block; font-size: 12.5px; color: #5b6b7f; font-weight: 600; margin-top: 1px; }
-  .pf-kpi small { display: block; font-size: 11.5px; color: #9aa5b1; margin-top: 3px; line-height: 1.4; }
+  .pf-kpi .lbl { display: block; font-size: 11.5px; color: #5b6b7f; font-weight: 600; margin-top: 1px; line-height: 1.3; }
+  .pf-kpi small { display: block; font-size: 10.5px; color: #9aa5b1; margin-top: 2px; line-height: 1.3; }
 
   /* affidabilità della stima */
   .pf-trust { padding: 16px 20px; }
@@ -644,6 +644,7 @@
   .pf-tbl tbody tr { transition: background .15s; } .pf-tbl tbody tr:hover td { background: #f5f9ff; }
   .pf-tbl tbody tr:last-child td { border-bottom: 0; }
   .pf-tbl tr[hidden] { display: none; }
+  .pf-tbl tr.sel td { background: #eef4ff; box-shadow: inset 0 0 0 0 transparent; } .pf-tbl tr.sel td:first-child { box-shadow: inset 3px 0 0 #1a73e8; }
   .pf-tbl .num { text-align: right; } .pf-tbl td.dist { min-width: 220px; width: 28%; }
   .pf-med { display: flex; align-items: center; gap: 11px; }
   .pf-rk { width: 24px; flex: none; text-align: center; font-size: 12px; font-weight: 800; color: #9aa5b1; }
@@ -668,7 +669,7 @@
   .c-tb.c-pf th, .c-tb.c-pf td { white-space: nowrap; }
 
   @media (max-width: 860px) { .pf-hero { grid-template-columns: 1fr; } }
-  @media (max-width: 520px) { .pf-gcard { padding: 18px; gap: 16px; } .pf-gauge { width: 104px; height: 104px; } .pf-gval { padding-top: 31px; } .pf-gval b { font-size: 28px; } .pf-tmain { flex-direction: column; align-items: flex-start; gap: 10px; } .pf-tstats { width: 100%; } }
+  @media (max-width: 520px) { .pf-tmain { flex-direction: column; align-items: flex-start; gap: 10px; } .pf-tstats { width: 100%; } }
 
   /* ═══════════ MEDICI: TOOLBAR + CARD ═══════════ */
   .r-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
@@ -3669,7 +3670,7 @@ function cntPerfHero(all, P, nMed, nTipi) {
   const gauge = '<div class="pf-gcard ' + cls + '"><div class="pf-gauge"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="bg" cx="60" cy="60" r="52"/><circle class="fg" cx="60" cy="60" r="52" style="stroke-dasharray:0 ' + C.toFixed(2) + '" data-dash="' + dash + ' ' + C.toFixed(2) + '"/></svg>'
     + '<div class="pf-gval"><b data-count="' + all.okPct + '">' + cntPerfN(all.okPct) + '</b><i>%</i></div></div>'
     + '<div class="pf-gtxt"><div class="pf-gk">Nei tempi di contratto</div><div class="pf-gs">' + (cls === 'good' ? 'Ottimo' : cls === 'mid' ? 'Da migliorare' : 'Critico') + '</div>'
-    + '<div class="pf-gsub"><b>' + all.ok.toLocaleString('it-IT') + '</b> su <b>' + all.n.toLocaleString('it-IT') + '</b> esami<br>Contando dalla sola richiesta: <b>' + cntPerfN(all.okTotPct) + '%</b></div></div></div>';
+    + '<div class="pf-gsub"><b>' + all.ok.toLocaleString('it-IT') + '</b> su <b>' + all.n.toLocaleString('it-IT') + '</b> esami</div></div></div>';
   const kpi = (ico, v, l, sub, cls2, count) => '<div class="pf-kpi ' + (cls2 || '') + '"><span class="pf-kico">' + ico + '</span><div><b' + (count != null ? ' data-count="' + count + '"' : '') + '>' + v + '</b><span class="lbl">' + l + '</span>' + (sub ? '<small>' + sub + '</small>' : '') + '</div></div>';
   return '<div class="pf-hero">' + gauge + '<div class="pf-kpis">'
     + kpi('🧾', all.n.toLocaleString('it-IT'), 'esami analizzati', nTipi + ' tipologie · ' + nMed + ' medici', '', all.n)
@@ -3678,26 +3679,15 @@ function cntPerfHero(all, P, nMed, nTipi) {
     + kpi(all.late ? '⚠️' : '✅', all.late.toLocaleString('it-IT'), 'esami fuori tempo', all.late ? cntPerfN(all.late * 100 / all.n, 1) + '% del totale' : 'nessun ritardo', all.late ? 'red' : 'green', all.late)
     + '</div></div>';
 }
-function cntPerfTrust(P) {
-  const tot = P.nT + P.nS, pT = tot ? P.nT * 100 / tot : 0;
-  const cls = cnt.shiftsLoading ? 'load' : !P.shifts ? 'warn' : '';
-  const st = cnt.shiftsLoading ? 'Turni in caricamento…' : !P.shifts ? 'Turni non disponibili · collega Google per una stima più precisa' : 'Turni del calendario collegati';
-  const ex = [P.neg ? P.neg + ' con referto precedente alla richiesta' : '', P.noTime ? P.noTime + ' senza data/ora completa' : ''].filter(Boolean).join(' · ');
-  return '<div class="r-panel pf-trust ' + cls + '"><div class="pf-trh"><span class="pf-trt">🛡️ Affidabilità della stima</span><span class="pf-trs">' + st + '</span></div>'
-    + '<div class="pf-trbar" title="Quota di esami con assegnazione ricavata dal turno del medico"><i style="width:' + pT.toFixed(1) + '%"></i></div>'
-    + '<div class="pf-trl"><span><i class="a"></i>Assegnazione da turno: <b>' + P.nT.toLocaleString('it-IT') + '</b> (' + cntPerfN(pT) + '%)</span><span><i class="b"></i>Da orario di servizio: <b>' + P.nS.toLocaleString('it-IT') + '</b></span>'
-    + '<span>Domenica non lavorativa scalata su <b>' + P.nDom.toLocaleString('it-IT') + '</b> esami</span>' + (ex ? '<span class="bad">Esclusi: <b>' + ex + '</b></span>' : '') + '</div></div>';
-}
-function cntPerfTypeCards(rows) {
-  return '<div class="pf-types">' + rows.map((g, i) => {
-    const cls = cntPerfCls(g.okPct);
-    return '<article class="pf-tcard ' + cls + (cnt.perfT === g.k ? ' sel' : '') + '" style="--i:' + i + '">'
-      + '<div class="pf-thead"><button type="button" class="pf-tname" data-pgo="' + escHtml(g.k) + '" title="Confronta i medici su questa tipologia"><span class="c-dot" style="background:' + avColor(g.k) + '"></span>' + escHtml(cntShort[g.k] || g.k) + '</button><span class="pf-lim" title="Limite di contratto">⏱ ' + cntPerfLim(g.k) + '</span></div>'
-      + '<div class="pf-tmain"><div class="pf-big">' + cntPerfN(g.okPct) + '%<small>nei tempi</small></div><div class="pf-tstats"><div><b>' + g.n.toLocaleString('it-IT') + '</b><span>esami</span></div><div><b>' + cntPerfFmt(g.medTot) + '</b><span>mediana</span></div><div><b>' + cntPerfFmt(g.p90Tot) + '</b><span>9 su 10 entro</span></div></div></div>'
-      + cntPerfBarHtml(g)
-      + '<div class="pf-tfoot">' + (g.late ? '<button type="button" class="pf-late" data-pfk="t" data-pfv="' + escHtml(g.k) + '" title="Mostra gli esami fuori tempo">' + g.late.toLocaleString('it-IT') + ' fuori tempo ›</button>' : '<span class="pf-clean">✓ Nessun ritardo</span>')
-      + '<button type="button" class="pf-go" data-pgo="' + escHtml(g.k) + '">Vedi medici →</button></div></article>';
-  }).join('') + '</div>';
+function cntPerfTypeTable(rows) {
+  return '<div class="pf-scroll"><table class="pf-tbl"><thead><tr><th>Tipologia</th><th class="num" title="Limite di refertazione da contratto">Limite</th><th class="num">Esami</th><th class="num" title="Dalla data richiesta alla data refertazione">Mediana</th><th class="num" title="9 esami su 10 sono stati refertati entro questo tempo">90° perc.</th>'
+    + '<th title="Tempo di lavorazione (da assegnazione presunta) entro il limite di contratto">Nei tempi di contratto</th><th class="num" title="Esami oltre il limite di contratto">Fuori tempo</th><th>Distribuzione</th></tr></thead><tbody>'
+    + rows.map(g => '<tr class="' + (cnt.perfT === g.k ? 'sel' : '') + '"><td><button type="button" class="pf-tname" data-pgo="' + escHtml(g.k) + '" title="Confronta i medici su questa tipologia"><span class="c-dot" style="background:' + avColor(g.k) + '"></span>' + escHtml(cntShort[g.k] || g.k) + '</button></td>'
+      + '<td class="num mut">' + cntPerfLim(g.k) + '</td><td class="num">' + g.n.toLocaleString('it-IT') + '</td><td class="num"><b>' + cntPerfFmt(g.medTot) + '</b></td><td class="num">' + cntPerfFmt(g.p90Tot) + '</td>'
+      + '<td class="pf-okc"><div><span class="pf-meter"><i class="' + cntPerfCls(g.okPct) + '" style="width:' + Math.max(2, g.okPct) + '%"></i></span>' + cntPerfOkHtml(g.okPct) + '</div></td>'
+      + '<td class="num">' + (g.late ? '<button type="button" class="pf-late" data-pfk="t" data-pfv="' + escHtml(g.k) + '" title="Mostra gli esami fuori tempo">' + g.late.toLocaleString('it-IT') + '</button>' : '<span class="mut">0</span>') + '</td>'
+      + '<td class="dist">' + cntPerfBarHtml(g) + '</td></tr>').join('')
+    + '</tbody></table></div>';
 }
 function cntPerfMedTable(rows) {
   return '<div class="pf-scroll"><table class="pf-tbl"><thead><tr><th>Medico</th><th class="num">Esami</th><th class="num" title="Dalla data richiesta alla data refertazione">Mediana</th><th class="num" title="9 esami su 10 sono stati refertati entro questo tempo">90° perc.</th>'
@@ -3750,14 +3740,13 @@ function cntPerfRenderInner() {
   cnt.perf = { all, byT, byM, P };
   const sig = [cnt.ym, all.n, all.late, P.nT, P.nS].join('|'), fresh = cnt.perfSig !== sig; cnt.perfSig = sig;
   const nMed = new Set(P.items.map(x => x.m)).size;
-  let h = cntPerfHero(all, P, nMed, byT.length) + cntPerfTrust(P);
-  h += '<div class="r-panel"><div class="pf-h">Come si distribuiscono i tempi</div><div class="pf-sub">Tutti gli esami del mese, confrontati con il limite di contratto della propria tipologia.</div>' + cntPerfBarHtml(all, true) + cntPerfLegendBig(all) + '</div>';
-  h += '<div class="r-panel"><div class="pf-h">Per tipologia</div><div class="pf-sub">Tempi di refertazione per tipo di esame. Tocca una card per confrontare i medici.</div>' + cntPerfTypeCards(byT) + '</div>';
+  let h = cntPerfHero(all, P, nMed, byT.length);
+  h += '<div class="r-panel"><div class="pf-h">Per tipologia</div><div class="pf-sub">Tempi di refertazione per tipo di esame. Tocca una tipologia per confrontare i medici.</div>' + cntPerfTypeTable(byT) + cntPerfLegendMini() + '</div>';
   h += '<div class="r-panel" id="pf-med"><div class="pf-h">Per medico</div><div class="pf-sub">Scegli una categoria per confrontare i medici sullo stesso tipo di esame.</div>'
     + '<div class="pf-tabs" role="tablist">' + byT.map(g => '<button type="button" role="tab" aria-selected="' + (cnt.perfT === g.k) + '" class="pf-tab' + (cnt.perfT === g.k ? ' active' : '') + '" data-pt="' + escHtml(g.k) + '"><span class="c-dot" style="background:' + avColor(g.k) + '"></span>' + escHtml(cntShort[g.k] || g.k) + '<em>' + g.n.toLocaleString('it-IT') + '</em></button>').join('') + '</div>'
     + '<div class="pf-tools"><div class="c-dsearch"><input class="r-input" id="pf-mq" type="search" placeholder="🔍 Cerca medico…" autocomplete="off" value="' + escHtml(cnt.perfQ || '') + '"><span class="r-usub" id="pf-mcnt"></span></div>'
     + '<div class="pf-seg" role="group" aria-label="Ordina i medici">' + [['n', 'Più esami'], ['fast', '⚡ Più veloce'], ['slow', '🐢 Più lento']].map(([k, l]) => '<button type="button" data-ps="' + k + '"' + (so === k ? ' class="active"' : '') + '>' + l + '</button>').join('') + '</div></div>'
-    + cntPerfMedTable(byM) + '<div class="c-note" id="pf-mempty" style="display:none;padding:22px">Nessun medico corrisponde alla ricerca.</div>' + cntPerfLegendMini() + '</div>';
+    + cntPerfMedTable(byM) + '<div class="c-note" id="pf-mempty" style="display:none;padding:22px">Nessun medico corrisponde alla ricerca.</div></div>';
   h += '<details class="c-det"><summary>ℹ️ Come sono calcolati i tempi</summary><div>La <b>data di assegnazione</b> al medico non è presente nel file, quindi è <b>presunta</b>. Per i medici in turno nel calendario «Medici in Turno» <b>non può essere precedente all\'inizio del turno</b> (mattina 08:30–14:30, pomeriggio 14:30–20:30, completo/holter 08:30–20:30): per un medico di pomeriggio, una richiesta alle 12:00 vale assegnata alle 14:30; se la richiesta arriva durante il turno, coincide con la richiesta. '
     + 'Senza un turno utile (o se i turni non sono disponibili) si usa l\'orario di servizio 08:30–20:30: una richiesta notturna vale assegnata alle 08:30. '
     + 'La <b>domenica è un giorno bonus (non lavorativo)</b> per tutti gli esami <b>tranne l\'ECG</b>: se tra richiesta e referto cade una domenica in cui il medico non è in turno (un turno solo-ECG non conta), quelle 24 ore vengono sottratte dai tempi (esami interessati: <b>' + P.nDom.toLocaleString('it-IT') + '</b>). '

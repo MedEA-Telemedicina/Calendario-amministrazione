@@ -529,9 +529,9 @@
   .pf-h { font-size: 15px; font-weight: 800; color: #1f2933; margin: 0 2px 2px; }
   .pf-sub { font-size: 12.5px; color: #7b8794; margin: 0 2px 6px; }
   .c-tb.c-pf th, .c-tb.c-pf td { white-space: nowrap; }
-  .c-tb.c-pf th.dist, .c-tb.c-pf td.dist { text-align: left; min-width: 170px; }
-  .pf-dist { display: flex; height: 10px; border-radius: 6px; overflow: hidden; background: #e6ebf2; }
-  .pf-dist i { display: block; height: 100%; }
+  .c-tb.c-pf th.dist, .c-tb.c-pf td.dist { text-align: left; min-width: 200px; }
+  .pf-dist { display: flex; height: 18px; border-radius: 6px; overflow: hidden; background: #e6ebf2; }
+  .pf-dist i { display: flex; align-items: center; justify-content: center; height: 100%; font: 700 10px/1 inherit; font-style: normal; overflow: hidden; }
   .pf-leg { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: #5b6b7f; margin: 12px 2px 0; }
   .pf-leg i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
   .pf-ok.good { color: #188038; } .pf-ok.mid { color: #c25e00; } .pf-ok.bad { color: #d93025; }
@@ -3240,43 +3240,48 @@ setInterval(() => { if (document.visibilityState === 'visible') cntSync(); }, SY
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') cntSync(); });
 
 // ── medici «da attenzionare» ──
-// Segnalazione GLOBALE sul medico (non legata al mese): resta su tutti i mesi finché qualcuno non la toglie.
-// Una riga per medico in rend_impostazioni (chiave 'att|<id medico>', valore true/false): nessuna sovrascrittura tra utenti.
-let attMap = {}, attSaving = 0;                      // attMap: id medico -> { da, il } (solo i medici segnalati)
+// Segnalazione legata al MESE: vale solo per il mese selezionato, ogni mese ha le sue segnalazioni.
+// Una riga per medico e per mese in rend_impostazioni (chiave 'att|<YYYY-MM>|<id medico>', valore true/false): nessuna sovrascrittura tra utenti.
+// (le vecchie righe globali 'att|<id medico>' non vengono più lette)
+let attMap = {}, attSaving = 0, attYm = '';          // attMap: id medico -> { da, il } (solo i medici segnalati nel mese attYm)
+const attCurYm = () => cnt.ym || ymAdd(new Date().getFullYear() + '-' + pad2(new Date().getMonth() + 1), -1);   // stesso default di Conteggi
 const cntIsAtt = id => String(id) in attMap;
 async function loadAtt() {
   if (attSaving) return false;
-  const { data, error } = await getSb().from('rend_impostazioni').select('chiave,valore,aggiornato_da,aggiornato_il').like('chiave', 'att|%');
+  const ym = attCurYm();
+  const { data, error } = await getSb().from('rend_impostazioni').select('chiave,valore,aggiornato_da,aggiornato_il').like('chiave', 'att|' + ym + '|%');
   if (error || !data) return false;
+  if (ym !== attCurYm() || attSaving) return false;   // mese cambiato (o salvataggio in corso) durante la richiesta
   const m = {};
-  data.forEach(r => { if (r.valore === true) m[String(r.chiave).slice(4)] = { da: r.aggiornato_da, il: r.aggiornato_il }; });
-  const ch = JSON.stringify(m) !== JSON.stringify(attMap);
-  attMap = m; return ch;
+  data.forEach(r => { if (r.valore === true) m[String(r.chiave).slice(5 + ym.length)] = { da: r.aggiornato_da, il: r.aggiornato_il }; });
+  const ch = JSON.stringify(m) !== JSON.stringify(attMap) || ym !== attYm;
+  attMap = m; attYm = ym; return ch;
 }
 function attTip(id) {
   const mt = attMap[String(id)];
-  return mt ? 'Da attenzionare' + (mt.da ? ' · segnalato da ' + mt.da + (mt.il ? ', ' + new Date(mt.il).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '') : '') : '';
+  return mt ? 'Da attenzionare a ' + ymLabel(attYm) + (mt.da ? ' · segnalato da ' + mt.da + (mt.il ? ', ' + new Date(mt.il).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '') : '') : '';
 }
 function cntAttHtml(id) {
   const on = cntIsAtt(id);
-  return '<span class="c-att' + (on ? ' on' : '') + '" title="' + escHtml(on ? attTip(id) : 'Segna questo medico come da attenzionare: resta segnalato su tutti i mesi, per tutti gli utenti') + '"><input type="checkbox" data-att="' + escHtml(id) + '"' + (on ? ' checked' : '') + '> Da attenzionare</span>';
+  return '<span class="c-att' + (on ? ' on' : '') + '" title="' + escHtml(on ? attTip(id) : 'Segna questo medico come da attenzionare per ' + ymLabel(attCurYm()) + ': la segnalazione vale solo per questo mese, per tutti gli utenti') + '"><input type="checkbox" data-att="' + escHtml(id) + '"' + (on ? ' checked' : '') + '> Da attenzionare</span>';
 }
 function attRefresh() { doctors.forEach(d => { d._h = null; }); renderDoctors(); if (cnt.rec && !cnt.loading) cntRender(); }
 async function cntToggleAtt(id, on) {
   id = String(id);
+  const ym = attCurYm(); if (attYm !== ym) { attMap = {}; attYm = ym; }
   const had = id in attMap, prev = attMap[id];
   if (on) attMap[id] = { da: myName(), il: new Date().toISOString() }; else delete attMap[id];
   attSaving++; attRefresh();
   try {
-    const row = { chiave: 'att|' + id, valore: !!on, aggiornato_da: myName(), aggiornato_il: new Date().toISOString() };
+    const row = { chiave: 'att|' + ym + '|' + id, valore: !!on, aggiornato_da: myName(), aggiornato_il: new Date().toISOString() };
     const { data, error } = await getSb().from('rend_impostazioni').upsert(row, { onConflict: 'chiave' }).select();
     if (error) throw error;
     if (!data || !data.length) throw new Error('scrittura rifiutata dal database (policy RLS di rend_impostazioni)');
-    if (on) attMap[id] = { da: row.aggiornato_da, il: row.aggiornato_il };
+    if (on && attYm === ym) attMap[id] = { da: row.aggiornato_da, il: row.aggiornato_il };
     attRefresh();
-    toast(on ? 'Medico segnalato come da attenzionare su tutti i mesi' : 'Segnalazione rimossa', 'ok');
+    toast(on ? 'Medico segnalato come da attenzionare per ' + ymLabel(ym) : 'Segnalazione rimossa per ' + ymLabel(ym), 'ok');
   } catch (e) {
-    if (had) attMap[id] = prev; else delete attMap[id];
+    if (attYm === ym) { if (had) attMap[id] = prev; else delete attMap[id]; }
     attRefresh();
     toast('Segnalazione NON salvata: ' + (e.message || e), 'err');
   } finally { attSaving--; }
@@ -3368,7 +3373,7 @@ function cntRenderMain() {
     + (T.anyCons ? '<div class="c-chip"><b>' + fmtEuro(T.centsE / 100) + '</b><span>compenso esami a consuntivo</span></div>' : '')
     + '<div class="c-chip tot"><b>' + fmtEuro((T.centsT + T.centsE) / 100) + '</b><span>totale mese</span></div></div>';
   const attDocs = doctors.filter(d => cntIsAtt(d.id));
-  if (attDocs.length) h += '<div class="c-attbox"><b>⚑ Da attenzionare (' + attDocs.length + '):</b> ' + attDocs.map(d => '<span class="c-att on" style="cursor:default">' + escHtml(d.nome) + '</span>').join('') + '</div>';
+  if (attDocs.length) h += '<div class="c-attbox"><b>⚑ Da attenzionare a ' + escHtml(ymLabel(cnt.ym)) + ' (' + attDocs.length + '):</b> ' + attDocs.map(d => '<span class="c-att on" style="cursor:default">' + escHtml(d.nome) + '</span>').join('') + '</div>';
   cnt.pendMap = {}; R.pend.forEach(q => { cnt.pendMap[q.key] = q; });
   if (hasShifts && T.pend) h += '<div class="c-warn">⚠ <span><b>' + T.pend + '</b> ' + (T.pend === 1 ? 'giorno con ECG oltre' : 'giorni con ECG oltre') + ' la capienza dei turni in calendario: i turni aggiuntivi <b>non sono ancora conteggiati</b> e vanno confermati.</span><button class="r-btn primary" type="button" data-cnt="extra" data-queue="1">Rivedi e conferma</button></div>';
   if (hasShifts && R.convTot.list.length) {
@@ -3404,10 +3409,12 @@ function cntRenderMain() {
 // Tempi di refertazione da contratto (minuti): ECG 15 min · holter e spirometria 24 h · polisonnografia 48 h
 const CNT_PERF_SOGLIE = { 'ECG': 15, 'SPIROMETRIA': 24 * 60, 'POLISONNOGRAFIA': 48 * 60 };
 const CNT_PERF_SOGLIA_DEF = 24 * 60;              // holter (cardiaco, pressorio, 12D) e tutte le altre tipologie: 24 ore
-const CNT_PERF_OLTRE = 48 * 60;                   // ultima fascia della distribuzione
+// Fasce RELATIVE al limite di contratto della tipologia (così ECG, holter e polisonno sono confrontabili)
 const CNT_PERF_BUCKETS = [
-  { l: '≤ 15 min', max: 15, c: '#34a853' }, { l: '15 min – 2 h', max: 120, c: '#9ccc65' },
-  { l: '2 – 24 h', max: 1440, c: '#fbbc04' }, { l: '24 – 48 h', max: CNT_PERF_OLTRE, c: '#fb8c00' }, { l: 'oltre 48 h', max: Infinity, c: '#d93025' }
+  { l: 'Molto veloce (≤ metà del limite)', max: 0.5, c: '#2e9e4f', t: '#fff' },
+  { l: 'Nei tempi di contratto', max: 1, c: '#a5d36a', t: '#1f2933' },
+  { l: 'In ritardo (fino a 2× il limite)', max: 2, c: '#fb8c00', t: '#fff' },
+  { l: 'In forte ritardo (oltre 2× il limite)', max: Infinity, c: '#d93025', t: '#fff' }
 ];
 // tipologie escluse dalla scheda Performance
 const CNT_PERF_ESCLUSE = ['DERMATOLOGIA', 'TRIAGE', 'RETINOGRAFIA'];
@@ -3448,22 +3455,23 @@ function cntPerfStats(items) {
   const n = items.length, tot = items.map(x => x.tot), lav = items.map(x => x.lav);
   const ok = items.filter(x => x.lav <= cntPerfSoglia(x.t)).length, okT = items.filter(x => x.tot <= cntPerfSoglia(x.t)).length, late = n - ok;
   const bk = CNT_PERF_BUCKETS.map(() => 0);
-  lav.forEach(v => { bk[CNT_PERF_BUCKETS.findIndex(b => v <= b.max)]++; });
-  return { n, medTot: cntPerfPct(tot, .5), medLav: cntPerfPct(lav, .5), p90: cntPerfPct(lav, .9), ok, okPct: n ? ok * 100 / n : null, okTotPct: n ? okT * 100 / n : null, late, bk };
+  items.forEach(x => { const r = x.lav / cntPerfSoglia(x.t); bk[CNT_PERF_BUCKETS.findIndex(b => r <= b.max)]++; });
+  return { n, medTot: cntPerfPct(tot, .5), medLav: cntPerfPct(lav, .5), ok, okPct: n ? ok * 100 / n : null, okTotPct: n ? okT * 100 / n : null, late, bk };
 }
 function cntPerfGroups(items, key) {
   const by = {}; items.forEach(x => (by[x[key]] || (by[x[key]] = [])).push(x));
   return Object.entries(by).map(([k, l]) => Object.assign({ k }, cntPerfStats(l))).sort((a, b) => b.n - a.n);
 }
 const cntPerfOkHtml = p => p == null ? '–' : '<span class="pf-ok ' + (p >= 90 ? 'good' : p >= 70 ? 'mid' : 'bad') + '">' + p.toLocaleString('it-IT', { maximumFractionDigits: 0 }) + '%</span>';
-const cntPerfBarHtml = g => '<div class="pf-dist" title="' + escHtml(CNT_PERF_BUCKETS.map((b, i) => b.l + ': ' + g.bk[i]).join(' · ')) + '">'
-  + g.bk.map((v, i) => v ? '<i style="width:' + (v * 100 / g.n) + '%;background:' + CNT_PERF_BUCKETS[i].c + '"></i>' : '').join('') + '</div>';
+const cntPerfBarHtml = g => '<div class="pf-dist">' + g.bk.map((v, i) => {
+  if (!v) return ''; const w = v * 100 / g.n, B = CNT_PERF_BUCKETS[i];
+  return '<i style="width:' + w + '%;background:' + B.c + ';color:' + B.t + '" title="' + escHtml(B.l + ': ' + v.toLocaleString('it-IT') + ' esami (' + w.toLocaleString('it-IT', { maximumFractionDigits: 1 }) + '%)') + '">' + (w >= 8 ? Math.round(w) + '%' : '') + '</i>';
+}).join('') + '</div>';
 function cntPerfTable(rows, label, isType) {
   const dot = t => '<span class="c-dot" style="background:' + avColor(t) + '"></span>';
   return '<div class="c-scroll"><table class="c-tb c-pf"><thead><tr><th>' + label + '</th><th>Esami</th><th title="Dalla data richiesta alla data refertazione">Richiesta → referto</th>'
-    + '<th title="Dall\'assegnazione presunta alla data refertazione">Assegnazione presunta → referto</th><th title="Il 90% degli esami è lavorato entro questo tempo">90° percentile</th><th title="Tempo di lavorazione (da assegnazione presunta) entro il limite di contratto">Nei tempi di contratto</th><th title="Tempo reale dalla data richiesta entro il limite di contratto">Nei tempi (da richiesta)</th><th>Fuori contratto</th><th class="dist">Distribuzione</th></tr></thead><tbody>'
-    + rows.map(g => '<tr><td><b>' + (isType ? dot(g.k) + escHtml(cntShort[g.k] || g.k) : escHtml(g.k)) + '</b></td><td>' + g.n.toLocaleString('it-IT') + '</td><td>' + cntPerfFmt(g.medTot) + '</td><td><b>' + cntPerfFmt(g.medLav) + '</b></td><td>' + cntPerfFmt(g.p90)
-      + '</td><td>' + cntPerfOkHtml(g.okPct) + '</td><td>' + cntPerfOkHtml(g.okTotPct) + '</td><td>' + (g.late ? '<b style="color:#d93025">' + g.late.toLocaleString('it-IT') + '</b>' : '<span class="mut">0</span>') + '</td><td class="dist">' + cntPerfBarHtml(g) + '</td></tr>').join('')
+    + '<th title="Dall\'assegnazione presunta alla data refertazione">Assegnazione presunta → referto</th><th title="Tempo di lavorazione (da assegnazione presunta) entro il limite di contratto">Nei tempi di contratto</th><th title="Tempo reale dalla data richiesta entro il limite di contratto">Nei tempi (da richiesta)</th><th>Fuori contratto</th><th class="dist">Distribuzione</th></tr></thead><tbody>'
+    + rows.map(g => '<tr><td><b>' + (isType ? dot(g.k) + escHtml(cntShort[g.k] || g.k) : escHtml(g.k)) + '</b></td><td>' + g.n.toLocaleString('it-IT') + '</td><td>' + cntPerfFmt(g.medTot) + '</td><td><b>' + cntPerfFmt(g.medLav) + '</b></td><td>' + cntPerfOkHtml(g.okPct) + '</td><td>' + cntPerfOkHtml(g.okTotPct) + '</td><td>' + (g.late ? '<b style="color:#d93025">' + g.late.toLocaleString('it-IT') + '</b>' : '<span class="mut">0</span>') + '</td><td class="dist">' + cntPerfBarHtml(g) + '</td></tr>').join('')
     + '</tbody></table></div>';
 }
 function cntPerfRender() {
@@ -3486,7 +3494,7 @@ function cntPerfRender() {
     + chip(all.okPct.toLocaleString('it-IT', { maximumFractionDigits: 0 }) + '%', 'esami nei tempi di contratto')
     + chip(all.late.toLocaleString('it-IT'), 'esami fuori contratto') + '</div>';
   h += '<details class="c-det"><summary>ℹ️ Come sono calcolati i tempi</summary><div>La <b>data di assegnazione</b> al medico non è presente nel file, quindi è <b>presunta</b>: se la richiesta arriva in orario di servizio (08:30–20:30) coincide con la richiesta; se arriva di notte, coincide con la prima apertura utile (08:30 del mattino). '
-    + '«Assegnazione presunta → referto» è quindi il tempo di lavorazione, senza l\'attesa notturna. Si usa la <b>mediana</b> (metà degli esami è più veloce, metà più lenta) perché pochi casi molto vecchi falserebbero la media. Limiti di contratto: <b>ECG 15 minuti</b>, <b>holter e spirometria 24 ore</b>, <b>polisonnografia 48 ore</b>. «Nei tempi di contratto» conta dall\'assegnazione presunta; «Nei tempi (da richiesta)» conta dall\'orario reale di richiesta, senza correzioni notturne. «Fuori contratto» = esami oltre il limite della propria tipologia.'
+    + '«Assegnazione presunta → referto» è quindi il tempo di lavorazione, senza l\'attesa notturna. Si usa la <b>mediana</b> (metà degli esami è più veloce, metà più lenta) perché pochi casi molto vecchi falserebbero la media. Le barre mostrano come si distribuiscono gli esami rispetto al <b>limite della propria tipologia</b> (es. per l\'ECG 15 min, per la polisonnografia 48 h), quindi i colori hanno lo stesso significato per tutte le righe. Limiti di contratto: <b>ECG 15 minuti</b>, <b>holter e spirometria 24 ore</b>, <b>polisonnografia 48 ore</b>. «Nei tempi di contratto» conta dall\'assegnazione presunta; «Nei tempi (da richiesta)» conta dall\'orario reale di richiesta, senza correzioni notturne. «Fuori contratto» = esami oltre il limite della propria tipologia.'
     + (P.neg || P.noTime ? '<br><br>Esclusi dal calcolo: ' + [P.neg ? P.neg + ' con data refertazione precedente alla richiesta' : '', P.noTime ? P.noTime + ' senza data/ora completa' : ''].filter(Boolean).join(' · ') + '.' : '') + '</div></details>';
   h += '<div class="r-panel"><div class="pf-h">Per tipologia</div><div class="pf-sub">Tempi di refertazione per tipo di esame.</div>' + cntPerfTable(byT, 'Tipologia', true)
     + '<div class="pf-leg">' + CNT_PERF_BUCKETS.map(x => '<span><i style="background:' + x.c + '"></i>' + x.l + '</span>').join('') + '</div></div>';
@@ -3499,8 +3507,8 @@ function cntPerfRender() {
 function cntPerfExport() {
   const C = cnt.perf; if (!C) { toast('Nessun dato da esportare', 'err'); return; }
   const r1 = x => x == null ? '' : Math.round(x * 10) / 10;
-  const hdr = ['Esami', 'Mediana richiesta→referto (min)', 'Mediana assegnazione presunta→referto (min)', '90° percentile (min)', 'Nei tempi di contratto (%)', 'Nei tempi da richiesta (%)', 'Fuori contratto'];
-  const row = g => [g.k, g.n, r1(g.medTot), r1(g.medLav), r1(g.p90), r1(g.okPct), r1(g.okTotPct), g.late];
+  const hdr = ['Esami', 'Mediana richiesta→referto (min)', 'Mediana assegnazione presunta→referto (min)', 'Nei tempi di contratto (%)', 'Nei tempi da richiesta (%)', 'Fuori contratto'];
+  const row = g => [g.k, g.n, r1(g.medTot), r1(g.medLav), r1(g.okPct), r1(g.okTotPct), g.late];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Tipologia', ...hdr], ...C.byT.map(row)]), 'Per tipologia');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Medico', ...hdr], ...cntPerfGroups(C.P.items, 'm').map(row)]), 'Per medico');
@@ -3511,7 +3519,9 @@ function cntPerfExport() {
 async function cntLoad() {
   const my = ++cnt.req;
   cnt.loading = true; cnt.err = ''; cnt.rec = null; cnt.scelte = {}; cnt.scelteMeta = {}; cnt.scelteErr = ''; cnt.shifts = null; cnt.shiftsPrev = []; cnt.prevDati = null; cnt.shiftsErr = ''; cnt.shiftsLoading = false; cnt.loaded = false; cnt.fileMeta = null;
+  if (attYm !== cnt.ym) { attMap = {}; attYm = cnt.ym; }   // le segnalazioni «da attenzionare» sono per mese
   cntRender();
+  loadAtt().then(ch => { if (ch) attRefresh(); }).catch(() => {});
   try {
     const { data, error } = await getSb().from('conteggi_mesi').select('*').eq('mese', cnt.ym).maybeSingle();
     if (my !== cnt.req) return;

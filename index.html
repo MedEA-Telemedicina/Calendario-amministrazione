@@ -525,6 +525,90 @@
     .c-fi { width: 100%; }
   }
 
+
+  /* ── riga file caricato: sottile, una sola linea ── */
+  .c-fbar { display: flex; align-items: center; gap: 10px 12px; padding: 7px 8px 7px 10px; margin-bottom: 8px; background: #fff; border: 1px solid #edf1f6; border-radius: 14px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+  .c-fbar .c-fico { width: 30px; height: 30px; border-radius: 9px; font-size: 15px; }
+  .c-finfo { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; line-height: 1.25; }
+  .c-fbar .c-fname { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; word-break: normal; }
+  .c-fmeta { font-size: 11.5px; color: #8895a5; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .c-fbar .c-btns { gap: 4px; flex-wrap: nowrap; flex: none; }
+  .c-ib { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px; border: none; border-radius: 9px; background: transparent; color: #52606d; font: 600 12px/1 inherit; font-family: inherit; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s; }
+  .c-ib i { font-style: normal; font-size: 13px; line-height: 1; }
+  .c-ib:hover { background: #eef3fa; color: #1a73e8; }
+  .c-ib.danger:hover { background: #fdecea; color: #c5372c; }
+  .c-ib:focus-visible { outline: 2px solid #1a73e8; outline-offset: 1px; }
+
+  /* ── note di assegnazione: pillola discreta che si apre a richiesta ── */
+  .c-notes { margin: 0 0 12px 2px; font-size: 12px; color: #6b7a8c; }
+  .c-notes > summary { display: inline-flex; align-items: center; gap: 8px; padding: 3px 5px 3px 10px; border-radius: 999px; background: #f3f6fa; color: #5b6b7f; font-weight: 600; cursor: pointer; list-style: none; user-select: none; transition: background .15s; }
+  .c-notes > summary::-webkit-details-marker { display: none; }
+  .c-notes > summary::after { content: '›'; width: 16px; height: 16px; display: grid; place-items: center; font-size: 14px; line-height: 1; font-weight: 800; transition: transform .2s; }
+  .c-notes[open] > summary::after { transform: rotate(90deg); }
+  .c-notes > summary:hover { background: #e8eef6; }
+  .c-notes > summary b { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #dbe6f6; color: #1558b0; font-size: 11px; display: grid; place-items: center; }
+  .c-notes > div { margin: 8px 0 0 6px; padding: 2px 0 2px 12px; border-left: 3px solid #dbe6f6; line-height: 1.65; max-height: 240px; overflow: auto; }
+
+  /* ── affinamenti responsive della sezione Conteggi ── */
+  #sub-view-conteggi { min-width: 0; }
+  #cnt-body, .c-docs, .c-doc, .c-dbody { min-width: 0; }
+  .c-dbody > * { min-width: 0; max-width: 100%; }
+  .c-scroll { -webkit-overflow-scrolling: touch; max-width: 100%; }
+  .c-nav { position: sticky; top: 0; z-index: 5; }
+  .c-chips { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .c-chip { transition: transform .2s, box-shadow .2s; }
+  .c-chip:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(16,24,40,.1); }
+  .c-doc > summary:focus-visible { outline: 2px solid #1a73e8; outline-offset: -2px; border-radius: 18px; }
+  .c-doc .n > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+  .c-tb th, .c-tb td { overflow-wrap: anywhere; }
+  .c-tb.c-mx th, .c-tb.c-mx td { overflow-wrap: normal; }
+  @media (hover: none) { .c-arrow { width: 42px; height: 42px; } .c-ib { height: 34px; } }
+  @media (max-width: 900px) {
+    .c-doc > summary { gap: 8px 10px; }
+    .c-doc .n { flex-basis: 100%; }
+    .c-doc .t { margin-left: auto; }
+    .c-detbtn { margin-left: auto; }
+  }
+  @media (max-width: 640px) {
+    #sub-view-conteggi .r-kpis { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    #sub-view-conteggi .r-kpi { padding: 12px; gap: 10px; border-radius: 14px; }
+    #sub-view-conteggi .r-kpi .n { font-size: 20px; }
+    .c-nav { border-radius: 14px; top: 4px; }
+    .c-arrow { flex: none; }
+    .c-onlyatt { flex: 1 1 auto; white-space: normal; }
+    .c-fbar { flex-wrap: wrap; padding: 8px 10px; }
+    .c-finfo { flex: 1 1 calc(100% - 50px); }
+    .c-fbar .c-btns { width: 100%; justify-content: space-between; border-top: 1px solid #f0f3f7; padding-top: 6px; }
+    .c-fbar .c-ib { flex: 1; justify-content: center; padding: 0 6px; }
+    .c-fbar .c-ib span { display: none; }
+    .c-fbar .c-ib i { font-size: 16px; }
+    .c-fmeta { white-space: normal; }
+    .c-chips { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .c-chip { padding: 11px 12px 11px 16px; }
+    .c-chip.tot { grid-column: 1 / -1; }
+    .c-chip span { font-size: 11.5px; }
+    .c-doc { border-radius: 14px; }
+    .c-doc > summary { padding: 11px 12px; }
+    .c-doc .n { font-size: 14px; gap: 10px; }
+    .c-doc .m { padding: 3px 10px; }
+    .c-doc .t { font-size: 15px; }
+    .c-detbtn { flex: 1 1 100%; justify-content: center; margin-left: 0; }
+    .c-sec { font-size: 11px; }
+    .c-tb { font-size: 12.5px; } .c-tb th, .c-tb td { padding: 8px 9px; }
+    .c-pend { margin-left: 0; }
+    .c-bar { margin-left: 0; width: 100%; max-width: 180px; }
+    .c-tl .b { padding-left: 0; }
+    .c-warn { padding: 10px 12px; } .c-warn .r-btn { width: 100%; }
+    .c-grand { padding: 12px 14px; } .c-grand b { font-size: 17px; }
+    .c-drop { padding: 30px 14px; } .c-drop .big { width: 60px; height: 60px; font-size: 28px; }
+    .c-unm-row { flex-wrap: wrap; }
+    .c-attbox { padding: 10px 12px; }
+  }
+  @media (max-width: 380px) {
+    #sub-view-conteggi .r-kpi .ic { display: none; }
+    .c-chips { grid-template-columns: 1fr; }
+  }
+
   /* ═══════════ PERFORMANCE ═══════════ */
   .pf-wrap { display: flex; flex-direction: column; gap: 18px; }
   .pf-wrap > .r-panel, .pf-wrap > .c-det { margin-bottom: 0; }
@@ -3483,11 +3567,11 @@ function cntRenderMain() {
   }
   if (!doctorsLoaded) { body.innerHTML = '<div class="r-panel c-note">Elenco medici non ancora caricato…</div>'; return; }
   const r = cnt.rec, ign = r.dati.ignorati || {}, R = cntCompute(), hasShifts = !!cnt.shifts, T = R.T;
-  let h = '<div class="r-panel c-file"><div class="c-fi"><span class="c-fico">📄</span><div><div class="c-fname">' + escHtml(r.nome_file || 'file') + '</div><div class="r-usub">'
-    + (r.righe_totali || 0).toLocaleString('it-IT') + ' righe · ' + (r.righe_conteggiate || 0).toLocaleString('it-IT') + ' esami refertati conteggiati · caricato il '
-    + (r.caricato_il ? new Date(r.caricato_il).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '–') + (r.caricato_da ? ' da ' + escHtml(r.caricato_da) : '') + '</div></div></div>'
-    + '<div class="c-btns">' + (cnt.fileMeta ? '<button class="r-btn primary" data-cnt="dlfile" title="Scarica il file Excel originale caricato per questo mese">⬇ Scarica Excel</button>' : '<span class="r-usub" title="Elimina e ricarica il file per renderlo scaricabile">File originale non salvato</span>') + '<button class="r-btn ghost" data-cnt="expand">Espandi tutti</button><button class="r-btn ghost" data-cnt="collapse">Comprimi tutti</button>'
-    + '<button class="r-btn ghost" data-cnt="del">🗑 Elimina e ricarica</button></div></div>';
+  const fMeta = (r.righe_totali || 0).toLocaleString('it-IT') + ' righe · ' + (r.righe_conteggiate || 0).toLocaleString('it-IT') + ' esami conteggiati · ' + (r.caricato_il ? new Date(r.caricato_il).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '–') + (r.caricato_da ? ' · ' + escHtml(r.caricato_da) : '');
+  let h = '<div class="c-fbar"><span class="c-fico">📄</span><div class="c-finfo"><span class="c-fname" title="' + escHtml(r.nome_file || 'file') + '">' + escHtml(r.nome_file || 'file') + '</span><span class="c-fmeta">' + fMeta + '</span></div>'
+    + '<div class="c-btns">' + (cnt.fileMeta ? '<button class="c-ib" data-cnt="dlfile" title="Scarica il file Excel originale caricato per questo mese"><i>⬇</i><span>Excel</span></button>' : '<span class="c-fmeta" title="Elimina e ricarica il file per renderlo scaricabile">File originale non salvato</span>')
+    + '<button class="c-ib" data-cnt="expand" title="Espandi tutti i medici"><i>▾</i><span>Espandi</span></button><button class="c-ib" data-cnt="collapse" title="Comprimi tutti i medici"><i>▴</i><span>Comprimi</span></button>'
+    + '<button class="c-ib danger" data-cnt="del" title="Elimina e ricarica il file"><i>🗑</i><span>Ricarica</span></button></div></div>';
   // note sull'assegnazione degli esami ai turni: un'unica riga compatta, dettagli a richiesta
   const nts = [], pl = (n, a, b) => n === 1 ? a : b;
   if (ign.spostati) nts.push('<b>' + ign.spostati + '</b> ' + pl(ign.spostati, 'esame refertato il giorno dopo la richiesta è conteggiato', 'esami refertati il giorno dopo la richiesta sono conteggiati') + ' nel giorno di assegnazione.');
@@ -3498,7 +3582,7 @@ function cntRenderMain() {
   if (R.prevMoved) nts.push('<b>' + R.prevMoved + '</b> ' + pl(R.prevMoved, 'esame refertato', 'esami refertati') + ' a inizio mese ' + pl(R.prevMoved, 'appartiene', 'appartengono') + ' al turno dell\'ultimo giorno del mese precedente: non conteggiat' + pl(R.prevMoved, 'o', 'i') + ' qui.');
   if (R.hPrev) nts.push('<b>' + R.hPrev + '</b> holter a inizio mese ' + pl(R.hPrev, 'appartiene', 'appartengono') + ' al turno del mese precedente: non conteggiat' + pl(R.hPrev, 'o', 'i') + ' qui.');
   if (R.hOver || R.hOut) nts.push('Holter oltre la capienza del turno: <b>' + R.hOver + '</b> · refertati senza turno holter nelle 24 ore precedenti: <b>' + R.hOut + '</b> (dettagli nell\'avviso del singolo medico).');
-  if (nts.length) h += '<details class="c-det c-notes"><summary>ℹ️ Assegnazione degli esami ai turni · ' + nts.length + (nts.length === 1 ? ' nota' : ' note') + ' <span class="mut">(nel «Dettaglio esami» gli esami spostati sono indicati con ↩)</span></summary><div>' + nts.join('<br>') + '</div></details>';
+  if (nts.length) h += '<details class="c-notes"><summary><span>ℹ️ Assegnazione esami ai turni</span><b>' + nts.length + '</b></summary><div>' + nts.join('<br>') + '<div class="mut">Nel «Dettaglio esami» gli esami spostati sono indicati con ↩.</div></div></details>';
   if (cnt.scelteErr) h += '<div class="c-warn">⚠ <span>Le scelte sui turni aggiuntivi <b>non possono essere salvate né condivise</b>: tabella <b>conteggi_scelte</b> non trovata su Supabase. Esegui lo script <b>supabase_persistenza.sql</b> nel SQL Editor e ricarica la pagina.</span></div>';
   if (cnt.shiftsLoading) h += '<div class="c-warn c-info">⏳ Lettura dei turni dal calendario…</div>';
   else if (cnt.shiftsErr) h += '<div class="c-warn">Turni non disponibili (' + escHtml(cnt.shiftsErr) + ') — sono mostrati solo gli esami, senza turni né compensi. <button class="r-btn ghost" data-cnt="shifts">↻ Riprova</button></div>';

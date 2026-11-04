@@ -1814,6 +1814,7 @@ const GRUPPI = [
   ]},
   { titolo: 'Esami a consuntivo (pagati a prestazione)', voci: [
     { k: 'ecg',             l: 'ECG' },
+    { k: 'ecg_domenica',    l: 'ECG domenica' },
     { k: 'hc',              l: 'HC' },
     { k: 'hp',              l: 'HP' },
     { k: 'holter_12der',    l: 'Holter cardiaco 12 der.' },
@@ -2593,7 +2594,7 @@ function cntVoce(ev, d, ecgN) {
 const vocLabel = k => (VOCI_ALL.find(v => v.k === k) || {}).l || k;
 
 const CNT_TIPO_VOCE = { 'ECG': 'ecg', 'HOLTER CARDIACO': 'hc', 'HOLTER PRESSORIO': 'hp', 'HOLTER CARDIACO 12D': 'holter_12der', 'SPIROMETRIA': 'spirometria', 'POLISONNOGRAFIA': 'polisonnografia' };
-const CNT_CONS = ['ecg', 'hc', 'hp', 'holter_12der', 'spirometria', 'polisonnografia'];
+const CNT_CONS = ['ecg', 'ecg_domenica', 'hc', 'hp', 'holter_12der', 'spirometria', 'polisonnografia'];
 const CNT_TURNI = ['turno_completo', 'turno_ecg_75', 'turno_ecg_100', 'turno_holter', 'turno_16hc', 'turno_domenica'];
 const GG = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const cents = x => Math.round(x * 100);
@@ -3169,7 +3170,16 @@ function cntCompute() {
       const voce = CNT_TIPO_VOCE[t] || null;
       const prezzo = voce && d.tariffe[voce] != null ? d.tariffe[voce] : null;
       const inc = Math.min(n, incl[t] || 0), pay = n - inc;
-      return { t, n, prezzo, inc, pay, c: prezzo != null ? cents(prezzo) * pay : 0 };
+      // ECG a consuntivo refertati di domenica: se il medico ha il prezzo «ECG domenica» valgono quello, gli altri restano al prezzo ECG normale
+      const prezzoDom = t === 'ECG' && d.tariffe.ecg_domenica != null ? d.tariffe.ecg_domenica : null;
+      let dom = 0;
+      if (prezzoDom != null) Object.entries(cells).forEach(([day, c0]) => {
+        if (new Date(day + 'T00:00:00').getDay() !== 0) return;
+        const nE = c0.types['ECG'] || 0; dom += nE - Math.min(c0.ecgIncl || 0, nE);
+      });
+      dom = Math.min(dom, pay);
+      const cTot = (prezzo != null ? cents(prezzo) * (pay - dom) : 0) + (dom ? cents(prezzoDom) * dom : 0);
+      return { t, n, prezzo, inc, pay, dom, prezzoDom, c: prezzo != null || dom ? cTot : 0 };
     });
     const centsE = typeRows.reduce((a, r) => a + r.c, 0);
     const conv = cntConv(typeRows, centsT, ok), convG = cntConvByTurno(sv, cells, typeRows, d.tariffe);
@@ -3226,6 +3236,8 @@ function cntPendInline(q) {
   if (q.conf > 0) return '<div class="c-pend done"><span>✓ Confermato: ' + (q.conf === 1 ? cntOrd(q.gn + 1) + ' turno' : q.conf + ' turni aggiuntivi') + ' ECG assegnato/i' + who + '</span>' + btn('Modifica') + '</div>';
   return '<div class="c-pend no"><span>Turno aggiuntivo ECG non assegnato (' + q.ecg + ' ECG oltre la capienza)' + who + '</span>' + btn('Modifica') + '</div>';
 }
+// riga «domenica» sotto l'importo a referto (solo per gli ECG di un medico con il prezzo ECG domenica)
+const cntDomNote = r => r.dom ? '<br><small class="mut">domenica ' + fmtEuro(r.prezzoDom) + ' × ' + r.dom.toLocaleString('it-IT') + '</small>' : '';
 // medici solo a consuntivo: niente tabella giorno/turno, solo conteggio per tipologia con importo a referto e compenso spettante
 function cntConsTableHtml(x) {
   const dot = t => '<span class="c-dot" style="background:' + avColor(t) + '"></span>';
@@ -3233,7 +3245,7 @@ function cntConsTableHtml(x) {
   let h = '<div class="c-scroll" style="margin-top:0"><table class="c-tb"><thead><tr><th>Tipologia</th><th>Esami refertati</th><th>Importo a referto</th><th>Compenso spettante</th></tr></thead><tbody>';
   x.typeRows.forEach(r => {
     h += '<tr><td style="text-align:left"><b>' + dot(r.t) + escHtml(r.t) + '</b></td><td><b>' + r.n.toLocaleString('it-IT') + '</b></td>'
-      + '<td>' + (r.prezzo != null ? fmtEuro(r.prezzo) : '<span class="mut">tariffa mancante</span>') + '</td>'
+      + '<td>' + (r.prezzo != null ? fmtEuro(r.prezzo) : '<span class="mut">tariffa mancante</span>') + cntDomNote(r) + '</td>'
       + '<td><b>' + (r.prezzo != null ? fmtEuro(r.c / 100) : '<span class="mut">–</span>') + '</b></td></tr>';
   });
   h += '</tbody><tfoot><tr><td style="text-align:left">Totale</td><td>' + x.esami.toLocaleString('it-IT') + '</td><td></td><td>' + fmtEuro(x.centsE / 100) + '</td></tr></tfoot></table></div>';
@@ -3248,7 +3260,7 @@ function cntConsMixHtml(x) {
   rows.forEach(r => {
     h += '<tr><td style="text-align:left"><b>' + dot(r.t) + escHtml(r.t) + '</b></td><td>' + r.n.toLocaleString('it-IT') + '</td>'
       + '<td>' + (r.inc ? r.inc.toLocaleString('it-IT') : '<span class="mut">–</span>') + '</td><td><b>' + r.pay.toLocaleString('it-IT') + '</b></td>'
-      + '<td>' + fmtEuro(r.prezzo) + '</td><td><b>' + fmtEuro(r.c / 100) + '</b></td></tr>';
+      + '<td>' + fmtEuro(r.prezzo) + cntDomNote(r) + '</td><td><b>' + fmtEuro(r.c / 100) + '</b></td></tr>';
   });
   const sum = k => rows.reduce((a, r) => a + r[k], 0);
   h += '</tbody><tfoot><tr><td style="text-align:left">Totale</td><td>' + sum('n').toLocaleString('it-IT') + '</td><td>' + sum('inc').toLocaleString('it-IT') + '</td><td>' + sum('pay').toLocaleString('it-IT') + '</td><td></td><td>' + fmtEuro(x.centsE / 100) + '</td></tr></tfoot></table></div>';
@@ -3684,17 +3696,28 @@ function cntPerfAssignShift(wins, tq, tr) {
   return null;
 }
 // Domenica = giorno bonus (non lavorativo) per tutti gli esami tranne l'ECG: se tra i due istanti cade una domenica in cui il medico NON è in turno
-// (un turno solo-ECG non conta per gli altri esami), quelle 24 ore non si contano. La domenica del referto non si scala (quel giorno il medico ha lavorato).
-function cntPerfSunday(a, b, wins) {
+// per quella tipologia di esame, quelle 24 ore non si contano. La domenica del referto non si scala (quel giorno il medico ha lavorato).
+// Il turno di domenica copre solo le tipologie che gli competono:
+//  · turno ECG → solo ECG · turno Holter 16 HC → solo holter cardiaco (12D incluso, niente pressorio)
+//  · turno Holter 10/10 → holter cardiaco, 12D e pressorio · turno completo (o non riconosciuto) → tutte le tipologie
+function cntPerfShiftCovers(kind, tipo) {
+  const t = String(tipo || '').toUpperCase();
+  if (kind === 'ecg') return /^ECG\b/.test(t);
+  if (kind === 'h16') return CNT_HOLTER_T.includes(t) && t !== 'HOLTER PRESSORIO';
+  if (kind === 'holter') return CNT_HOLTER_T.includes(t);
+  return true;
+}
+function cntPerfSunday(a, b, wins, tipo) {
   let x = 0;
   for (let d = Math.floor(a / 1440); d < Math.floor(b / 1440); d++) {
     if ((d + 4) % 7 !== 0) continue;                                   // 01/01/1970 = giovedì → domenica = (giorni + 4) % 7 === 0
     const ws = wins && wins[new Date(d * 86400000).toISOString().slice(0, 10)];
-    if (ws && ws.some(w => w[2] !== 'ecg')) continue;                  // turno non-ECG in quella domenica: il medico lavora
+    if (ws && ws.some(w => cntPerfShiftCovers(w[2], tipo))) continue;     // turno di domenica adatto a questa tipologia: il medico lavora
     x += Math.max(0, Math.min(b, (d + 1) * 1440) - Math.max(a, d * 1440));
   }
   return x;
 }
+function cntPerfAvg(arr) { return arr.length ? arr.reduce((s, x) => s + x, 0) / arr.length : null; }
 function cntPerfPct(arr, p) {
   if (!arr.length) return null;
   const a = arr.slice().sort((x, y) => x - y), i = (a.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i);
@@ -3719,7 +3742,7 @@ function cntPerfCompute() {
     let ta = wins ? cntPerfAssignShift(wins, tq, tr) : null;
     if (ta != null) out.nT++; else { ta = Math.min(cntPerfAssign(tq), tr); out.nS++; }
     const ecg = /^ECG\b/i.test(String(e[1]));                         // ECG: la domenica si lavora, nessuno sconto
-    const sTot = ecg ? 0 : cntPerfSunday(tq, tr, wins), sLav = ecg ? 0 : cntPerfSunday(ta, tr, wins);
+    const sTot = ecg ? 0 : cntPerfSunday(tq, tr, wins, e[1]), sLav = ecg ? 0 : cntPerfSunday(ta, tr, wins, e[1]);
     if (sTot) out.nDom++;
     out.items.push({ m: med, t: e[1], tot: tr - tq - sTot, lav: tr - ta - sLav, dom: sTot, id: e[0], pz: e[4], cl: e[3], rq: e[5], rf: e[6] });
   }); });
@@ -3730,7 +3753,7 @@ function cntPerfStats(items) {
   const ok = items.filter(x => x.lav <= cntPerfSoglia(x.t)).length, okT = items.filter(x => x.tot <= cntPerfSoglia(x.t)).length, late = n - ok;
   const bk = CNT_PERF_BUCKETS.map(() => 0);
   items.forEach(x => { const r = x.lav / cntPerfSoglia(x.t); bk[CNT_PERF_BUCKETS.findIndex(b => r <= b.max)]++; });
-  return { n, medTot: cntPerfPct(tot, .5), p90Tot: cntPerfPct(tot, .9), medLav: cntPerfPct(lav, .5), ok, okPct: n ? ok * 100 / n : null, okTotPct: n ? okT * 100 / n : null, late, bk };
+  return { n, avgTot: cntPerfAvg(tot), avgLav: cntPerfAvg(lav), ok, okPct: n ? ok * 100 / n : null, okTotPct: n ? okT * 100 / n : null, late, bk };
 }
 function cntPerfGroups(items, key) {
   const by = {}; items.forEach(x => (by[x[key]] || (by[x[key]] = [])).push(x));
@@ -3741,7 +3764,7 @@ const cntPerfN = (v, d) => v == null ? '–' : v.toLocaleString('it-IT', { maxim
 const cntPerfOkHtml = p => p == null ? '–' : '<span class="pf-ok ' + cntPerfCls(p) + '">' + cntPerfN(p) + '%</span>';
 const cntPerfLim = t => { const m = cntPerfSoglia(t); return m < 90 ? m + ' min' : (m / 60).toLocaleString('it-IT', { maximumFractionDigits: 1 }) + ' h'; };
 const cntPerfIni = n => { const w = String(n).trim().split(/\s+/); return ((w.length > 1 ? w[0][0] + w[1][0] : String(n).trim().slice(0, 2)) || '?').toUpperCase(); };
-const cntPerfSmall = g => g.n < 5 ? '<span class="pf-warn" title="Meno di 5 esami: la mediana è poco rappresentativa">campione ridotto</span>' : '';
+const cntPerfSmall = g => g.n < 5 ? '<span class="pf-warn" title="Meno di 5 esami: il tempo medio è poco rappresentativo">campione ridotto</span>' : '';
 const cntPerfBarHtml = (g, big) => '<div class="pf-dist' + (big ? ' big' : '') + '">' + g.bk.map((v, i) => {
   if (!v) return ''; const w = v * 100 / g.n, B = CNT_PERF_BUCKETS[i];
   return '<i style="width:' + w + '%;background:' + B.c + ';color:' + B.t + '" title="' + escHtml(B.l + ': ' + v.toLocaleString('it-IT') + ' esami (' + w.toLocaleString('it-IT', { maximumFractionDigits: 1 }) + '%)') + '">' + (w >= (big ? 5 : 9) ? Math.round(w) + '%' : '') + '</i>';
@@ -3758,26 +3781,26 @@ function cntPerfHero(all, P, nMed, nTipi) {
   const kpi = (ico, v, l, sub, cls2, count) => '<div class="pf-kpi ' + (cls2 || '') + '"><span class="pf-kico">' + ico + '</span><div><b' + (count != null ? ' data-count="' + count + '"' : '') + '>' + v + '</b><span class="lbl">' + l + '</span>' + (sub ? '<small>' + sub + '</small>' : '') + '</div></div>';
   return '<div class="pf-hero">' + gauge + '<div class="pf-kpis">'
     + kpi('🧾', all.n.toLocaleString('it-IT'), 'esami analizzati', nTipi + ' tipologie · ' + nMed + ' medici', '', all.n)
-    + kpi('⏱️', cntPerfFmt(all.medTot), 'mediana richiesta → referto', '9 esami su 10 entro ' + cntPerfFmt(all.p90Tot), '')
-    + kpi('🛠️', cntPerfFmt(all.medLav), 'mediana di lavorazione', 'dall\'assegnazione presunta al referto', 'amber')
+    + kpi('⏱️', cntPerfFmt(all.avgTot), 'tempo medio richiesta → referto', '', '')
+    + kpi('🛠️', cntPerfFmt(all.avgLav), 'tempo medio di lavorazione', 'dall\'assegnazione presunta al referto', 'amber')
     + kpi(all.late ? '⚠️' : '✅', all.late.toLocaleString('it-IT'), 'esami fuori tempo', all.late ? cntPerfN(all.late * 100 / all.n, 1) + '% del totale' : 'nessun ritardo', all.late ? 'red' : 'green', all.late)
     + '</div></div>';
 }
 function cntPerfTypeTable(rows) {
-  return '<div class="pf-scroll"><table class="pf-tbl"><thead><tr><th>Tipologia</th><th class="num" title="Limite di refertazione da contratto">Limite</th><th class="num">Esami</th><th class="num" title="Dalla data richiesta alla data refertazione">Mediana</th><th class="num" title="9 esami su 10 sono stati refertati entro questo tempo">90° perc.</th>'
+  return '<div class="pf-scroll"><table class="pf-tbl"><thead><tr><th>Tipologia</th><th class="num" title="Limite di refertazione da contratto">Limite</th><th class="num">Esami</th><th class="num" title="Media dei tempi dalla data richiesta alla data refertazione">Tempo medio</th>'
     + '<th title="Tempo di lavorazione (da assegnazione presunta) entro il limite di contratto">Nei tempi di contratto</th><th class="num" title="Esami oltre il limite di contratto">Fuori tempo</th><th>Distribuzione</th></tr></thead><tbody>'
     + rows.map(g => '<tr class="' + (cnt.perfT === g.k ? 'sel' : '') + '"><td><button type="button" class="pf-tname" data-pgo="' + escHtml(g.k) + '" title="Confronta i medici su questa tipologia"><span class="c-dot" style="background:' + avColor(g.k) + '"></span>' + escHtml(cntShort[g.k] || g.k) + '</button></td>'
-      + '<td class="num mut">' + cntPerfLim(g.k) + '</td><td class="num">' + g.n.toLocaleString('it-IT') + '</td><td class="num"><b>' + cntPerfFmt(g.medTot) + '</b></td><td class="num">' + cntPerfFmt(g.p90Tot) + '</td>'
+      + '<td class="num mut">' + cntPerfLim(g.k) + '</td><td class="num">' + g.n.toLocaleString('it-IT') + '</td><td class="num"><b>' + cntPerfFmt(g.avgTot) + '</b></td>'
       + '<td class="pf-okc"><div><span class="pf-meter"><i class="' + cntPerfCls(g.okPct) + '" style="width:' + Math.max(2, g.okPct) + '%"></i></span>' + cntPerfOkHtml(g.okPct) + '</div></td>'
       + '<td class="num">' + (g.late ? '<button type="button" class="pf-late" data-pfk="t" data-pfv="' + escHtml(g.k) + '" title="Mostra gli esami fuori tempo">' + g.late.toLocaleString('it-IT') + '</button>' : '<span class="mut">0</span>') + '</td>'
       + '<td class="dist">' + cntPerfBarHtml(g) + '</td></tr>').join('')
     + '</tbody></table></div>';
 }
 function cntPerfMedTable(rows) {
-  return '<div class="pf-scroll"><table class="pf-tbl"><thead><tr><th>Medico</th><th class="num">Esami</th><th class="num" title="Dalla data richiesta alla data refertazione">Mediana</th><th class="num" title="9 esami su 10 sono stati refertati entro questo tempo">90° perc.</th>'
+  return '<div class="pf-scroll"><table class="pf-tbl"><thead><tr><th>Medico</th><th class="num">Esami</th><th class="num" title="Media dei tempi dalla data richiesta alla data refertazione">Tempo medio</th>'
     + '<th title="Tempo di lavorazione (da assegnazione presunta) entro il limite di contratto">Nei tempi di contratto</th><th class="num" title="Esami oltre il limite di contratto">Fuori tempo</th><th>Distribuzione</th></tr></thead><tbody>'
     + rows.map((g, i) => '<tr data-n="' + escHtml(nameKey(g.k)) + '"><td><div class="pf-med"><span class="pf-rk' + (i < 3 ? ' m' + (i + 1) : '') + '">' + (i + 1) + '</span><span class="pf-av" style="background:' + avColor(g.k) + '">' + escHtml(cntPerfIni(g.k)) + '</span><span class="pf-mn"><b>' + escHtml(g.k) + '</b>' + cntPerfSmall(g) + '</span></div></td>'
-      + '<td class="num">' + g.n.toLocaleString('it-IT') + '</td><td class="num"><b>' + cntPerfFmt(g.medTot) + '</b></td><td class="num">' + cntPerfFmt(g.p90Tot) + '</td>'
+      + '<td class="num">' + g.n.toLocaleString('it-IT') + '</td><td class="num"><b>' + cntPerfFmt(g.avgTot) + '</b></td>'
       + '<td class="pf-okc"><div><span class="pf-meter"><i class="' + cntPerfCls(g.okPct) + '" style="width:' + Math.max(2, g.okPct) + '%"></i></span>' + cntPerfOkHtml(g.okPct) + '</div></td>'
       + '<td class="num">' + (g.late ? '<button type="button" class="pf-late" data-pfk="m" data-pfv="' + escHtml(g.k) + '" title="Mostra gli esami fuori tempo">' + g.late.toLocaleString('it-IT') + '</button>' : '<span class="mut">0</span>') + '</td>'
       + '<td class="dist">' + cntPerfBarHtml(g) + '</td></tr>').join('')
@@ -3818,9 +3841,9 @@ function cntPerfRenderInner() {
   const all = cntPerfStats(P.items), byT = cntPerfGroups(P.items, 't');
   if (!cnt.perfT || !byT.some(g => g.k === cnt.perfT)) cnt.perfT = byT[0].k;   // sempre una categoria selezionata (la più numerosa di default)
   const sel = P.items.filter(x => x.t === cnt.perfT), byM = cntPerfGroups(sel, 'm');
-  const so = cnt.perfSort || 'n';                       // n = più esami · fast = più veloce · slow = più lento (mediana richiesta → referto)
+  const so = cnt.perfSort || 'n';                       // n = più esami · fast = più veloce · slow = più lento (tempo medio richiesta → referto)
   const tie = (a, b) => b.n - a.n || String(a.k).localeCompare(String(b.k), 'it');
-  if (so === 'fast') byM.sort((a, b) => a.medTot - b.medTot || tie(a, b)); else if (so === 'slow') byM.sort((a, b) => b.medTot - a.medTot || tie(a, b));
+  if (so === 'fast') byM.sort((a, b) => a.avgTot - b.avgTot || tie(a, b)); else if (so === 'slow') byM.sort((a, b) => b.avgTot - a.avgTot || tie(a, b));
   cnt.perf = { all, byT, byM, P };
   const sig = [cnt.ym, all.n, all.late, P.nT, P.nS].join('|'), fresh = cnt.perfSig !== sig; cnt.perfSig = sig;
   const nMed = new Set(P.items.map(x => x.m)).size;
@@ -3833,9 +3856,9 @@ function cntPerfRenderInner() {
     + cntPerfMedTable(byM) + '<div class="c-note" id="pf-mempty" style="display:none;padding:22px">Nessun medico corrisponde alla ricerca.</div></div>';
   h += '<details class="c-det"><summary>ℹ️ Come sono calcolati i tempi</summary><div>La <b>data di assegnazione</b> al medico non è presente nel file, quindi è <b>presunta</b>. Per i medici in turno nel calendario «Medici in Turno» <b>non può essere precedente all\'inizio del turno</b> (mattina 08:30–14:30, pomeriggio 14:30–20:30, completo/holter 08:30–20:30): per un medico di pomeriggio, una richiesta alle 12:00 vale assegnata alle 14:30; se la richiesta arriva durante il turno, coincide con la richiesta. '
     + 'Senza un turno utile (o se i turni non sono disponibili) si usa l\'orario di servizio 08:30–20:30: una richiesta notturna vale assegnata alle 08:30. '
-    + 'La <b>domenica è un giorno bonus (non lavorativo)</b> per tutti gli esami <b>tranne l\'ECG</b>: se tra richiesta e referto cade una domenica in cui il medico non è in turno (un turno solo-ECG non conta), quelle 24 ore vengono sottratte dai tempi (esami interessati: <b>' + P.nDom.toLocaleString('it-IT') + '</b>). '
+    + 'La <b>domenica è un giorno bonus (non lavorativo)</b> per tutti gli esami <b>tranne l\'ECG</b>: se tra richiesta e referto cade una domenica in cui il medico non è in turno <b>per quella tipologia di esame</b>, quelle 24 ore vengono sottratte dai tempi. Il turno di domenica conta così: <b>turno ECG</b> solo per gli ECG, <b>turno Holter 16 HC</b> solo per gli holter cardiaci (12 derivazioni incluso, non il pressorio), <b>turno Holter 10/10</b> per holter cardiaco, 12D e pressorio, <b>turno completo</b> per tutte le tipologie (esami interessati: <b>' + P.nDom.toLocaleString('it-IT') + '</b>). '
     + 'Esami assegnati dal turno: <b>' + P.nT.toLocaleString('it-IT') + '</b> · da orario di servizio: <b>' + P.nS.toLocaleString('it-IT') + '</b>' + (cnt.shiftsLoading ? ' (turni in caricamento…)' : !P.shifts ? ' (turni non disponibili: collega Google)' : '') + '. '
-    + '«Assegnazione presunta → referto» è quindi il tempo di lavorazione. Si usa la <b>mediana</b> (metà degli esami è più veloce, metà più lenta) perché pochi casi molto vecchi falserebbero la media; il <b>90° percentile</b> indica il tempo entro cui è stato refertato il 90% degli esami. '
+    + '«Assegnazione presunta → referto» è quindi il tempo di lavorazione. Il <b>tempo medio</b> è la media aritmetica dei tempi di tutti gli esami: pochi casi molto vecchi possono alzarlo sensibilmente. '
     + 'Le barre mostrano come si distribuiscono gli esami rispetto al <b>limite della propria tipologia</b> (es. per l\'ECG 15 min, per la polisonnografia 48 h), quindi i colori hanno lo stesso significato per tutte le righe. Limiti di contratto: <b>ECG 15 minuti</b>, <b>holter (12 derivazioni incluso) e spirometria 24 ore</b>, <b>polisonnografia 48 ore</b>. «Nei tempi di contratto» conta dall\'assegnazione presunta; «Fuori tempo» = esami oltre il limite della propria tipologia. '
     + 'I medici con meno di 5 esami sono segnalati come «campione ridotto».'
     + (P.neg || P.noTime ? '<br><br>Esclusi dal calcolo: ' + [P.neg ? P.neg + ' con data refertazione precedente alla richiesta' : '', P.noTime ? P.noTime + ' senza data/ora completa' : ''].filter(Boolean).join(' · ') + '.' : '') + '</div></details>';
@@ -3863,7 +3886,7 @@ function cntPerfOpen(kind, val) {
   byId('pf-title').textContent = '⏱️ Esami fuori tempo · ' + (kind === 't' ? tip(val) : val + (cnt.perfT ? ' · ' + tip(cnt.perfT) : '')) + ' · ' + ymLabel(cnt.ym);
   const dot = t => '<span class="c-dot" style="background:' + avColor(t) + '"></span>', td = v => v ? escHtml(v) : '<span class="mut">–</span>';
   byId('pf-body').innerHTML = !items.length ? '<div class="c-note" style="padding:24px">Nessun esame fuori tempo.</div>'
-    : '<div class="pf-mchips"><div><b>' + items.length.toLocaleString('it-IT') + '</b><span>esami fuori tempo</span></div><div><b>' + cntPerfFmtLong(items[0].tot) + '</b><span>tempo massimo</span></div><div><b>' + cntPerfFmtLong(cntPerfPct(items.map(x => x.tot), .5)) + '</b><span>mediana</span></div></div>'
+    : '<div class="pf-mchips"><div><b>' + items.length.toLocaleString('it-IT') + '</b><span>esami fuori tempo</span></div><div><b>' + cntPerfFmtLong(items[0].tot) + '</b><span>tempo massimo</span></div><div><b>' + cntPerfFmtLong(cntPerfAvg(items.map(x => x.tot))) + '</b><span>tempo medio</span></div></div>'
     + '<div class="c-dsearch"><input class="r-input" id="pf-q" type="search" placeholder="🔍 Cerca per ID, medico, cliente o paziente…" autocomplete="off"><span class="r-usub" id="pf-cnt"></span></div>'
     + '<div class="c-scroll" style="margin-top:0"><table class="c-tb c-left c-pf"><thead><tr><th>ID</th><th>Tipologia</th><th>Medico</th><th>Cliente</th><th>Paziente</th><th>Data richiesta</th><th>Data refertazione</th><th>Richiesta → referto</th><th>Limite</th></tr></thead><tbody>'
     + items.map(x => '<tr data-s="' + escHtml(nameKey([x.id, x.m, x.cl, x.pz].join(' '))) + '"><td class="mut">' + td(x.id) + '</td><td><b>' + dot(x.t) + escHtml(tip(x.t)) + '</b></td><td>' + escHtml(x.m) + '</td><td>' + td(x.cl) + '</td><td>' + td(x.pz)
@@ -3890,8 +3913,8 @@ function cntPerfLateExport() {
 function cntPerfExport() {
   const C = cnt.perf; if (!C) { toast('Nessun dato da esportare', 'err'); return; }
   const r1 = x => x == null ? '' : Math.round(x * 10) / 10;
-  const hdr = ['Esami', 'Mediana richiesta→referto (min)', '90° percentile richiesta→referto (min)', 'Nei tempi di contratto (%)', 'Fuori tempo'];
-  const row = g => [g.k, g.n, r1(g.medTot), r1(g.p90Tot), r1(g.okPct), g.late];
+  const hdr = ['Esami', 'Tempo medio richiesta→referto (min)', 'Nei tempi di contratto (%)', 'Fuori tempo'];
+  const row = g => [g.k, g.n, r1(g.avgTot), r1(g.okPct), g.late];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Tipologia', ...hdr], ...C.byT.map(row)]), 'Per tipologia');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Medico', ...hdr], ...cntPerfGroups(C.P.items, 'm').map(row)]), 'Per medico');

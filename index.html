@@ -2555,6 +2555,14 @@ function cntOwner(k, ms) {
     });
     if (cand.length === 1) return cand[0].d;
     if (cand.length > 1) return null;                  // ambiguo: stesso cognome e stessa iniziale
+    // cognome composto: il calendario usa solo il primo cognome ("CAGNETTA V.") e l'elenco ha "CAGNETTA DOMASS VALENTINA": l'iniziale è quella del nome, dopo il resto del cognome
+    const loose = ms.filter(m => {
+      const f = nameKey(m.d.nome).split(' ').filter(Boolean);
+      if (f.length <= sur.length || !sur.every((w, i) => f[i] === w)) return false;
+      const rest = f.slice(sur.length);
+      return rest.some((_, j) => j > 0 && j + ini.length <= rest.length && ini.every((x, i) => rest[j + i][0] === x));
+    });
+    if (loose.length === 1) return loose[0].d;
   }
   // elenco con iniziale puntata ("BERLONI M.") <-> calendario senza iniziale o viceversa
   const cand = ms.filter(m => m.sur.length && m.sur.every((w, i) => c[i] === w) && (

@@ -887,7 +887,81 @@
   @media (max-width: 760px) {
     .calendar-grid { grid-template-columns: repeat(3,1fr); }
   }
+
+
+  /* ═══════════ MIGLIORAMENTI GRAFICI E PERFORMANCE v2 ═══════════ */
+  :root{
+    --r-primary:#1a73e8; --r-primary-dark:#0d47a1; --r-accent:#e8710a;
+    --r-radius:16px; --r-ease:cubic-bezier(.2,.8,.2,1);
+    --r-shadow-1:0 1px 3px rgba(16,24,40,.08),0 8px 24px rgba(16,24,40,.08);
+    --r-shadow-2:0 16px 48px rgba(16,24,40,.16);
+  }
+  html{ -webkit-text-size-adjust:100%; }
+  body{ text-rendering:optimizeLegibility; -webkit-font-smoothing:antialiased; font-feature-settings:"tnum" 0; }
+  ::selection{ background:rgba(26,115,232,.18); }
+  :focus-visible{ outline:2px solid var(--r-primary); outline-offset:2px; border-radius:6px; }
+  :focus:not(:focus-visible){ outline:none; }
+
+  /* scrollbar moderne */
+  ::-webkit-scrollbar{ width:10px; height:10px; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+  ::-webkit-scrollbar-thumb{ background:#c2cfdd; border-radius:8px; border:2px solid #f0f4f8; }
+  ::-webkit-scrollbar-thumb:hover{ background:#9fb2c6; }
+  .c-scroll,.pf-scroll,.r-modal-b{ scrollbar-width:thin; scrollbar-color:#c2cfdd transparent; }
+
+  /* sfondo con sfumatura morbida */
+  body{ background:
+    radial-gradient(1100px 480px at 85% -8%, rgba(26,115,232,.09), transparent 60%),
+    radial-gradient(900px 420px at -10% 12%, rgba(232,113,10,.06), transparent 55%),
+    #f0f4f8; }
+
+  /* rendering lazy delle card lunghe: salta la disposizione fuori schermo */
+  .c-doc{ content-visibility:auto; contain-intrinsic-size:auto 90px; }
+  .r-doc,.pf-tbl tbody tr,.stats-table tbody tr{ content-visibility:auto; contain-intrinsic-size:auto 44px; }
+
+  /* header e superfici */
+  .app-header{ background:linear-gradient(180deg,#ffffff,#fbfcfe); }
+  .stats-card,.month-nav,.search-bar,.week-nav,.day-col,.cal-selector{ backdrop-filter:saturate(1.15); }
+  .day-col{ transition:transform .18s var(--r-ease), box-shadow .18s var(--r-ease); }
+  .day-col:hover{ transform:translateY(-2px); box-shadow:var(--r-shadow-1); }
+  .event-pill{ transition:filter .15s ease, transform .15s ease; }
+  .event-pill:hover{ filter:brightness(1.04); transform:translateX(2px); }
+
+  /* pulsanti e tab */
+  .btn-sm,.cal-btn,.nav-arrow,.btn-today,.btn-today-week,.r-btn,.r-tab,.r-pill,.c-arrow,.main-tab{
+    transition:transform .16s var(--r-ease), box-shadow .2s var(--r-ease), background .2s, color .2s, border-color .2s;
+  }
+  .btn-sm:active,.cal-btn:active,.r-btn:active,.c-arrow:active{ transform:scale(.96); }
+  .main-tab{ box-shadow:none; }
+  .main-tab.active{ box-shadow:0 4px 14px rgba(26,115,232,.28); }
+
+  /* badge e numeri: allineamento tabellare */
+  .stats-table td,.c-chip b,.pf-tbl td,.c-tb{ font-variant-numeric:tabular-nums; }
+
+  /* spinner più fluido (GPU) */
+  .spinner{ will-change:transform; }
+
+  /* animazioni ridotte: rispetta l'utente e il sistema */
+  @media (prefers-reduced-motion: reduce){
+    *{ scroll-behavior:auto !important; }
+    .btn-refresh:hover{ transform:none; }
+  }
+  @media (prefers-contrast: more){
+    .event-pill,.c-tb td,.r-table td{ border-color:#9fb2c6; }
+  }
+
+  /* stampa pulita delle tabelle */
+  @media print{
+    .app-header,.search-bar,.month-nav,.week-nav,.btn-export,.h3-right-controls,.cal-selector,.btn-refresh,.btn-sm{ display:none !important; }
+    .stats-card{ box-shadow:none; border:1px solid #ddd; page-break-inside:avoid; }
+    body{ background:#fff; }
+  }
+
 </style>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://gfqhwxppgvjdjfntyush.supabase.co" crossorigin>
+  <link rel="preconnect" href="https://accounts.google.com">
+  <link rel="preconnect" href="https://apis.google.com">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
@@ -896,7 +970,7 @@
 <!-- LOADING -->
 <div id="loading-overlay">
   <div class="spinner"></div>
-  <p id="loading-msg">Caricamento eventi...</p>
+  <p id="loading-msg" role="status">Caricamento eventi…</p>
 </div>
 
 <!-- LOGIN SCREEN -->
@@ -1566,7 +1640,7 @@ function renderWeek() {
   document.getElementById('week-label').textContent = `${fmtDate(ws)}  ›  ${fmtDate(we)}`;
 
   const grid = document.getElementById('calendar-grid');
-  grid.innerHTML = '';
+  const frag = document.createDocumentFragment();
 
   for (let i = 0; i < 7; i++) {
     const day = addDays(ws, i);
@@ -1618,8 +1692,11 @@ function renderWeek() {
     });
 
     col.appendChild(body);
-    grid.appendChild(col);
+    frag.appendChild(col);
   }
+  // sostituzione atomica in un unico reflow
+  grid.textContent = '';
+  grid.appendChild(frag);
 }
 
 // ─── SORT STATE ───────────────────────────────────────────────
@@ -1761,10 +1838,14 @@ function renderTable(id, events) {
 // ─── RICERCA CARDIOLOGO ───────────────────────────────────────
 let searchQuery = '';
 
+let _searchTimer = null;
 function applySearch() {
-  searchQuery = (document.getElementById('search-input').value || '').trim().toUpperCase();
-  renderWeek();
-  renderStats();
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(() => {
+    searchQuery = (document.getElementById('search-input').value || '').trim().toUpperCase();
+    // rendering in coda, nello stesso frame del browser
+    requestAnimationFrame(() => { renderWeek(); renderStats(); });
+  }, 180);
 }
 
 function clearSearch() {

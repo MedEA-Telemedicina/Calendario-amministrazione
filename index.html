@@ -2576,7 +2576,8 @@ function cntCal(evs) {
 // Se il titolo dell'evento contiene 75 o 100 vale quello; se il medico ha una sola tariffa vale quella;
 // se ha entrambe, si deduce dal numero di ECG del giorno (oltre 75 -> turno da 100).
 function cntVoce(ev, d, ecgN) {
-  if (new Date(ev.date + 'T00:00:00').getDay() === 0) return { k: 'turno_domenica' };
+  // «Turno domenica» è solo il turno ECG della domenica; gli altri turni di domenica restano del loro tipo (es. «TUCCI S.» = holter 10/10, «TUCCI S. (TURNO DA 16HC)» = 16 HC, completo)
+  if (ev.kind === 'ecg' && new Date(ev.date + 'T00:00:00').getDay() === 0) return { k: 'turno_domenica' };
   if (ev.kind === 'altro') return { unk: true };
   if (ev.kind === 'h16') return { k: 'turno_16hc' };
   if (ev.kind === 'holter') return { k: 'turno_holter' };

@@ -1190,6 +1190,7 @@
           </div>
           <select class="r-select" id="doc-voce" aria-label="Filtra per tipologia"></select>
           <span class="r-spacer"></span>
+          <button class="r-btn ghost" id="btn-att-list" type="button" title="Elenco dei medici da attenzionare, mese per mese">⚑ Medici da attenzionare</button>
           <button class="r-btn ghost" id="btn-doc-xlsx" type="button" title="Scarica la lista medici in Excel">⬇ Excel</button>
           <button class="r-btn primary" id="btn-new-doc">＋ Nuovo medico</button>
         </div>
@@ -1291,6 +1292,15 @@
       <div class="r-modal-h"><h3 id="extra-title">⚠ Conferma turno ECG aggiuntivo</h3><button class="r-x" type="button" data-close="extra" aria-label="Chiudi">✕</button></div>
       <div class="r-modal-b" id="extra-body"></div>
       <div class="r-modal-f"><button class="r-btn ghost" type="button" data-close="extra">Decidi più tardi</button></div>
+    </div>
+  </div>
+
+  <!-- ═══ MODALE MEDICI DA ATTENZIONARE (mese per mese) ═══ -->
+  <div class="r-modal-bg" id="att-modal">
+    <div class="r-modal" style="max-width:720px" role="dialog" aria-modal="true" aria-labelledby="att-title">
+      <div class="r-modal-h"><h3 id="att-title">⚑ Medici da attenzionare</h3><button class="r-x" type="button" data-close="att" aria-label="Chiudi">✕</button></div>
+      <div class="r-modal-b" id="att-list-body"></div>
+      <div class="r-modal-f"><button class="r-btn primary" type="button" id="att-xlsx">⬇ Esporta Excel</button></div>
     </div>
   </div>
 
@@ -3684,6 +3694,73 @@ async function cntAnswerExtra(n) {
     toast('Scelta NON salvata: ' + (e.message || e), 'err');
   } finally { cnt.saving--; }
 }
+// ── elenco medici da attenzionare, mese per mese (da rend_impostazioni: att|YYYY-MM|id) ──
+let attListCache = null;
+async function attListLoad() {
+  const { data, error } = await getSb().from('rend_impostazioni')
+    .select('chiave,valore,aggiornato_da,aggiornato_il')
+    .like('chiave', 'att|%')
+    .order('chiave', { ascending: false });
+  if (error) throw new Error(error.message);
+  const byYm = {};
+  (data || []).forEach(r => {
+    if (r.valore !== true) return;
+    const p = String(r.chiave).split('|');                       // att|YYYY-MM|id medico
+    if (p.length !== 3 || !/^\d{4}-\d{2}$/.test(p[1])) return;
+    const d = doctors.find(x => String(x.id) === String(p[2]));
+    (byYm[p[1]] = byYm[p[1]] || []).push({
+      nome: d ? d.nome : '(medico eliminato)',
+      attivo: d ? d.attivo : null,
+      da: r.aggiornato_da || '', il: r.aggiornato_il || ''
+    });
+  });
+  return byYm;
+}
+function attListHtml(byYm) {
+  const months = Object.keys(byYm).sort().reverse();
+  if (!months.length)
+    return '<div class="r-empty" style="padding:34px"><div class="big">⚑</div>Nessun medico segnalato come da attenzionare in nessun mese.<br><span class="r-usub">Usa la spunta «Da attenzionare» nella scheda Conteggi per segnalare un medico nel mese selezionato.</span></div>';
+  let tot = 0; months.forEach(ym => tot += byYm[ym].length);
+  return '<div class="r-usub" style="margin:2px 2px 14px">' + months.length + (months.length === 1 ? ' mese con segnalazioni' : ' mesi con segnalazioni') + ' · ' + tot + (tot === 1 ? ' medico segnalato' : ' medici segnalati') + ' in totale</div>'
+    + months.map(ym => {
+      const list = byYm[ym].sort((a, b) => a.nome.localeCompare(b.nome, 'it', { sensitivity: 'base' }));
+      return '<div class="r-panel" style="margin-bottom:14px"><h3><span>⚑ ' + escHtml(ymLabel(ym)) + '</span>'
+        + '<span class="cnt" style="background:#fff0dc;color:#b45309;border-radius:20px;font-size:12px;padding:2px 11px;font-weight:800">' + list.length + '</span></h3>'
+        + '<div class="c-wolist">' + list.map(x =>
+          '<span class="c-wo" style="' + (x.attivo === false ? 'opacity:.55;' : '') + '" title="' + escHtml(x.da ? 'Segnalato da ' + x.da + (x.il ? ', ' + new Date(x.il).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '') : '') + '">'
+          + '<span>' + escHtml(x.nome) + (x.attivo === false ? ' <span class="c-off">non attivo</span>' : '') + '</span>'
+          + '<span class="r-usub">👤 ' + escHtml(x.da || '—') + '</span></span>').join('')
+        + '</div></div>';
+    }).join('');
+}
+async function openAttList() {
+  openModal('att-modal');
+  const b = byId('att-list-body');
+  b.innerHTML = '<div class="r-sk" style="height:56px;margin-bottom:10px"></div>'.repeat(3);
+  try {
+    attListCache = await attListLoad();
+    b.innerHTML = attListHtml(attListCache);
+  } catch (e) {
+    attListCache = null;
+    b.innerHTML = '<div class="r-banner" style="display:block">Impossibile caricare le segnalazioni: ' + escHtml(e.message || e) + '</div>';
+  }
+}
+function attListExport() {
+  if (!attListCache) { toast('Nessun dato da esportare: apri prima l\'elenco', 'err'); return; }
+  const months = Object.keys(attListCache).sort().reverse();
+  if (!months.length) { toast('Nessun medico segnalato in nessun mese', 'err'); return; }
+  const aoa = [['Mese', 'Medico', 'Attivo', 'Segnalato da', 'Data segnalazione']];
+  months.forEach(ym => attListCache[ym].forEach(x =>
+    aoa.push([ymLabel(ym), x.nome, x.attivo === false ? 'No' : 'Sì', x.da || '',
+      x.il ? new Date(x.il).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : ''])));
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 16 }, { wch: 30 }, { wch: 7 }, { wch: 18 }, { wch: 18 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Da attenzionare');
+  XLSX.writeFile(wb, 'medici_da_attenzionare.xlsx');
+  toast('Excel scaricato', 'ok');
+}
+
 // pagina «Riepilogo turni»: mostra l'HTML preparato da cntRenderMain (cnt.convHtml)
 function cntRiepRender() {
   const b = byId('riep-body'); if (!b) return;
@@ -4289,6 +4366,8 @@ async function maybeImportLegacy() {
   byId('doc-voce').addEventListener('change', e => { docVoce = e.target.value; renderDoctors(); });
   byId('btn-new-doc').addEventListener('click', () => openDoctorModal());
   byId('btn-doc-xlsx').addEventListener('click', exportDoctorsExcel);
+  byId('btn-att-list').addEventListener('click', openAttList);
+  byId('att-xlsx').addEventListener('click', attListExport);
   byId('btn-backup').addEventListener('click', exportBackup);
   (function () {
     const root = byId('sub-view-conteggi');
@@ -4395,7 +4474,7 @@ async function maybeImportLegacy() {
   // chiusura modali: pulsanti ✕/Annulla, click sullo sfondo, tasto Esc
   document.addEventListener('click', e => {
     const c = e.target.closest('[data-close]');
-    if (c) { c.dataset.close === 'doc' ? closeDoctorModal() : c.dataset.close === 'det' ? closeModal('det-modal') : c.dataset.close === 'pf' ? closeModal('pf-modal') : c.dataset.close === 'extra' ? closeModal('extra-modal') : closeUserModal(); return; }
+    if (c) { c.dataset.close === 'doc' ? closeDoctorModal() : c.dataset.close === 'det' ? closeModal('det-modal') : c.dataset.close === 'pf' ? closeModal('pf-modal') : c.dataset.close === 'extra' ? closeModal('extra-modal') : c.dataset.close === 'att' ? closeModal('att-modal') : closeUserModal(); return; }
     if (e.target.classList && e.target.classList.contains('r-modal-bg') && !e.target.classList.contains('lock')) closeModal(e.target.id);   // i popup «lock» si chiudono solo con la ✕
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDoctorModal(); closeUserModal(); closeModal('extra-modal'); } });   // Esc non chiude i popup «lock» (dettaglio esami, fuori tempo)

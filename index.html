@@ -412,6 +412,11 @@
   .c-attbox { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin: 12px 0; padding: 12px 16px; border-radius: 14px; background: #fff0dc; border: 1px solid #f5c27a; color: #8a4a05; font-size: 13px; }
   .c-onlyatt { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: #3b4a5c; cursor: pointer; white-space: nowrap; }
   .c-onlyatt input { width: 16px; height: 16px; margin: 0; accent-color: #e8710a; }
+  .c-wo.rep { background: #fdecea; border-color: #f1a9a0; color: #9b1c12; }
+  .c-wo.rep .r-usub { color: #b4443a; }
+  .c-rep-n { display: inline-block; padding: 1px 8px; border-radius: 999px; background: #d93025; color: #fff; font-size: 11px; font-weight: 800; }
+  .c-replegend { display: flex; align-items: center; gap: 8px; margin: 0 2px 14px; font-size: 12px; color: #5b6672; }
+  .c-replegend .sw { width: 14px; height: 14px; border-radius: 50%; background: #fdecea; border: 1px solid #f1a9a0; flex: none; }
   .c-off { display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: 999px; background: #eef0f3; color: #5b6672; font-size: 11px; font-weight: 700; vertical-align: middle; }
   .c-doc .m { font-size: 12px; color: #5b6b7f; background: #f3f6fa; border-radius: 20px; padding: 4px 12px; white-space: nowrap; font-weight: 600; }
   .c-doc .m b { color: #1f2933; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -3709,6 +3714,7 @@ async function attListLoad() {
     if (p.length !== 3 || !/^\d{4}-\d{2}$/.test(p[1])) return;
     const d = doctors.find(x => String(x.id) === String(p[2]));
     (byYm[p[1]] = byYm[p[1]] || []).push({
+      id: String(p[2]),
       nome: d ? d.nome : '(medico eliminato)',
       attivo: d ? d.attivo : null,
       da: r.aggiornato_da || '', il: r.aggiornato_il || ''
@@ -3721,14 +3727,18 @@ function attListHtml(byYm) {
   if (!months.length)
     return '<div class="r-empty" style="padding:34px"><div class="big">⚑</div>Nessun medico segnalato come da attenzionare in nessun mese.<br><span class="r-usub">Usa la spunta «Da attenzionare» nella scheda Conteggi per segnalare un medico nel mese selezionato.</span></div>';
   let tot = 0; months.forEach(ym => tot += byYm[ym].length);
-  return '<div class="r-usub" style="margin:2px 2px 14px">' + months.length + (months.length === 1 ? ' mese con segnalazioni' : ' mesi con segnalazioni') + ' · ' + tot + (tot === 1 ? ' medico segnalato' : ' medici segnalati') + ' in totale</div>'
+  const monthsOf = {};                                            // id medico -> n. di mesi in cui è segnalato
+  months.forEach(ym => byYm[ym].forEach(x => { monthsOf[x.id] = (monthsOf[x.id] || 0) + 1; }));
+  const nRep = Object.keys(monthsOf).filter(id => monthsOf[id] >= 2).length;
+  return (nRep ? '<div class="c-replegend"><span class="sw"></span><span><b>' + nRep + (nRep === 1 ? ' medico' : ' medici') + '</b> segnalati in almeno 2 mesi (evidenziati in rosso)</span></div>' : '')
+    + '<div class="r-usub" style="margin:2px 2px 14px">' + months.length + (months.length === 1 ? ' mese con segnalazioni' : ' mesi con segnalazioni') + ' · ' + tot + (tot === 1 ? ' medico segnalato' : ' medici segnalati') + ' in totale</div>'
     + months.map(ym => {
       const list = byYm[ym].sort((a, b) => a.nome.localeCompare(b.nome, 'it', { sensitivity: 'base' }));
       return '<div class="r-panel" style="margin-bottom:14px"><h3><span>⚑ ' + escHtml(ymLabel(ym)) + '</span>'
         + '<span class="cnt" style="background:#fff0dc;color:#b45309;border-radius:20px;font-size:12px;padding:2px 11px;font-weight:800">' + list.length + '</span></h3>'
         + '<div class="c-wolist">' + list.map(x =>
-          '<span class="c-wo" style="' + (x.attivo === false ? 'opacity:.55;' : '') + '" title="' + escHtml(x.da ? 'Segnalato da ' + x.da + (x.il ? ', ' + new Date(x.il).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '') : '') + '">'
-          + '<span>' + escHtml(x.nome) + (x.attivo === false ? ' <span class="c-off">non attivo</span>' : '') + '</span>'
+          '<span class="c-wo' + (monthsOf[x.id] >= 2 ? ' rep' : '') + '" style="' + (x.attivo === false ? 'opacity:.55;' : '') + '" title="' + escHtml((monthsOf[x.id] >= 2 ? 'Segnalato in ' + monthsOf[x.id] + ' mesi · ' : '') + (x.da ? 'Segnalato da ' + x.da + (x.il ? ', ' + new Date(x.il).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '') : '')) + '">'
+          + '<span>' + escHtml(x.nome) + (monthsOf[x.id] >= 2 ? ' <span class="c-rep-n">' + monthsOf[x.id] + ' mesi</span>' : '') + (x.attivo === false ? ' <span class="c-off">non attivo</span>' : '') + '</span>'
           + '<span class="r-usub">👤 ' + escHtml(x.da || '—') + '</span></span>').join('')
         + '</div></div>';
     }).join('');

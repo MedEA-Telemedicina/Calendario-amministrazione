@@ -1489,13 +1489,40 @@ function showAppScreen() {
   document.getElementById('g-chip-txt').textContent = 'Google collegato';
 }
 
-function handleTokenResponse(resp) {
-  if (resp.error) { showLoginScreen(); return; }
+const TOKEN_KEY = 'gcal_token_v1';
+let renewTimer = null;
+function saveToken(resp) {
+  const ms = Math.max(60, (Number(resp.expires_in) || 3600) - 120) * 1000;
+  try { localStorage.setItem(TOKEN_KEY, JSON.stringify({ t: resp.access_token, exp: Date.now() + ms })); } catch (e) {}
+  clearTimeout(renewTimer);
+  // rinnovo silenzioso prima della scadenza: nessun popup, nessun pannello
+  renewTimer = setTimeout(() => { try { tokenClient.requestAccessToken({ prompt: 'none' }); } catch (e) {} }, ms);
+}
+function readCachedToken() {
+  try {
+    const o = JSON.parse(localStorage.getItem(TOKEN_KEY) || 'null');
+    if (o && o.t && o.exp > Date.now() + 30000) return o;
+  } catch (e) {}
+  return null;
+}
+function clearCachedToken() { try { localStorage.removeItem(TOKEN_KEY); } catch (e) {} clearTimeout(renewTimer); }
+
+function enterApp() {
   showAppScreen();
   const now = new Date();
   if (!currentMonth) currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   if (!currentWeekStart) currentWeekStart = startOfWeek(now);
   loadEvents();
+}
+
+function handleTokenResponse(resp) {
+  if (resp.error) {
+    if (googleConnected) return;     // rinnovo silenzioso fallito: si continua finché il token regge
+    showLoginScreen(); return;
+  }
+  saveToken(resp);
+  if (googleConnected) return;       // era solo un rinnovo: niente ricarico
+  enterApp();
 }
 
 // ─── GAPI / GIS ───────────────────────────────────────────────
@@ -1521,8 +1548,16 @@ function gisLoaded() {
 function maybeAutoLogin() {
   if (!gapiInited || !gisInited || autoLoginAttempted) return;
   autoLoginAttempted = true;
+  const c = readCachedToken();
+  if (c) {                           // già collegato in precedenza: entra subito, senza alcun pannello
+    gapi.client.setToken({ access_token: c.t });
+    enterApp();
+    clearTimeout(renewTimer);
+    renewTimer = setTimeout(() => { try { tokenClient.requestAccessToken({ prompt: 'none' }); } catch (e) {} }, Math.max(1000, c.exp - Date.now()));
+    return;
+  }
   showLoading('Accesso automatico...');
-  tokenClient.requestAccessToken({ prompt: '' });
+  tokenClient.requestAccessToken({ prompt: 'none' });   // silenzioso: nessun popup se l'account è già autorizzato
 }
 
 // ─── PULSANTI ─────────────────────────────────────────────────
@@ -1537,6 +1572,7 @@ function startGoogleLogin() {
 document.getElementById('btn-login').addEventListener('click', startGoogleLogin);
 
 document.getElementById('btn-signout').addEventListener('click', () => {
+  clearCachedToken();
   const t = gapi.client.getToken();
   if (t) google.accounts.oauth2.revoke(t.access_token);
   gapi.client.setToken('');

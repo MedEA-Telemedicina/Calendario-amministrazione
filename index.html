@@ -9,7 +9,13 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f0f4f8; color: #333; min-height: 100vh; }
 
-  /* ── LOGIN SCREEN ── */
+  .login-card {
+    background: white; border-radius: 20px; padding: 50px 48px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.13); text-align: center; max-width: 420px; width: 100%;
+  }
+  .login-card .icon { font-size: 56px; margin-bottom: 16px; }
+  .login-card h1 { font-size: 24px; color: #1a73e8; margin-bottom: 8px; font-weight: 700; }
+  .login-card p { color: #777; font-size: 14px; margin-bottom: 34px; line-height: 1.6; }
   #login-screen {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     min-height: 100vh; padding: 20px;
@@ -30,6 +36,14 @@
   .btn-google:hover { background: #1558b0; }
   .btn-google:disabled { background: #a8c4f0; cursor: not-allowed; }
   .btn-google svg { width: 22px; height: 22px; flex-shrink: 0; }
+  .g-chip { display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:600; color:#666;
+    background:#f1f3f4; border:1px solid #dde1e6; border-radius:999px; padding:5px 12px; white-space:nowrap; }
+  .g-chip .g-dot { width:9px; height:9px; border-radius:50%; background:#d93025; flex-shrink:0; }
+  .g-chip.on { color:#137333; background:#e6f4ea; border-color:#b7dfc2; }
+  .g-chip.on .g-dot { background:#1e8e3e; }
+  .g-inline-banner { display:none; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
+    background:#e8f0fe; border:1px solid #c6dafc; color:#174ea6; border-radius:12px; padding:12px 16px; margin:0 0 14px; font-size:14px; }
+  .g-inline-banner .btn-google { width:auto; padding:9px 18px; font-size:14px; }
   .login-note { font-size: 11px; color: #bbb; margin-top: 18px; }
   .h3-right-controls { display: flex; align-items: center; gap: 8px; }
   .sort-select {
@@ -417,6 +431,17 @@
   .c-rep-n { display: inline-block; padding: 1px 8px; border-radius: 999px; background: #d93025; color: #fff; font-size: 11px; font-weight: 800; }
   .c-replegend { display: flex; align-items: center; gap: 8px; margin: 0 2px 14px; font-size: 12px; color: #5b6672; }
   .c-replegend .sw { width: 14px; height: 14px; border-radius: 50%; background: #fdecea; border: 1px solid #f1a9a0; flex: none; }
+  .pf-trend { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px; align-items: stretch; height: 176px; padding: 6px 2px 0; }
+  .pf-tcol { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; height: 100%; }
+  .pf-tval { font-size: 11px; font-weight: 800; color: #33475b; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pf-tw { flex: 1; width: 100%; min-height: 0; display: flex; align-items: flex-end; justify-content: center; }
+  .pf-tbar { width: 100%; max-width: 38px; min-height: 3px; border-radius: 8px 8px 0 0; background: #d5dce6; transition: height .9s cubic-bezier(.2,.8,.2,1); }
+  .pf-tbar.good { background: linear-gradient(180deg, #34a853, #188038); } .pf-tbar.mid { background: linear-gradient(180deg, #fbbc04, #e8710a); } .pf-tbar.bad { background: linear-gradient(180deg, #ef5350, #d93025); }
+  .pf-wrap:not(.in) .pf-tbar { height: 2% !important; }
+  .pf-tmon { font-size: 11px; font-weight: 700; color: #7b8794; }
+  .pf-tcol.empty .pf-tval, .pf-tcol.empty .pf-tmon { opacity: .45; }
+  .pf-ynote { font-size: 12px; color: #7b8794; margin: 10px 2px 0; }
+  @media (max-width: 640px) { .pf-trend { gap: 3px; height: 150px; } .pf-tval { font-size: 9.5px; } .pf-tmon { font-size: 10px; } }
   .c-off { display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: 999px; background: #eef0f3; color: #5b6672; font-size: 11px; font-weight: 700; vertical-align: middle; }
   .c-doc .m { font-size: 12px; color: #5b6b7f; background: #f3f6fa; border-radius: 20px; padding: 4px 12px; white-space: nowrap; font-weight: 600; }
   .c-doc .m b { color: #1f2933; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -978,7 +1003,7 @@
   <p id="loading-msg" role="status">Caricamento eventi…</p>
 </div>
 
-<!-- LOGIN SCREEN -->
+<!-- SCHERMATA DI AVVIO (separata): la tabella si vede solo dopo l'accesso -->
 <div id="login-screen" style="display:none;">
   <div class="login-card">
     <div class="icon">📅</div>
@@ -1001,11 +1026,13 @@
     </div>
     <div class="header-right">
       <button class="btn-refresh" id="btn-refresh" title="Aggiorna dati" onclick="loadEvents()">&#x21BB;</button>
+      <span class="g-chip" id="g-chip" title="Stato collegamento Google Calendar"><span class="g-dot"></span><span id="g-chip-txt">Google non collegato</span></span>
       <button class="btn-sm" id="btn-signout">Esci</button>
     </div>
   </div>
 
   <div id="error-app" class="error-banner"></div>
+
 
   <!-- TAB PRINCIPALI -->
   <div class="main-tabs">
@@ -1206,6 +1233,7 @@
       <!-- ── Performance ── -->
       <section class="r-sub" id="sub-view-performance">
         <div class="c-nav">
+          <div class="pf-seg" id="perf-mode" role="group" aria-label="Periodo del report"><button type="button" data-pmode="m" class="active">Mensile</button><button type="button" data-pmode="a">Annuale</button></div>
           <button class="c-arrow" data-cnt="prev" type="button" title="Mese precedente">‹</button>
           <div class="c-month" id="perf-month">–</div>
           <button class="c-arrow" data-cnt="next" type="button" title="Mese successivo">›</button>
@@ -1446,15 +1474,24 @@ function isEcgEvent(ev) {
 }
 
 // ─── AUTH CALLBACK ────────────────────────────────────────────
-function handleTokenResponse(resp) {
-  if (resp.error) {
-    hideLoading();
-    document.getElementById('login-screen').style.display = 'flex';
-    document.getElementById('app').style.display = 'none';
-    return;
-  }
+let googleConnected = false;
+function showLoginScreen() {
+  hideLoading();
+  googleConnected = false;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+}
+function showAppScreen() {
+  googleConnected = true;
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
+  document.getElementById('g-chip').classList.add('on');
+  document.getElementById('g-chip-txt').textContent = 'Google collegato';
+}
+
+function handleTokenResponse(resp) {
+  if (resp.error) { showLoginScreen(); return; }
+  showAppScreen();
   const now = new Date();
   if (!currentMonth) currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   if (!currentWeekStart) currentWeekStart = startOfWeek(now);
@@ -1475,6 +1512,7 @@ function gisLoaded() {
     client_id: CLIENT_ID,
     scope: 'https://www.googleapis.com/auth/calendar.readonly',
     callback: handleTokenResponse,
+    error_callback: () => { showLoginScreen(); },
   });
   gisInited = true;
   maybeAutoLogin();
@@ -1488,14 +1526,15 @@ function maybeAutoLogin() {
 }
 
 // ─── PULSANTI ─────────────────────────────────────────────────
-document.getElementById('btn-login').addEventListener('click', () => {
+function startGoogleLogin() {
   if (!gisInited || !tokenClient) {
     alert('Le librerie Google non sono ancora pronte. Attendi qualche secondo e riprova.');
     return;
   }
   showLoading('Autenticazione in corso...');
   tokenClient.requestAccessToken({ prompt: '' });
-});
+}
+document.getElementById('btn-login').addEventListener('click', startGoogleLogin);
 
 document.getElementById('btn-signout').addEventListener('click', () => {
   const t = gapi.client.getToken();
@@ -1504,8 +1543,9 @@ document.getElementById('btn-signout').addEventListener('click', () => {
   autoLoginAttempted = false;
   allEvents = [];
   lockRend(); switchMainTab('turni');
-  document.getElementById('app').style.display = 'none';
-  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('g-chip').classList.remove('on');
+  document.getElementById('g-chip-txt').textContent = 'Google non collegato';
+  showLoginScreen();
 });
 
 // ─── NAVIGAZIONE MESE ─────────────────────────────────────────
@@ -2410,7 +2450,7 @@ async function saveDoctorModal() {
 // ═══════════ CONTEGGI MENSILI ═══════════
 // File esami del mese -> salvato (già aggregato) su Supabase in `conteggi_mesi`.
 // Turno conteggiato = medico in turno nel calendario "Medici in Turno" con almeno 1 esame refertato quel giorno.
-const cnt = { ym: null, rec: null, loaded: false, loading: false, err: '', shifts: null, shiftsErr: '', shiftsLoading: false, req: 0, scelte: {}, scelteMeta: {}, scelteErr: '', saving: 0, syncing: false, shiftsPrev: [], shiftsPrev2: [], shiftsNext: [], prevDati: null, fileMeta: null };
+const cnt = { ym: null, rec: null, loaded: false, loading: false, err: '', shifts: null, shiftsErr: '', shiftsLoading: false, req: 0, scelte: {}, scelteMeta: {}, scelteErr: '', saving: 0, syncing: false, shiftsPrev: [], shiftsPrev2: [], shiftsNext: [], prevDati: null, fileMeta: null, perfMode: 'm', perfYear: '', annual: null, annReq: 0 };
 const pad2 = n => String(n).padStart(2, '0');
 const WD = ['D', 'L', 'M', 'M', 'G', 'V', 'S'];
 function ymLabel(ym) { const [y, m] = ym.split('-').map(Number); const s = new Date(y, m - 1, 1).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' }); return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -3898,10 +3938,11 @@ function cntPerfAssign(tq) {
   return tq;
 }
 // medico (id) -> { 'YYYY-MM-DD': [[inizio, fine] in minuti, ...] } dai turni del calendario
-function cntPerfShiftWin() {
-  if (!cnt.shifts) return null;
+function cntPerfShiftWin(evs) {
+  if (evs === undefined) evs = cnt.shifts ? cnt.shifts.concat(cnt.shiftsPrev || []) : null;   // senza argomento: turni del mese selezionato
+  if (!evs) return null;
   const ms = doctors.map(cntMatcher), own = {}, by = {};
-  cnt.shifts.concat(cnt.shiftsPrev || []).forEach(ev => {
+  evs.forEach(ev => {
     const k = nameKey(ev.doctor); if (!(k in own)) own[k] = cntOwner(k, ms);
     const o = own[k]; if (!o) return;
     const w = ev.time === 'pom' ? [CNT_H_SPLIT, CNT_H_FINE, ev.kind] : ev.time === 'mat' ? [CNT_H_INI, CNT_H_SPLIT, ev.kind] : [CNT_H_INI, CNT_H_FINE, ev.kind];
@@ -3954,10 +3995,11 @@ function cntPerfFmt(m) {
   if (m < 48 * 60) return (m / 60).toLocaleString('it-IT', { maximumFractionDigits: 1 }) + ' h';
   return (m / 1440).toLocaleString('it-IT', { maximumFractionDigits: 1 }) + ' gg';
 }
-function cntPerfCompute() {
-  const D = cnt.rec && cnt.rec.dati; if (!D || !D.esami) return { noDetail: true };
-  const out = { items: [], neg: 0, noTime: 0, nT: 0, nS: 0, nDom: 0, shifts: !!cnt.shifts };
-  const SW = cntPerfShiftWin(), ms = doctors.map(cntMatcher);
+function cntPerfCompute(D, evs) {
+  if (D === undefined) D = cnt.rec && cnt.rec.dati;      // senza argomenti: mese selezionato; con (dati, turni) serve al report annuale
+  if (!D || !D.esami) return { noDetail: true };
+  const SW = cntPerfShiftWin(evs), ms = doctors.map(cntMatcher);
+  const out = { items: [], neg: 0, noTime: 0, nT: 0, nS: 0, nDom: 0, shifts: !!SW };
   Object.entries(D.esami).forEach(([med, L]) => { if (cntPerfMedEscluso(med)) return; const dd = SW ? cntMatch(med, ms) : null, wins = dd ? SW[dd.id] : null; L.forEach(e => {
     if (cntPerfEsclusa(e[1])) return;
     const tq = cntPerfTs(e[5]), tr = cntPerfTs(e[6]);
@@ -4045,8 +4087,15 @@ function cntPerfAnimate(root, fresh) {
     });
   }));
 }
+function cntPerfSyncNav() {
+  const a = cnt.perfMode === 'a';
+  document.querySelectorAll('#perf-mode button').forEach(x => x.classList.toggle('active', (x.dataset.pmode === 'a') === a));
+  const sec = byId('sub-view-performance');
+  if (sec) { const pv = sec.querySelector('[data-cnt="prev"]'), nx = sec.querySelector('[data-cnt="next"]'); if (pv) pv.title = a ? 'Anno precedente' : 'Mese precedente'; if (nx) nx.title = a ? 'Anno successivo' : 'Mese successivo'; }
+  setTxt('perf-month', a ? 'Anno ' + cnt.perfYear : (cnt.ym ? ymLabel(cnt.ym) : '–'));
+}
 function cntPerfRender() {
-  try { cntPerfRenderInner(); }
+  try { cntPerfSyncNav(); if (cnt.perfMode === 'a') cntPerfRenderAnnual(); else cntPerfRenderInner(); }
   catch (e) {
     console.error('Performance:', e); cnt.perf = null;
     const b = byId('perf-body'); if (b) b.innerHTML = '<div class="r-panel c-note" style="padding:26px">Non è stato possibile mostrare la scheda Performance (' + escHtml((e && e.message) || e) + ').<br><button type="button" class="r-btn primary" style="margin-top:12px" data-pfretry>↻ Riprova</button></div>';
@@ -4104,10 +4153,10 @@ function cntPerfFmtLong(m) {
 // elenco esami fuori tempo (oltre il limite di contratto) di una tipologia ('t') o di un medico ('m', con l'eventuale filtro tipologia attivo)
 function cntPerfOpen(kind, val) {
   const C = cnt.perf; if (!C) return;
-  const items = C.P.items.filter(x => x.lav > cntPerfSoglia(x.t) && (kind === 't' ? x.t === val : x.m === val && (!cnt.perfT || x.t === cnt.perfT))).sort((a, b) => b.tot - a.tot);
+  const items = C.P.items.filter(x => x.lav > cntPerfSoglia(x.t) && (kind === 't' ? x.t === val : kind === 'y' ? x.ym === val : x.m === val && (!cnt.perfT || x.t === cnt.perfT))).sort((a, b) => b.tot - a.tot);
   cnt.pfCur = { kind, val, items };
   const tip = t => cntShort[t] || t;
-  byId('pf-title').textContent = '⏱️ Esami fuori tempo · ' + (kind === 't' ? tip(val) : val + (cnt.perfT ? ' · ' + tip(cnt.perfT) : '')) + ' · ' + ymLabel(cnt.ym);
+  byId('pf-title').textContent = '⏱️ Esami fuori tempo · ' + (kind === 't' ? tip(val) : kind === 'y' ? ymLabel(val) : val + (cnt.perfT ? ' · ' + tip(cnt.perfT) : '')) + (kind === 'y' ? '' : ' · ' + (cnt.perfMode === 'a' ? 'Anno ' + cnt.perfYear : ymLabel(cnt.ym)));
   const dot = t => '<span class="c-dot" style="background:' + avColor(t) + '"></span>', td = v => v ? escHtml(v) : '<span class="mut">–</span>';
   byId('pf-body').innerHTML = !items.length ? '<div class="c-note" style="padding:24px">Nessun esame fuori tempo.</div>'
     : '<div class="pf-mchips"><div><b>' + items.length.toLocaleString('it-IT') + '</b><span>esami fuori tempo</span></div><div><b>' + cntPerfFmtLong(items[0].tot) + '</b><span>tempo massimo</span></div><div><b>' + cntPerfFmtLong(cntPerfAvg(items.map(x => x.tot))) + '</b><span>tempo medio</span></div></div>'
@@ -4131,10 +4180,11 @@ function cntPerfLateExport() {
     ...rows.map(x => [x.id, x.t, x.m, x.cl, x.pz, cntFmtDT(x.rq), cntFmtDT(x.rf), Math.round(x.tot), cntPerfSoglia(x.t), Math.round(x.dom || 0)])];
   const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = [{ wch: 12 }, { wch: 24 }, { wch: 22 }, { wch: 24 }, { wch: 26 }, { wch: 17 }, { wch: 19 }, { wch: 22 }, { wch: 22 }];
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Fuori tempo');
-  XLSX.writeFile(wb, 'esami_fuori_tempo_' + String(D.val).replace(/[^A-Za-z0-9]+/g, '_') + '_' + cnt.ym + '.xlsx');
+  XLSX.writeFile(wb, 'esami_fuori_tempo_' + String(D.val).replace(/[^A-Za-z0-9]+/g, '_') + '_' + (cnt.perfMode === 'a' ? cnt.perfYear : cnt.ym) + '.xlsx');
   toast('Excel scaricato (' + rows.length + ' esami)', 'ok');
 }
 function cntPerfExport() {
+  if (cnt.perfMode === 'a') { cntPerfExportAnnual(); return; }
   const C = cnt.perf; if (!C) { toast('Nessun dato da esportare', 'err'); return; }
   const r1 = x => x == null ? '' : Math.round(x * 10) / 10;
   const hdr = ['Esami', 'Tempo medio richiesta→referto (min)', 'Nei tempi di contratto (%)', 'Fuori tempo'];
@@ -4143,6 +4193,145 @@ function cntPerfExport() {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Tipologia', ...hdr], ...C.byT.map(row)]), 'Per tipologia');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Medico', ...hdr], ...cntPerfGroups(C.P.items, 'm').map(row)]), 'Per medico');
   XLSX.writeFile(wb, 'performance_' + cnt.ym + '.xlsx');
+}
+
+// ═══════════ PERFORMANCE · REPORT ANNUALE ═══════════
+// Riunisce i file esami di tutti i mesi dell'anno (tabella conteggi_mesi, un mese per volta) e i turni dell'intero anno dal calendario,
+// poi applica lo stesso calcolo del report mensile (cntPerfCompute). I dati restano in memoria finché non si cambia anno o si ricarica un mese.
+const cntPerfMon = (ym, long) => { const [y, m] = ym.split('-').map(Number); const t = new Date(y, m - 1, 1).toLocaleDateString('it-IT', { month: long ? 'long' : 'short' }).replace('.', ''); return t.charAt(0).toUpperCase() + t.slice(1); };
+const cntPerfNowYm = () => new Date().getFullYear() + '-' + pad2(new Date().getMonth() + 1);
+async function cntPerfLoadYear() {
+  const year = cnt.perfYear, my = ++cnt.annReq;
+  const A = cnt.annual = { year, loading: true, prog: '', err: '', P: null, months: [], missing: [], noDetail: [], shiftsErr: '', shiftsOk: false };
+  const alive = () => my === cnt.annReq && cnt.annual === A;
+  const nowYm = cntPerfNowYm();
+  cntPerfRender();
+  try {
+    const recs = {};
+    for (let m = 1; m <= 12; m++) {
+      const ym = year + '-' + pad2(m);
+      if (ym > nowYm) continue;                                   // mesi futuri: niente da caricare
+      A.prog = ymLabel(ym); cntPerfRender();
+      const { data, error } = await getSb().from('conteggi_mesi').select('mese,dati').eq('mese', ym).maybeSingle();
+      if (!alive()) return;
+      if (error) throw error;
+      if (data && data.dati) recs[ym] = data.dati; else A.missing.push(ym);
+    }
+    let evs = null;                                               // turni dell'anno (facoltativi: senza, si usa l'orario di servizio 08:30–20:30)
+    try {
+      if (typeof gapi === 'undefined' || !gapi.client || !gapi.client.getToken || !gapi.client.getToken()) throw new Error('Accesso a Google non attivo: i turni non sono leggibili.');
+      A.prog = 'turni dal calendario'; cntPerfRender();
+      const y = +year, tMin = new Date(y, 0, -1), tMax = new Date(y + 1, 0, 2), cal = CALENDARS[1];
+      let items = [], pageToken;
+      do {
+        const q = { calendarId: cal.id, timeMin: tMin.toISOString(), timeMax: tMax.toISOString(), singleEvents: true, orderBy: 'startTime', maxResults: 2500 };
+        if (pageToken) q.pageToken = pageToken;
+        const r = await gapi.client.request({ path: 'https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent(cal.id) + '/events', params: q });
+        items = items.concat(r.result.items || []); pageToken = r.result.nextPageToken;
+      } while (pageToken);
+      if (!alive()) return;
+      evs = [];
+      for (let k = -1; k <= 12; k++) evs = evs.concat(cntShiftsFromItems(items, ymAdd(year + '-01', k)));   // dicembre precedente … gennaio successivo
+      A.shiftsOk = true;
+    } catch (e) {
+      if (!alive()) return;
+      evs = null; A.shiftsErr = e.result && e.result.error ? e.result.error.message : (e.message || String(e));
+    }
+    A.prog = 'calcolo'; cntPerfRender();
+    const items = [], first = new Map(), tot = { neg: 0, noTime: 0, nT: 0, nS: 0, nDom: 0 };
+    Object.keys(recs).sort().forEach(ym => {
+      const P = cntPerfCompute(recs[ym], evs);
+      if (P.noDetail) { A.noDetail.push(ym); return; }
+      A.months.push(ym);
+      Object.keys(tot).forEach(k => { tot[k] += P[k]; });
+      P.items.forEach(x => {
+        const key = x.id ? String(x.id) : '';
+        if (key) { const f = first.get(key); if (f && f !== ym) return; first.set(key, ym); }   // stesso ID presente in due mesi: conta una volta sola
+        x.ym = ym; items.push(x);
+      });
+    });
+    A.P = Object.assign({ items, shifts: !!evs }, tot);
+  } catch (e) { if (!alive()) return; A.err = e.message || String(e); }
+  if (!alive()) return;
+  A.loading = false; cntPerfRender();
+}
+function cntPerfTrendHtml(rows) {
+  return '<div class="pf-trend">' + rows.map(r => {
+    const g = r.g;
+    return '<div class="pf-tcol' + (g ? '' : ' empty') + '" title="' + escHtml(g ? cntPerfMon(r.ym, true) + ': ' + g.n.toLocaleString('it-IT') + ' esami · ' + cntPerfN(g.okPct) + '% nei tempi · tempo medio ' + cntPerfFmt(g.avgTot) : cntPerfMon(r.ym, true) + ': nessun dato') + '">'
+      + '<span class="pf-tval">' + (g ? cntPerfN(g.okPct) + '%' : '–') + '</span>'
+      + '<div class="pf-tw"><div class="pf-tbar' + (g ? ' ' + cntPerfCls(g.okPct) : '') + '" style="height:' + (g ? Math.max(2, g.okPct) : 2) + '%"></div></div>'
+      + '<span class="pf-tmon">' + escHtml(cntPerfMon(r.ym)) + '</span></div>';
+  }).join('') + '</div><div class="pf-ynote">Percentuale di esami refertati nei tempi di contratto, mese per mese.</div>';
+}
+function cntPerfYearTable(rows, A) {
+  const nowYm = cntPerfNowYm();
+  return '<div class="pf-scroll"><table class="pf-tbl"><thead><tr><th>Mese</th><th class="num">Esami</th><th class="num" title="Media dei tempi dalla data richiesta alla data refertazione">Tempo medio</th>'
+    + '<th title="Tempo di lavorazione (da assegnazione presunta) entro il limite di contratto">Nei tempi di contratto</th><th class="num" title="Esami oltre il limite di contratto">Fuori tempo</th><th>Distribuzione</th></tr></thead><tbody>'
+    + rows.map(r => {
+      const g = r.g;
+      if (!g) return '<tr><td><b>' + escHtml(cntPerfMon(r.ym, true)) + '</b></td><td colspan="5" class="mut">' + (A.noDetail.includes(r.ym) ? 'dettaglio esami non disponibile: ricarica il file del mese' : r.ym > nowYm ? '–' : 'nessun file caricato') + '</td></tr>';
+      return '<tr><td><b>' + escHtml(cntPerfMon(r.ym, true)) + '</b></td><td class="num">' + g.n.toLocaleString('it-IT') + '</td><td class="num"><b>' + cntPerfFmt(g.avgTot) + '</b></td>'
+        + '<td class="pf-okc"><div><span class="pf-meter"><i class="' + cntPerfCls(g.okPct) + '" style="width:' + Math.max(2, g.okPct) + '%"></i></span>' + cntPerfOkHtml(g.okPct) + '</div></td>'
+        + '<td class="num">' + (g.late ? '<button type="button" class="pf-late" data-pfk="y" data-pfv="' + escHtml(r.ym) + '" title="Mostra gli esami fuori tempo">' + g.late.toLocaleString('it-IT') + '</button>' : '<span class="mut">0</span>') + '</td>'
+        + '<td class="dist">' + cntPerfBarHtml(g) + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
+}
+function cntPerfRenderAnnual() {
+  const b = byId('perf-body'); if (!b) return;
+  const msg = t => { b.innerHTML = '<div class="r-panel c-note" style="padding:26px">' + t + '</div>'; cnt.perf = null; };
+  const year = cnt.perfYear;
+  if (!cnt.annual || cnt.annual.year !== year) { cntPerfLoadYear(); return; }     // il caricamento ridisegna la scheda da solo
+  const A = cnt.annual;
+  if (A.loading) { b.innerHTML = '<div class="pf-wrap in"><div class="r-sk" style="height:150px"></div><div class="pf-skg"><div class="r-sk"></div><div class="r-sk"></div><div class="r-sk"></div></div><div class="c-note" style="text-align:center">Caricamento ' + escHtml(year) + ' · ' + escHtml(A.prog || '…') + '</div></div>'; cnt.perf = null; return; }
+  if (A.err) return msg('Errore nel caricamento dell\'anno ' + escHtml(year) + ': ' + escHtml(A.err) + '<br><button type="button" class="r-btn primary" style="margin-top:12px" data-pyreload>↻ Riprova</button>');
+  const P = A.P;
+  if (!A.months.length) return msg('Nessun file degli esami con il dettaglio dei singoli esami per il <b>' + escHtml(year) + '</b>.' + (A.noDetail.length ? ' I mesi ' + A.noDetail.map(m => cntPerfMon(m, true)).join(', ') + ' sono stati caricati prima di questa funzione: nella scheda <b>Conteggi</b> usa «Elimina e ricarica» per ognuno.' : ' Carica i file dei mesi dalla scheda <b>Conteggi</b>.'));
+  if (!P.items.length) return msg('Nei file del ' + escHtml(year) + ' non ci sono esami con <b>data richiesta</b> e <b>data refertazione</b> complete di orario: non posso calcolare i tempi.');
+  const all = cntPerfStats(P.items), byT = cntPerfGroups(P.items, 't');
+  if (!cnt.perfT || !byT.some(g => g.k === cnt.perfT)) cnt.perfT = byT[0].k;
+  const sel = P.items.filter(x => x.t === cnt.perfT), byM = cntPerfGroups(sel, 'm');
+  const so = cnt.perfSort || 'n', tie = (a, c) => c.n - a.n || String(a.k).localeCompare(String(c.k), 'it');
+  if (so === 'fast') byM.sort((a, c) => a.avgTot - c.avgTot || tie(a, c)); else if (so === 'slow') byM.sort((a, c) => c.avgTot - a.avgTot || tie(a, c));
+  const mrows = []; for (let m = 1; m <= 12; m++) { const ym = year + '-' + pad2(m), l = P.items.filter(x => x.ym === ym); mrows.push({ ym, g: l.length ? cntPerfStats(l) : null }); }
+  cnt.perf = { all, byT, byM, P, annual: true, mrows };
+  const sig = ['a', year, all.n, all.late, P.nT, P.nS].join('|'), fresh = cnt.perfSig !== sig; cnt.perfSig = sig;
+  const nMed = new Set(P.items.map(x => x.m)).size, nowYm = cntPerfNowYm();
+  let h = cntPerfHero(all, P, nMed, byT.length);
+  h += '<div class="r-panel"><div class="pf-h">Andamento mensile ' + escHtml(year) + '</div><div class="pf-sub">' + A.months.length + (A.months.length === 1 ? ' mese' : ' mesi') + ' con dati su ' + mrows.filter(r => r.ym <= nowYm).length + ' trascorsi. Tocca il numero dei fuori tempo per vedere gli esami del mese.</div>' + cntPerfTrendHtml(mrows) + cntPerfYearTable(mrows, A) + cntPerfLegendMini() + '</div>';
+  h += '<div class="r-panel"><div class="pf-h">Per tipologia</div><div class="pf-sub">Tempi di refertazione per tipo di esame nell\'intero anno. Tocca una tipologia per confrontare i medici.</div>' + cntPerfTypeTable(byT) + cntPerfLegendMini() + '</div>';
+  h += '<div class="r-panel" id="pf-med"><div class="pf-h">Per medico</div><div class="pf-sub">Scegli una categoria per confrontare i medici sullo stesso tipo di esame, su tutto l\'anno.</div>'
+    + '<div class="pf-tabs" role="tablist">' + byT.map(g => '<button type="button" role="tab" aria-selected="' + (cnt.perfT === g.k) + '" class="pf-tab' + (cnt.perfT === g.k ? ' active' : '') + '" data-pt="' + escHtml(g.k) + '"><span class="c-dot" style="background:' + avColor(g.k) + '"></span>' + escHtml(cntShort[g.k] || g.k) + '<em>' + g.n.toLocaleString('it-IT') + '</em></button>').join('') + '</div>'
+    + '<div class="pf-tools"><div class="c-dsearch"><input class="r-input" id="pf-mq" type="search" placeholder="🔍 Cerca medico…" autocomplete="off" value="' + escHtml(cnt.perfQ || '') + '"><span class="r-usub" id="pf-mcnt"></span></div>'
+    + '<div class="pf-seg" role="group" aria-label="Ordina i medici">' + [['n', 'Più esami'], ['fast', '⚡ Più veloce'], ['slow', '🐢 Più lento']].map(([k, l]) => '<button type="button" data-ps="' + k + '"' + (so === k ? ' class="active"' : '') + '>' + l + '</button>').join('') + '</div></div>'
+    + cntPerfMedTable(byM) + '<div class="c-note" id="pf-mempty" style="display:none;padding:22px">Nessun medico corrisponde alla ricerca.</div></div>';
+  const lst = a => a.map(m => cntPerfMon(m, true)).join(', ');
+  h += '<details class="c-det"><summary>ℹ️ Come è calcolato il report annuale</summary><div>Il report riunisce i file esami dei mesi caricati per il <b>' + escHtml(year) + '</b> (<b>' + A.months.length + '</b>: ' + escHtml(lst(A.months)) + ') e usa gli <b>stessi criteri del report mensile</b>: assegnazione presunta al medico, domenica come giorno non lavorativo (esclusi gli ECG), limiti di contratto per tipologia (ECG 15 minuti, holter e spirometria 24 ore, polisonnografia 48 ore). '
+    + 'Gli esami sono conteggiati nel mese del file in cui compaiono; un ID presente in due mesi viene contato una volta sola. '
+    + 'Esami assegnati dal turno: <b>' + P.nT.toLocaleString('it-IT') + '</b> · da orario di servizio: <b>' + P.nS.toLocaleString('it-IT') + '</b> · con domenica esclusa: <b>' + P.nDom.toLocaleString('it-IT') + '</b>'
+    + (A.shiftsOk ? '' : ' (turni non disponibili' + (A.shiftsErr ? ': ' + escHtml(A.shiftsErr) : '') + ': collega Google e premi «Ricarica anno» per usarli)') + '. '
+    + 'I medici con meno di 5 esami sono segnalati come «campione ridotto».'
+    + (A.missing.length ? '<br><br>Mesi senza file caricato: ' + escHtml(lst(A.missing)) + '.' : '')
+    + (A.noDetail.length ? '<br>Mesi senza dettaglio dei singoli esami (da ricaricare dalla scheda Conteggi): ' + escHtml(lst(A.noDetail)) + '.' : '')
+    + (P.neg || P.noTime ? '<br><br>Esclusi dal calcolo: ' + [P.neg ? P.neg + ' con data refertazione precedente alla richiesta' : '', P.noTime ? P.noTime + ' senza data/ora completa' : ''].filter(Boolean).join(' · ') + '.' : '')
+    + '<br><br><button type="button" class="r-btn ghost" data-pyreload>↻ Ricarica anno</button></div></details>';
+  b.innerHTML = '<div class="pf-wrap">' + h + '</div>';
+  cntPerfMedFilter(); cntPerfAnimate(b.firstElementChild, fresh);
+}
+function cntPerfExportAnnual() {
+  const C = cnt.perf; if (!C || !C.annual) { toast('Nessun dato da esportare', 'err'); return; }
+  const r1 = x => x == null ? '' : Math.round(x * 10) / 10;
+  const hdr = ['Esami', 'Tempo medio richiesta→referto (min)', 'Nei tempi di contratto (%)', 'Fuori tempo'];
+  const row = g => [g.k, g.n, r1(g.avgTot), r1(g.okPct), g.late];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Mese', ...hdr], ...C.mrows.filter(r => r.g).map(r => [ymLabel(r.ym), r.g.n, r1(r.g.avgTot), r1(r.g.okPct), r.g.late])]), 'Per mese');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Tipologia', ...hdr], ...C.byT.map(row)]), 'Per tipologia');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Medico', ...hdr], ...cntPerfGroups(C.P.items, 'm').map(row)]), 'Per medico');
+  const mm = [];
+  C.mrows.filter(r => r.g).forEach(r => cntPerfGroups(C.P.items.filter(x => x.ym === r.ym), 'm').forEach(g => mm.push([g.k, r.ym, ...row(g).slice(1)])));
+  mm.sort((a, b) => String(a[0]).localeCompare(String(b[0]), 'it') || String(a[1]).localeCompare(String(b[1])));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Medico', 'Mese', ...hdr], ...mm.map(x => [x[0], ymLabel(x[1]), ...x.slice(2)])]), 'Medico per mese');
+  XLSX.writeFile(wb, 'performance_' + cnt.perfYear + '.xlsx');
 }
 
 // ── caricamento dati / azioni ──
@@ -4186,7 +4375,7 @@ async function cntUpload(file) {
     const payload = { mese: ym, nome_file: file.name, righe_totali: res.righe, righe_conteggiate: res.counted, dati: res.dati, caricato_da: displayName(currentUser.email) };
     const { error } = await getSb().from('conteggi_mesi').upsert(payload, { onConflict: 'mese' });
     if (error) throw error;
-    cnt.rec = Object.assign({ caricato_il: new Date().toISOString() }, payload);
+    cnt.rec = Object.assign({ caricato_il: new Date().toISOString() }, payload); cnt.annual = null;   // il report annuale va ricalcolato
     toast('Conteggi di ' + ymLabel(ym) + ' salvati', 'ok');
     await cntSaveFile(file, ym);
     const my = ++cnt.req; cnt.shifts = null; cnt.shiftsErr = ''; cnt.shiftsLoading = true; cntRender();
@@ -4253,10 +4442,10 @@ async function cntDelete() {
   if (error) { toast('Errore: ' + error.message, 'err'); return; }
   try { localStorage.removeItem('cnt_extra_' + ym); } catch (e) {}
   cnt.scelte = {}; cnt.scelteMeta = {};
-  cnt.req++; cnt.rec = null; cnt.fileMeta = null; cnt.shifts = null; cnt.shiftsErr = ''; cnt.shiftsLoading = false;
+  cnt.req++; cnt.rec = null; cnt.fileMeta = null; cnt.shifts = null; cnt.shiftsErr = ''; cnt.shiftsLoading = false; cnt.annual = null;
   toast('Conteggi eliminati', 'ok'); cntRender();
 }
-function cntReset() { cnt.fileMeta = null; cntUnsubscribe(); cnt.scelte = {}; cnt.scelteMeta = {}; cnt.scelteErr = ''; cnt.req++; cnt.ym = null; cnt.rec = null; cnt.loaded = false; cnt.loading = false; cnt.err = ''; cnt.shifts = null; cnt.shiftsErr = ''; cnt.shiftsLoading = false; }
+function cntReset() { cnt.annual = null; cnt.annReq++; cnt.perfMode = 'm'; cnt.fileMeta = null; cntUnsubscribe(); cnt.scelte = {}; cnt.scelteMeta = {}; cnt.scelteErr = ''; cnt.req++; cnt.ym = null; cnt.rec = null; cnt.loaded = false; cnt.loading = false; cnt.err = ''; cnt.shifts = null; cnt.shiftsErr = ''; cnt.shiftsLoading = false; }
 
 // ── export Excel della lista medici ──
 function exportDoctorsExcel() {
@@ -4412,8 +4601,19 @@ async function maybeImportLegacy() {
       cntSavePesi().then(ok => toast(ok ? 'Pesi salvati e condivisi con tutti gli utenti' : 'Pesi NON salvati sul database (esegui supabase_persistenza.sql): validi solo su questo schermo', ok ? 'ok' : 'err'));
     });
     byId('sub-view-performance').addEventListener('click', e => {
+      const pm = e.target.closest('[data-pmode]');
+      if (pm) {
+        const a = pm.dataset.pmode === 'a';
+        if ((cnt.perfMode === 'a') !== a) { cnt.perfMode = a ? 'a' : 'm'; if (a) cnt.perfYear = (cnt.ym || '').slice(0, 4) || String(new Date().getFullYear()); cntPerfRender(); }
+        return;
+      }
+      if (e.target.closest('[data-pyreload]')) { cnt.annual = null; cntPerfRender(); return; }
       const n = e.target.closest('[data-cnt]');
-      if (n && (n.dataset.cnt === 'prev' || n.dataset.cnt === 'next')) { cntGo(n.dataset.cnt === 'prev' ? -1 : 1); return; }
+      if (n && (n.dataset.cnt === 'prev' || n.dataset.cnt === 'next')) {
+        const d = n.dataset.cnt === 'prev' ? -1 : 1;
+        if (cnt.perfMode === 'a') { cnt.perfYear = String(+cnt.perfYear + d); cntPerfRender(); } else cntGo(d);
+        return;
+      }
       const o = e.target.closest('[data-ps]'); if (o) { cnt.perfSort = o.dataset.ps; cntPerfRender(); return; }
       const l = e.target.closest('[data-pfk]'); if (l) { cntPerfOpen(l.dataset.pfk, l.dataset.pfv); return; }
       if (e.target.closest('[data-pfretry]')) { cntPerfRender(); return; }
